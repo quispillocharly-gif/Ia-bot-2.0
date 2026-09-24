@@ -30,13 +30,11 @@ jobs:
         run: python collect_ticks.py
       - name: Run V7 adaptive shadow lab
         run: python v7_adaptive.py
-      - name: Refresh sprint checkpoint
-        run: python v7_sprint.py
       - name: Persist V7 memory
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add memory/v7_adaptive_latest.json memory/v7_adaptive_state.json memory/v7_frozen_neural.json memory/v7_frozen_neural.joblib memory/v7_sprint_latest.json
+          git add memory/v7_adaptive_latest.json memory/v7_adaptive_state.json memory/v7_frozen_neural.json memory/v7_frozen_neural.joblib
           git diff --cached --quiet || git commit -m "V7 adaptive shadow research"
           git restore audit.json ticks.json
           for attempt in 1 2 3; do
