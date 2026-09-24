@@ -12,7 +12,8 @@ OUT=M/"neural_v5_latest.json"
 STATE=M/"neural_v5_state.json"
 MODEL=M/"neural_v5_candidate.joblib"
 META=M/"neural_v5_candidate.json"
-CONFIRM=M/"v5_1_confirmation_latest.json"\nGRAVE=M/"v6_graveyard.json"
+CONFIRM=M/"v5_1_confirmation_latest.json"
+GRAVE=M/"v6_graveyard.json"
 
 BASE=.10
 SEARCH_VERSION="5.2"
