@@ -121,8 +121,15 @@ tr:first-child td{background:#0b2d1966;color:#caffda}
   <div class="card"><div class="label">MEMORY CORE</div><div id="lastUpdate" class="big">–</div><div id="runs" class="mini">–</div><div id="nextRefresh" class="mini cyan">AUTO SYNC 60s</div></div>
  </section>
 
+
+ <section class="grid3" id="neuralCore">
+  <div class="card"><div class="label">V5 NEURAL CHAMPION</div><div id="v5Leader" class="big">BOOTING…</div><div id="v5Rate" class="metric cyan">–</div><div id="v5Meta" class="mini">Esperando primera corrida neuronal</div></div>
+  <div class="card"><div class="label">V5 NEURAL EDGE</div><div id="v5Edge" class="metric">–</div><div id="v5Wilson" class="big">Wilson low –</div><span id="v5Status" class="badge">WAITING</span></div>
+  <div class="card"><div class="label">V5.1 FUTURE CONFIRMATION</div><div id="v51Rate" class="metric">–</div><div id="v51Rec" class="mini">Esperando modelo congelado</div><div class="progressLabel"><span>PROGRESO</span><span id="v51Pct">0 / 1000</span></div><div class="progress"><div id="v51Bar" class="fill" style="width:0%"></div></div><span id="v51Status" class="badge">WAITING</span></div>
+ </section>
+
  <section class="card">
-  <div class="statusrow"><div><div class="label">NEURAL CONSENSUS / MODEL VOTES</div><div id="brainSummary" class="mini">Inicia el núcleo live.</div></div><span id="consensusBadge" class="badge">NO DATA</span></div>
+  <div class="statusrow"><div><div class="label">LIVE CONSENSUS / MODEL VOTES</div><div id="brainSummary" class="mini">Inicia el núcleo live.</div></div><span id="consensusBadge" class="badge">NO DATA</span></div>
   <div id="votes" class="voteGrid"></div><div id="brain" class="tags"></div>
  </section>
 
@@ -163,6 +170,31 @@ function brain(){
  $('brainSummary').textContent='Consensus MATCH '+best+' · '+max+'/'+MODELS.length+' votes';
  $('consensusBadge').textContent=max+'/'+MODELS.length+' VOTES';return {best,max}
 }
+
+async function loadNeural(){
+ try{
+  const a=await fetch('./memory/neural_v5_latest.json?t='+Date.now(),{cache:'no-store'});
+  if(a.ok){
+   const n5=await a.json(),L=n5.leader||{};
+   $('v5Leader').textContent='MLP · W'+(L.window??'–')+' · '+((L.hidden||[]).join('×')||'–');
+   $('v5Rate').textContent=pct(L.hit_rate)+' · '+(L.wins??0)+'/'+(L.predictions??0);
+   $('v5Meta').textContent='run '+n5.runs+' · candidate '+(n5.candidate_model_id||'–')+' · '+(L.epochs??0)+' epochs';
+   $('v5Edge').textContent=pp(L.edge_vs_10pct);$('v5Edge').className='metric '+((L.edge_vs_10pct??0)>=0?'green':'red');
+   $('v5Wilson').textContent='Wilson low '+pct(L.wilson_lower);setBadge($('v5Status'),n5.status);
+  }
+ }catch(e){log('V5 neural memory waiting','yellow')}
+ try{
+  const b=await fetch('./memory/v5_1_confirmation_latest.json?t='+Date.now(),{cache:'no-store'});
+  if(b.ok){
+   const c=await b.json();$('v51Rate').textContent=pct(c.hit_rate);
+   $('v51Rate').className='metric '+(c.hit_rate==null?'muted':c.hit_rate>=.10?'green':'red');
+   $('v51Rec').textContent=c.predictions+' pruebas · '+c.wins+' wins · '+c.losses+' losses · W'+c.window;
+   $('v51Bar').style.width=Math.min(100,(c.predictions||0)/10)+'%';$('v51Pct').textContent=(c.predictions||0)+' / 1000';
+   setBadge($('v51Status'),c.status);
+  }
+ }catch(e){log('V5.1 confirmation waiting','yellow')}
+}
+
 async function loadMemory(){
  try{
   const [a,b]=await Promise.all([fetch('./memory/research_v4_latest.json?t='+Date.now(),{cache:'no-store'}),fetch('./memory/v4_1_confirmation_latest.json?t='+Date.now(),{cache:'no-store'})]);
@@ -187,8 +219,8 @@ async function loadMemory(){
 function newSignal(){if(seq.length<200)return;const b=brain(),wait=v4?.leader?.wait_ticks??3;signal={match:b.best,left:wait,armed:false};$('sig').textContent='MATCH '+signal.match;$('sigInfo').textContent='WAIT '+wait+' TICKS';$('sigResult').textContent='Signal locked until evaluation';$('liveModel').textContent='Consensus '+MODELS.length+' models · wait '+wait;log('SIGNAL LOCKED MATCH '+signal.match+' / WAIT '+wait,'yellow')}
 function onTick(d,z){seq.push(d);if(seq.length>1000)seq.shift();tickNo++;$('tick').textContent=z;$('digit').textContent=d;$('tickCount').textContent='LIVE ticks '+tickNo;if(tickNo%4===0)brain();if(!signal){newSignal();return}if(signal.armed){const ok=d===signal.match;stats.n++;ok?stats.w++:stats.l++;localStorage.setItem('matrixLive',JSON.stringify(stats));showStats();$('sigResult').textContent=(ok?'✅ HIT':'❌ MISS')+' · digit '+d;log((ok?'HIT':'MISS')+' MATCH '+signal.match+' → '+d,ok?'green':'red');signal=null;setTimeout(newSignal,350);return}signal.left--;if(signal.left<=0){signal.armed=true;$('sigInfo').textContent='⚡ EVALUATE MATCH '+signal.match+' NEXT TICK';log('EVALUATION ARMED MATCH '+signal.match,'green')}else $('sigInfo').textContent='WAIT '+signal.left+' TICK'+(signal.left===1?'':'S')}
 async function start(){if(running){socket?.close();return}await loadMemory();socket=new WebSocket(WS);socket.onopen=()=>{log('OPENING R_75 STREAM');socket.send(JSON.stringify({ticks_history:'R_75',count:1000,end:'latest',style:'ticks',req_id:1}))};socket.onmessage=e=>{const x=JSON.parse(e.data);if(x.error){log('WS ERROR '+x.error.message,'red');return}if(x.history?.prices){const p=Number(x.pip_size??4);seq=x.history.prices.map(q=>Number(Number(q).toFixed(p).slice(-1)));running=true;$('go').textContent='■ DETENER NÚCLEO LIVE';$('liveDot').className='dot ok';$('liveState').textContent='LIVE ON';log('STREAM ONLINE · '+seq.length+' history ticks','green');brain();newSignal();socket.send(JSON.stringify({ticks:'R_75',subscribe:1,req_id:2}))}if(x.tick){const p=Number(x.tick.pip_size??4),z=Number(x.tick.quote).toFixed(p),d=Number(z.slice(-1));onTick(d,z)}};socket.onclose=()=>{running=false;$('go').textContent='▶ INICIAR NÚCLEO LIVE';$('liveDot').className='dot off';$('liveState').textContent='LIVE OFF';log('STREAM CLOSED','yellow')}}
-$('go').onclick=start;$('refresh').onclick=()=>{loadMemory();log('MANUAL SYNC REQUESTED','cyan')};$('reset').onclick=()=>{if(confirm('¿Reiniciar estadísticas live locales de este dispositivo?')){stats={n:0,w:0,l:0};localStorage.setItem('matrixLive',JSON.stringify(stats));showStats();log('LOCAL LIVE RESET','yellow')}};
-showStats();loadMemory();setInterval(()=>{refreshLeft--;if(refreshLeft<=0)loadMemory();$('nextRefresh').textContent='AUTO SYNC '+Math.max(0,refreshLeft)+'s'},1000);
+$('go').onclick=start;$('refresh').onclick=()=>{loadMemory();loadNeural();log('MANUAL SYNC REQUESTED','cyan')};$('reset').onclick=()=>{if(confirm('¿Reiniciar estadísticas live locales de este dispositivo?')){stats={n:0,w:0,l:0};localStorage.setItem('matrixLive',JSON.stringify(stats));showStats();log('LOCAL LIVE RESET','yellow')}};
+showStats();loadMemory();loadNeural();setInterval(()=>{refreshLeft--;if(refreshLeft<=0){loadMemory();loadNeural();}$('nextRefresh').textContent='AUTO SYNC '+Math.max(0,refreshLeft)+'s'},1000);
 
 // Matrix rain
 const canvas=$('matrix'),ctx=canvas.getContext('2d');let cols=[],font=15;
