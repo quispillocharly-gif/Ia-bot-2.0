@@ -1,0 +1,36 @@
+name: MATCH AI - V5 Neural Lab
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "13 * * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: match-ai-state-writer
+  cancel-in-progress: false
+
+jobs:
+  neural:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install websockets==13.1 numpy scikit-learn joblib
+      - name: Refresh audited ticks
+        env:
+          TICK_COUNT: "6000"
+        run: python collect_ticks.py
+      - name: Train autonomous neural candidates
+        run: python neural_v5.py
+      - name: Persist neural research
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add audit.json ticks.json memory/
+          git diff --cached --quiet || git commit -m "V5 autonomous neural research"
+          git push
