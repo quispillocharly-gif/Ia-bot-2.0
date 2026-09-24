@@ -1,19 +1,25 @@
 {
-  "version": "5.1-neural-confirmation",
+  "version": "5.2-neural-forward-confirmation",
   "model_id": "4d99ca520bf96c63",
+  "search_version": null,
   "window": 10,
   "hidden": [
     32
   ],
-  "runs": 1,
-  "new_ticks_this_run": 0,
-  "predictions": 0,
-  "wins": 0,
-  "losses": 0,
-  "hit_rate": null,
-  "wilson_lower": 0.0,
+  "confidence_threshold": 0.0,
+  "runs": 2,
+  "new_ticks_this_run": 661,
+  "opportunities": 661,
+  "predictions": 661,
+  "skipped": 0,
+  "coverage": 1.0,
+  "wins": 71,
+  "losses": 590,
+  "hit_rate": 0.10741301059001512,
+  "wilson_lower": 0.08603542396615518,
+  "mean_confidence": 0.1760143454830513,
   "baseline": 0.1,
   "status": "COLLECTING",
   "start_epoch": 1790271076,
-  "note": "Frozen neural model. Confirmation uses only ticks that arrived after the model was frozen."
+  "note": "Frozen neural candidate. Only signals above its preselected confidence threshold are counted. Evaluation uses only future ticks."
 }
