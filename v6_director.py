@@ -37,6 +37,7 @@ def main():
     ens=load(M/"v6_ensemble_latest.json")
     payout=load(M/"payout_snapshot.json")
     adaptive=load(M/"v7_adaptive_latest.json")
+    sprint=load(M/"v7_sprint_latest.json")
 
     v4l=v4.get("leader") or {}
     v5l=v5.get("leader") or {}
@@ -157,6 +158,11 @@ def main():
                        "shadow_pnl":(adaptive.get("economic") or {}).get("shadow_pnl") if adaptive else None,
                        "ev_per_signal":(adaptive.get("economic") or {}).get("ev_per_signal") if adaptive else None,
                        "calibration_ece":(adaptive.get("calibration") or {}).get("ece") if adaptive else None},
+        "evidence_sprint":{"status":sprint.get("status","NOT_STARTED") if sprint else "NOT_STARTED",
+                           "days_left":sprint.get("days_left") if sprint else None,
+                           "core_gates_passed":sprint.get("core_gates_passed") if sprint else 0,
+                           "core_gates_total":sprint.get("core_gates_total") if sprint else 4,
+                           "projected_signals_at_deadline":sprint.get("projected_signals_at_deadline") if sprint else None},
         "registry_total":reg["total_recorded"],"graveyard_size":len(grave["entries"]),
         "priorities":priorities,
         "note":"V6 records evidence, corrects exploratory multiple testing, monitors drift and failed candidates, and does not equate hit rate with profitability."
