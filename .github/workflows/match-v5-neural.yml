@@ -20,6 +20,7 @@ concurrency:
 jobs:
   neural:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -28,16 +29,16 @@ jobs:
       - run: pip install websockets==13.1 numpy scikit-learn joblib
       - name: Refresh audited ticks
         env:
-          TICK_COUNT: "6000"
+          TICK_COUNT: "10000"
         run: python collect_ticks.py
-      - name: Train autonomous neural candidates
+      - name: Train autonomous neural evolution lab
         run: python neural_v5.py
       - name: Persist neural research
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add memory/neural_v5_latest.json memory/neural_v5_state.json memory/neural_v5_candidate.json memory/neural_v5_candidate.joblib
-          git diff --cached --quiet || git commit -m "V5 autonomous neural research"
+          git diff --cached --quiet || git commit -m "V5.2 autonomous neural evolution"
           git restore audit.json ticks.json
           for attempt in 1 2 3; do
             git pull --rebase origin main
