@@ -205,8 +205,8 @@ async function loadSprint(){
   $('sprintGates').textContent=(s.core_gates_passed??0)+' / '+(s.core_gates_total??4);
   $('sprintGates').className='metric '+((s.core_gates_passed??0)===(s.core_gates_total??4)?'green':'yellow');
   $('sprintGateInfo').textContent='sample '+((g.forward_sample?.pass)?'✓':'×')+' · Wilson '+((g.economic_wilson?.pass)?'✓':'×')+' · EV '+((g.positive_shadow_ev?.pass)?'✓':'×')+' · placebo '+((g.economic_placebo?.pass)?'✓':'×');
-  $('sprintProjection').textContent=Math.round(s.projected_signals_at_deadline??0)+' señales';
-  $('sprintPace').textContent=(s.signals_per_day??0).toFixed(0)+' señales/día · break-even '+pct(s.break_even_rate);
+  $('sprintProjection').textContent=s.projected_signals_at_deadline==null?'CALIBRANDO':Math.round(s.projected_signals_at_deadline)+' señales';
+  $('sprintPace').textContent=(s.pace_status==='WARMUP'?'warmup '+(s.elapsed_hours??0).toFixed(1)+'h':(s.signals_per_day??0).toFixed(0)+' señales/día')+' · break-even '+pct(s.break_even_rate);
  }catch(e){log('SPRINT memory waiting','yellow')}
 }
 

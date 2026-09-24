@@ -42,8 +42,10 @@ def main():
     regime_positive=sum(1 for x in regimes if int(x.get("signals",0) or 0)>=100 and float(x.get("shadow_pnl",0) or 0)>0)
 
     elapsed=max(1.0,time.time()-float(v7.get("start_epoch",time.time()) or time.time()))
-    per_day=n/(elapsed/86400.0) if n else 0.0
-    projected=n+per_day*days_left if per_day>0 else n
+    elapsed_hours=elapsed/3600.0
+    pace_ready=elapsed_hours>=6.0 and n>=200
+    per_day=(n/(elapsed/86400.0)) if pace_ready else None
+    projected=(n+per_day*days_left) if pace_ready else None
 
     gates={
         "forward_sample":{"pass":n>=1000,"value":n,"target":1000},
@@ -61,7 +63,7 @@ def main():
         status="ECONOMIC_CANDIDATE"
     elif now>=deadline_utc:
         status="NO_CONFIRMED_EDGE_AT_DEADLINE"
-    elif days_left<=3 and projected<1000:
+    elif days_left<=3 and pace_ready and projected<1000:
         status="DATA_RISK"
     elif n<1000:
         status="COLLECTING"
@@ -87,6 +89,8 @@ def main():
         "status":status,
         "core_gates_passed":core_pass,
         "core_gates_total":len(core),
+        "pace_status":"READY" if pace_ready else "WARMUP",
+        "elapsed_hours":elapsed_hours,
         "signals_per_day":per_day,
         "projected_signals_at_deadline":projected,
         "break_even_rate":break_even,
