@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MATCH AI V4.2 Visual Research</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at top,#172765,#050713 58%);color:#eef5ff;font-family:system-ui,-apple-system,sans-serif}
+.wrap{max-width:1100px;margin:auto;padding:15px}.head{text-align:center;padding:16px}.head h1{margin:0;font-size:34px;background:linear-gradient(90deg,#00eaff,#a35cff,#ff48c8);-webkit-background-clip:text;color:transparent}
+.pill{display:inline-block;margin:7px 3px;padding:6px 10px;border:1px solid #00eaff;border-radius:99px;color:#72f2ff;font-size:12px}
+button{border:0;border-radius:15px;padding:15px;font-weight:900;color:white;background:linear-gradient(90deg,#4d5cff,#bd3fff,#ff3f9f)}
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin:10px 0 14px}.card{background:#0c1230e8;border:1px solid #33458a;border-radius:18px;padding:15px;margin-bottom:12px;box-shadow:0 0 22px #071136}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px}.label{font-size:11px;letter-spacing:1.2px;color:#9daed9}.big{font-size:23px;font-weight:900}.huge{font-size:68px;line-height:1;font-weight:1000}.green{color:#64ffb1}.yellow{color:#ffd66b}.red{color:#ff7088}.cyan{color:#72f2ff}.muted{color:#9daed9}
+.console{height:300px;overflow:auto;background:#030610;border:1px solid #253a73;border-radius:13px;padding:10px;font:12px ui-monospace,monospace;line-height:1.55}.line{border-bottom:1px solid #10182e;padding:3px}
+.row{display:grid;grid-template-columns:1.4fr .7fr .7fr .7fr;gap:5px;padding:8px 0;border-bottom:1px solid #25305e;font-size:13px}.progress{height:10px;background:#20294d;border-radius:9px;overflow:hidden}.fill{height:100%;background:linear-gradient(90deg,#00eaff,#9f5cff,#ff48c8)}
+.center{text-align:center}.signal{border-color:#ff48c8;text-align:center}.status{text-align:center;font-size:12px;color:#9daed9;margin:8px}.tag{display:inline-block;padding:4px 8px;border-radius:20px;background:#151e46;margin:3px;font-size:11px}
+</style></head><body><div class="wrap">
+<div class="head"><h1>MATCH AI V4.2</h1><div class="pill">VISUAL RESEARCH</div><div class="pill">R_75 · MATCH</div><div class="pill">DEMO / INVESTIGACIÓN</div></div>
+<div class="actions"><button id="go">▶ INICIAR CEREBRO LIVE</button><button id="refresh">↻ ACTUALIZAR GITHUB</button></div>
+
+<div class="card signal">
+<div class="label">SEÑAL EXPERIMENTAL ACTIVA</div><div id="sig" class="huge">–</div>
+<div id="sigInfo" class="big">Monitor detenido</div><div id="sigResult" class="muted"></div>
+</div>
+
+<div class="grid">
+<div class="card"><div class="label">TICK ACTUAL</div><div id="tick" class="big cyan">–</div><div id="digit" class="huge">–</div></div>
+<div class="card"><div class="label">V4 · LÍDER HISTÓRICO</div><div id="leader" class="big">–</div><div id="leaderRate" class="green">–</div><div id="v4state" class="yellow">–</div></div>
+<div class="card"><div class="label">V4.1 · CONFIRMACIÓN FUTURA</div><div id="confirm" class="big">–</div><div id="confirmRate" class="green">–</div><div id="confirmRec" class="muted">–</div><div class="progress"><div id="confirmBar" class="fill" style="width:0%"></div></div></div>
+<div class="card"><div class="label">PRUEBA LIVE LOCAL</div><div id="liveRate" class="big">–</div><div id="liveRec" class="muted">–</div><div id="liveModel" class="yellow">–</div></div>
+</div>
+
+<div class="card"><div class="label">🧠 CEREBRO IA EN VIVO · QUÉ ESTÁ CALCULANDO</div><div id="brain" class="grid"></div></div>
+<div class="card"><div class="label">🏆 TORNEO V4 · RESULTADOS EN GITHUB</div><div id="tournament"></div></div>
+<div class="card"><div class="label">🔬 CONSOLA DE INVESTIGACIÓN</div><div id="console" class="console"></div></div>
+<div class="status" id="status">Cargando memoria…</div>
+<div class="status">Los porcentajes son resultados experimentales. El sistema puede mejorar, empeorar o no demostrar ventaja; no garantiza rentabilidad.</div>
+</div>
+<script>
+const $=x=>document.getElementById(x), pct=x=>x==null?'–':(100*x).toFixed(2)+'%';
+const WS='wss://api.derivws.com/trading/v1/options/ws/public';
+let seq=[],socket=null,running=false,v4=null,c4=null,signal=null,tickNo=0;
+let stats=JSON.parse(localStorage.getItem('v42Live')||'{"n":0,"w":0,"l":0}');
+const MODELS=[
+ ['hot10',a=>hot(a,10)],['hot20',a=>hot(a,20)],['hot40',a=>hot(a,40)],['hot80',a=>hot(a,80)],
+ ['hot120',a=>hot(a,120)],['hot200',a=>hot(a,200)],['cold20',a=>cold(a,20)],['cold80',a=>cold(a,80)],
+ ['gap',gap],['transition1',a=>trans(a,1)],['transition2',a=>trans(a,2)],['transition3',a=>trans(a,3)]
+];
+function log(s,cls=''){let e=document.createElement('div');e.className='line '+cls;e.textContent=new Date().toLocaleTimeString()+'  '+s;$('console').prepend(e);while($('console').children.length>150)$('console').lastChild.remove()}
+function hot(a,n){let z=a.slice(-n),c=Array(10).fill(0);z.forEach(x=>c[x]++);return c.indexOf(Math.max(...c))}
+function cold(a,n){let z=a.slice(-n),c=Array(10).fill(0);z.forEach(x=>c[x]++);return c.indexOf(Math.min(...c))}
+function gap(a){let g=[];for(let d=0;d<10;d++){let i=a.lastIndexOf(d);g[d]=i<0?a.length+1:a.length-1-i}return g.indexOf(Math.max(...g))}
+function trans(a,o){if(a.length<o+2)return hot(a,80);let ctx=a.slice(-o).join(','),c=Array(10).fill(0);for(let i=o;i<a.length;i++)if(a.slice(i-o,i).join(',')===ctx)c[a[i]]++;return c.reduce((s,x)=>s+x,0)?c.indexOf(Math.max(...c)):hot(a,80)}
+function brain(){
+ let votes=Array(10).fill(0),out=[];
+ MODELS.forEach(([n,f])=>{let d=f(seq);votes[d]++;out.push({n,d})});
+ let best=votes.indexOf(Math.max(...votes));
+ $('brain').innerHTML=out.map(x=>`<div class="tag">${x.n} → <b>MATCH ${x.d}</b></div>`).join('');
+ log('Modelos: '+out.map(x=>x.n+'→'+x.d).join(' | '));
+ log('Consenso experimental → MATCH '+best+' ('+Math.max(...votes)+' votos)','cyan');
+ return {best,votes,out};
+}
+function showStats(){let r=stats.n?stats.w/stats.n:0;$('liveRate').textContent=pct(r);$('liveRec').textContent=stats.n+' señales · '+stats.w+' aciertos · '+stats.l+' fallos'}
+async function loadMemory(){
+ try{
+  let[a,b]=await Promise.all([fetch('./memory/research_v4_latest.json?t='+Date.now(),{cache:'no-store'}),fetch('./memory/v4_1_confirmation_latest.json?t='+Date.now(),{cache:'no-store'})]);
+  if(!a.ok||!b.ok)throw Error('Memoria V4/V4.1 todavía no disponible');
+  v4=await a.json();c4=await b.json();let L=v4.leader;
+  $('leader').textContent=L.model+' · espera '+L.wait_ticks;$('leaderRate').textContent=pct(L.hit_rate)+' · '+L.wins+'/'+L.predictions;$('v4state').textContent=v4.status;
+  $('confirm').textContent=c4.frozen_model+' · '+c4.wait_ticks+' ticks';$('confirmRate').textContent=pct(c4.hit_rate);$('confirmRec').textContent=c4.predictions+' pruebas · '+c4.wins+' aciertos · '+c4.losses+' fallos';
+  $('confirmBar').style.width=Math.min(100,(c4.predictions||0)/10)+'%';
+  $('tournament').innerHTML=(v4.top_models||[]).slice(0,12).map((x,i)=>`<div class="row"><b>#${i+1} ${x.model}</b><span>${x.wait_ticks} ticks</span><span class="green">${pct(x.hit_rate)}</span><span>${x.wins}/${x.predictions}</span></div>`).join('');
+  $('status').textContent='✓ Memoria actualizada · V4 run '+v4.runs+' · V4.1 run '+c4.runs;log('GitHub actualizado: líder '+L.model+', '+pct(L.hit_rate));
+ }catch(e){$('status').textContent='⚠ '+e.message;log(e.message,'red')}
+}
+function newSignal(){
+ if(seq.length<200)return;
+ let b=brain(), wait=(v4?.leader?.wait_ticks??3);
+ // Live signal uses current model consensus; historical leader remains displayed separately.
+ signal={match:b.best,left:wait,armed:false};
+ $('sig').textContent='MATCH '+signal.match;$('sigInfo').textContent='Esperar '+wait+' ticks';$('sigResult').textContent='';
+ $('liveModel').textContent='Consenso de '+MODELS.length+' modelos · espera '+wait;log('NUEVA SEÑAL FIJA: MATCH '+signal.match+' · esperar '+wait,'yellow')
+}
+function onTick(d,z){
+ seq.push(d);if(seq.length>1000)seq.shift();tickNo++;$('tick').textContent=z;$('digit').textContent=d;
+ if(tickNo%5===0)brain();
+ if(!signal){newSignal();return}
+ if(signal.armed){
+  let ok=d===signal.match;stats.n++;ok?stats.w++:stats.l++;localStorage.setItem('v42Live',JSON.stringify(stats));showStats();
+  $('sigResult').textContent=(ok?'✅ ACIERTO':'❌ FALLO')+' · salió '+d;log((ok?'ACIERTO':'FALLO')+' MATCH '+signal.match+' → salió '+d,ok?'green':'red');
+  signal=null;setTimeout(newSignal,400);return
+ }
+ signal.left--;
+ if(signal.left<=0){signal.armed=true;$('sigInfo').textContent='⚡ ENTRAR MATCH '+signal.match+' AHORA';log('ENTRADA EXPERIMENTAL → MATCH '+signal.match+' · próximo tick','green')}
+ else{$('sigInfo').textContent='Esperar '+signal.left+' tick'+(signal.left===1?'':'s')}
+}
+async function start(){
+ if(running){socket?.close();running=false;$('go').textContent='▶ INICIAR CEREBRO LIVE';log('Monitor detenido');return}
+ await loadMemory();socket=new WebSocket(WS);
+ socket.onopen=()=>{log('Conectando con R_75…');socket.send(JSON.stringify({ticks_history:'R_75',count:1000,end:'latest',style:'ticks',req_id:1}))};
+ socket.onmessage=e=>{let x=JSON.parse(e.data);if(x.error){log('ERROR: '+x.error.message,'red');return}
+  if(x.history?.prices){let p=Number(x.pip_size??4);seq=x.history.prices.map(q=>Number(Number(q).toFixed(p).slice(-1)));running=true;$('go').textContent='■ DETENER CEREBRO LIVE';log('Historial cargado: '+seq.length+' ticks','green');brain();newSignal();
+   socket.send(JSON.stringify({ticks:'R_75',subscribe:1,req_id:2}))}
+  if(x.tick){let p=Number(x.tick.pip_size??4),z=Number(x.tick.quote).toFixed(p),d=Number(z.slice(-1));onTick(d,z)}
+ };
+ socket.onclose=()=>{running=false;$('go').textContent='▶ INICIAR CEREBRO LIVE'}
+}
+$('go').onclick=start;$('refresh').onclick=loadMemory;showStats();loadMemory();setInterval(loadMemory,60000);
+</script></body></html>
