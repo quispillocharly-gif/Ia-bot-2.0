@@ -36,7 +36,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add audit.json ticks.json memory/
+          git add memory/v5_1_confirmation_latest.json memory/v5_1_confirmation_state.json memory/neural_v5_frozen.json memory/neural_v5_frozen.joblib
           git diff --cached --quiet || git commit -m "V5.1 neural forward confirmation"
           for attempt in 1 2 3; do
             git pull --rebase origin main
