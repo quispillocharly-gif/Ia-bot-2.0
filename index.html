@@ -173,7 +173,7 @@ function brain(){
 
 async function loadNeural(){
  try{
-  const a=await fetch('./memory/neural_v5_latest.json?t='+Date.now(),{cache:'no-store'});
+  const a=await fetch('https://raw.githubusercontent.com/quispillocharly-gif/Ia-bot-2.0/main/memory/neural_v5_latest.json?t='+Date.now(),{cache:'no-store'});
   if(a.ok){
    const n5=await a.json(),L=n5.leader||{};
    $('v5Leader').textContent='MLP · W'+(L.window??'–')+' · '+((L.hidden||[]).join('×')||'–');
@@ -184,7 +184,7 @@ async function loadNeural(){
   }
  }catch(e){log('V5 neural memory waiting','yellow')}
  try{
-  const b=await fetch('./memory/v5_1_confirmation_latest.json?t='+Date.now(),{cache:'no-store'});
+  const b=await fetch('https://raw.githubusercontent.com/quispillocharly-gif/Ia-bot-2.0/main/memory/v5_1_confirmation_latest.json?t='+Date.now(),{cache:'no-store'});
   if(b.ok){
    const c=await b.json();$('v51Rate').textContent=pct(c.hit_rate);
    $('v51Rate').className='metric '+(c.hit_rate==null?'muted':c.hit_rate>=.10?'green':'red');
@@ -197,7 +197,7 @@ async function loadNeural(){
 
 async function loadMemory(){
  try{
-  const [a,b]=await Promise.all([fetch('./memory/research_v4_latest.json?t='+Date.now(),{cache:'no-store'}),fetch('./memory/v4_1_confirmation_latest.json?t='+Date.now(),{cache:'no-store'})]);
+  const [a,b]=await Promise.all([fetch('https://raw.githubusercontent.com/quispillocharly-gif/Ia-bot-2.0/main/memory/research_v4_latest.json?t='+Date.now(),{cache:'no-store'}),fetch('https://raw.githubusercontent.com/quispillocharly-gif/Ia-bot-2.0/main/memory/v4_1_confirmation_latest.json?t='+Date.now(),{cache:'no-store'})]);
   if(!a.ok||!b.ok)throw Error('memory files unavailable');
   v4=await a.json();c4=await b.json();const L=v4.leader||{};
   $('leader').textContent=(L.model||'–').replaceAll('_',' ')+' · '+(L.wait_ticks??'–')+' ticks';
