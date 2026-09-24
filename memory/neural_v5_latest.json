@@ -1,7 +1,7 @@
 {
   "version": "5.0-neural-lab",
-  "timestamp": 1790258797,
-  "runs": 2,
+  "timestamp": 1790260022,
+  "runs": 3,
   "ticks": 6000,
   "train_end": 4200,
   "baseline": 0.1,
@@ -14,13 +14,13 @@
       32
     ],
     "predictions": 1800,
-    "wins": 195,
-    "hit_rate": 0.10833333333333334,
-    "wilson_lower": 0.09480024951128149,
-    "edge_vs_10pct": 0.008333333333333331,
-    "epochs": 15
+    "wins": 173,
+    "hit_rate": 0.0961111111111111,
+    "wilson_lower": 0.08334214352845036,
+    "edge_vs_10pct": -0.0038888888888889,
+    "epochs": 7
   },
-  "candidate_model_id": "11c1a9f1f177c48a",
+  "candidate_model_id": "676ee6de69884900",
   "top_models": [
     {
       "model": "mlp",
@@ -30,23 +30,10 @@
         32
       ],
       "predictions": 1800,
-      "wins": 195,
-      "hit_rate": 0.10833333333333334,
-      "wilson_lower": 0.09480024951128149,
-      "edge_vs_10pct": 0.008333333333333331,
-      "epochs": 15
-    },
-    {
-      "model": "mlp",
-      "window": 10,
-      "hidden": [
-        32
-      ],
-      "predictions": 1800,
-      "wins": 182,
-      "hit_rate": 0.10111111111111111,
-      "wilson_lower": 0.08802207169307934,
-      "edge_vs_10pct": 0.0011111111111111044,
+      "wins": 173,
+      "hit_rate": 0.0961111111111111,
+      "wilson_lower": 0.08334214352845036,
+      "edge_vs_10pct": -0.0038888888888889,
       "epochs": 7
     },
     {
@@ -56,11 +43,24 @@
         48
       ],
       "predictions": 1800,
-      "wins": 175,
-      "hit_rate": 0.09722222222222222,
-      "wilson_lower": 0.08438118836946573,
-      "edge_vs_10pct": -0.002777777777777782,
-      "epochs": 13
+      "wins": 169,
+      "hit_rate": 0.09388888888888888,
+      "wilson_lower": 0.08126571781958997,
+      "edge_vs_10pct": -0.006111111111111123,
+      "epochs": 7
+    },
+    {
+      "model": "mlp",
+      "window": 10,
+      "hidden": [
+        32
+      ],
+      "predictions": 1800,
+      "wins": 160,
+      "hit_rate": 0.08888888888888889,
+      "wilson_lower": 0.07660220009901372,
+      "edge_vs_10pct": -0.011111111111111113,
+      "epochs": 7
     }
   ],
   "note": "Neural candidates are trained only on earlier data and ranked on chronological holdout data."
