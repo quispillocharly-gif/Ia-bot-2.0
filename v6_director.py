@@ -33,7 +33,7 @@ def main():
     v5=load(M/"neural_v5_latest.json")
     v51=load(M/"v5_1_confirmation_latest.json")
     cand=load(M/"neural_v5_candidate.json")
-    ens=load(M/"v6_ensemble_latest.json")
+    ens=load(M/"v6_ensemble_latest.json")\n    payout=load(M/"payout_snapshot.json")
 
     v4l=v4.get("leader") or {}
     v5l=v5.get("leader") or {}
@@ -72,8 +72,20 @@ def main():
     GRAVE.write_text(json.dumps(grave,indent=2))
 
     forward_confirmed=[]
+    confirmed_objs=[]
     for name,obj in (("V4.1",v41),("V5.2",v51),("V6.1",ens)):
-        if obj and obj.get("status")=="CONFIRMED_EDGE":forward_confirmed.append(name)
+        if obj and obj.get("status")=="CONFIRMED_EDGE":
+            forward_confirmed.append(name); confirmed_objs.append(obj)
+
+    break_even=payout.get("max_break_even") if payout.get("status")=="OK" else None
+    if break_even is None:
+        economic_status="PAYOUT_UNAVAILABLE"
+    elif not confirmed_objs:
+        economic_status="PAYOUT_READY_FORWARD_NOT_CONFIRMED"
+    elif any(float(x.get("wilson_lower",0) or 0)>float(break_even) for x in confirmed_objs):
+        economic_status="ECONOMIC_EDGE_CANDIDATE"
+    else:
+        economic_status="STAT_EDGE_BELOW_BREAK_EVEN"
 
     if forward_confirmed:
         decision="FORWARD_EDGE_SIGNAL_DETECTED"
@@ -95,7 +107,12 @@ def main():
         priorities.append("Quarantine neural promotion while future performance is materially below historical performance.")
     if not ens:
         priorities.append("Start V6.1 forward ensemble validation.")
-    priorities.append("Do not claim profitability until live MATCH payout and break-even rate are measured.")
+    if break_even is None:
+        priorities.append("Payout probe is unavailable; do not claim profitability.")
+    elif not confirmed_objs:
+        priorities.append(f"Current conservative MATCH break-even is {break_even:.4f}; wait for forward confirmation before economic evaluation.")
+    elif economic_status!="ECONOMIC_EDGE_CANDIDATE":
+        priorities.append(f"Forward evidence has not cleared the current conservative break-even rate {break_even:.4f}.")
 
     snapshot={
         "timestamp":int(time.time()),"decision":decision,"drift":drift,
@@ -114,7 +131,8 @@ def main():
     out={
         "version":"6.0-autonomous-research-director","timestamp":int(time.time()),
         "decision":decision,"forward_confirmed_systems":forward_confirmed,
-        "economic_status":"PAYOUT_NOT_MEASURED","drift_status":drift,
+        "economic_status":economic_status,"payout_status":payout.get("status","MISSING"),
+        "break_even_rate":break_even,"drift_status":drift,
         "historical_to_future_gap":gap,
         "multiple_testing":{"v4":{"tests":tests_v4,"adjusted_p":v4_adj},"v5":{"tests":tests_v5,"adjusted_p":v5_adj}},
         "forward_evidence":{"v4_1_p":v41_p,"v5_2_p":v51_p,"v6_1_p":ens_p},

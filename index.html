@@ -188,7 +188,7 @@ async function loadV6(){
   if(a.ok){
    const d=await a.json();
    $('v6Decision').textContent=(d.decision||'–').replaceAll('_',' ');
-   $('v6Registry').textContent='registry '+(d.registry_total??0)+' · graveyard '+(d.graveyard_size??0)+' · economía '+(d.economic_status||'–');
+   $('v6Registry').textContent='registry '+(d.registry_total??0)+' · graveyard '+(d.graveyard_size??0)+' · economía '+(d.economic_status||'–')+' · break-even '+pct(d.break_even_rate);
    $('v6Drift').textContent=(d.drift_status||'–').replaceAll('_',' ');
    const m=d.multiple_testing||{};
    $('v6Multi').textContent='V4 adj-p '+((m.v4?.adjusted_p??1).toFixed(4))+' · V5 adj-p '+((m.v5?.adjusted_p??1).toFixed(4));
