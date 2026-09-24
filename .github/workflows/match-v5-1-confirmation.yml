@@ -2,6 +2,11 @@ name: MATCH AI - V5.1 Neural Confirmation
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "confirm_v5_1.py"
+      - ".github/workflows/match-v5-1-confirmation.yml"
   schedule:
     - cron: "23 * * * *"
 
