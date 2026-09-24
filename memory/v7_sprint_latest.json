@@ -1,0 +1,66 @@
+{
+  "version": "7.1-two-week-evidence-sprint",
+  "timestamp": 1790274524,
+  "start": "2026-09-24T00:00:00-05:00",
+  "deadline": "2026-10-08T23:59:59-05:00",
+  "days_left": 14.438363463078705,
+  "hours_left": 346.5207231138889,
+  "status": "COLLECTING",
+  "core_gates_passed": 0,
+  "core_gates_total": 4,
+  "signals_per_day": 0.0,
+  "projected_signals_at_deadline": 0,
+  "break_even_rate": 0.11198208286674133,
+  "v7_status": "COLLECTING",
+  "v61_status": "COLLECTING",
+  "v5_promotion": "HELD_STREAK",
+  "gates": {
+    "forward_sample": {
+      "pass": false,
+      "value": 0,
+      "target": 1000
+    },
+    "economic_hit_rate": {
+      "pass": false,
+      "value": null,
+      "target": 0.11198208286674133
+    },
+    "economic_wilson": {
+      "pass": false,
+      "value": 0.0,
+      "target": 0.11198208286674133
+    },
+    "positive_shadow_ev": {
+      "pass": false,
+      "value": null,
+      "pnl": 0.0,
+      "target": 0.0
+    },
+    "economic_placebo": {
+      "pass": false,
+      "value": 1.0,
+      "target": 0.05
+    },
+    "calibration": {
+      "pass": false,
+      "value": null,
+      "target": 0.03
+    },
+    "regime_coverage": {
+      "pass": false,
+      "value": 0,
+      "positive_regimes": 0,
+      "target": 2
+    }
+  },
+  "priorities": [
+    "Accumulate at least 1000 forward V7 signals before any conclusion.",
+    "Raise forward hit rate above current payout break-even without reducing validation quality.",
+    "Wilson lower bound is still below economic break-even; more stable evidence is required.",
+    "Shadow EV must turn positive under current payout.",
+    "Economic placebo probability must fall below 5%.",
+    "Collect meaningful samples in at least two detected regimes.",
+    "Improve or verify probability calibration before trusting confidence thresholds."
+  ],
+  "note": "Sprint success means evidence of an economically plausible edge, not a guaranteed profitable system. Real-money execution remains disabled."
+}
