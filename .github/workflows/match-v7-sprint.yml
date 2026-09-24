@@ -1,17 +1,12 @@
 name: MATCH AI - V7.1 Evidence Sprint Director
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - "v7_sprint.py"
-      - ".github/workflows/match-v7-sprint.yml"
   schedule:
     - cron: "55 * * * *"
 permissions:
   contents: write
 concurrency:
-  group: match-ai-v7-sprint-writer
+  group: match-ai-v7-state-writer
   cancel-in-progress: false
 jobs:
   sprint:
