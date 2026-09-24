@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Hourly final coordinator: evaluates the freshest outputs from all research stages.
 from pathlib import Path
 import json, math, time, hashlib
 
