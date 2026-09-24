@@ -20,6 +20,7 @@ concurrency:
 jobs:
   confirm:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -28,16 +29,16 @@ jobs:
       - run: pip install websockets==13.1 numpy scikit-learn joblib
       - name: Refresh audited ticks
         env:
-          TICK_COUNT: "6000"
+          TICK_COUNT: "10000"
         run: python collect_ticks.py
-      - name: Confirm frozen neural model
+      - name: Confirm frozen neural candidate
         run: python confirm_v5_1.py
       - name: Persist neural confirmation
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add memory/v5_1_confirmation_latest.json memory/v5_1_confirmation_state.json memory/neural_v5_frozen.json memory/neural_v5_frozen.joblib
-          git diff --cached --quiet || git commit -m "V5.1 neural forward confirmation"
+          git diff --cached --quiet || git commit -m "V5.2 neural forward confirmation"
           git restore audit.json ticks.json
           for attempt in 1 2 3; do
             git pull --rebase origin main

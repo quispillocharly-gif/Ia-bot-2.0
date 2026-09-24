@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#020805">
-<title>MATCH AI V4.3 MATRIX</title>
+<title>MATCH AI V5.2 MATRIX</title>
 <style>
 :root{
  --bg:#020805;--panel:#06130ccc;--panel2:#071a10e8;--line:#0f6b39;
@@ -86,7 +86,7 @@ tr:first-child td{background:#0b2d1966;color:#caffda}
 <canvas id="matrix"></canvas><div class="overlay"></div><div class="scan"></div>
 <div class="wrap">
  <header class="header">
-  <h1 class="logo glitch" data-text="MATCH AI V4.3">MATCH AI V4.3<small>MATRIX RESEARCH CONSOLE</small></h1>
+  <h1 class="logo glitch" data-text="MATCH AI V5.2">MATCH AI V5.2<small>MATRIX AUTONOMOUS RESEARCH CONSOLE</small></h1>
   <div class="pills">
    <span class="pill"><span id="liveDot" class="dot off"></span><span id="liveState">LIVE OFF</span></span>
    <span class="pill"><span id="memDot" class="dot warn"></span><span id="memState">MEMORY SYNC</span></span>
@@ -123,9 +123,9 @@ tr:first-child td{background:#0b2d1966;color:#caffda}
 
 
  <section class="grid3" id="neuralCore">
-  <div class="card"><div class="label">V5 NEURAL CHAMPION</div><div id="v5Leader" class="big">BOOTING…</div><div id="v5Rate" class="metric cyan">–</div><div id="v5Meta" class="mini">Esperando primera corrida neuronal</div></div>
-  <div class="card"><div class="label">V5 NEURAL EDGE</div><div id="v5Edge" class="metric">–</div><div id="v5Wilson" class="big">Wilson low –</div><span id="v5Status" class="badge">WAITING</span></div>
-  <div class="card"><div class="label">V5.1 FUTURE CONFIRMATION</div><div id="v51Rate" class="metric">–</div><div id="v51Rec" class="mini">Esperando modelo congelado</div><div class="progressLabel"><span>PROGRESO</span><span id="v51Pct">0 / 1000</span></div><div class="progress"><div id="v51Bar" class="fill" style="width:0%"></div></div><span id="v51Status" class="badge">WAITING</span></div>
+  <div class="card"><div class="label">V5.2 NEURAL CHAMPION</div><div id="v5Leader" class="big">BOOTING…</div><div id="v5Rate" class="metric cyan">–</div><div id="v5Meta" class="mini">Esperando primera corrida neuronal</div></div>
+  <div class="card"><div class="label">V5.2 NEURAL EDGE</div><div id="v5Edge" class="metric">–</div><div id="v5Wilson" class="big">Wilson low –</div><span id="v5Status" class="badge">WAITING</span></div>
+  <div class="card"><div class="label">V5.2 FUTURE CONFIRMATION</div><div id="v51Rate" class="metric">–</div><div id="v51Rec" class="mini">Esperando modelo congelado</div><div class="progressLabel"><span>PROGRESO</span><span id="v51Pct">0 / 1000</span></div><div class="progress"><div id="v51Bar" class="fill" style="width:0%"></div></div><span id="v51Status" class="badge">WAITING</span></div>
  </section>
 
  <section class="card">
@@ -178,7 +178,7 @@ async function loadNeural(){
    const n5=await a.json(),L=n5.leader||{};
    $('v5Leader').textContent='MLP · W'+(L.window??'–')+' · '+((L.hidden||[]).join('×')||'–');
    $('v5Rate').textContent=pct(L.hit_rate)+' · '+(L.wins??0)+'/'+(L.predictions??0);
-   $('v5Meta').textContent='run '+n5.runs+' · candidate '+(n5.candidate_model_id||'–')+' · '+(L.epochs??0)+' epochs';
+   $('v5Meta').textContent='run '+n5.runs+' · '+(n5.promotion||'–')+' · threshold '+((L.confidence_threshold??0)*100).toFixed(1)+'% · coverage '+pct(L.coverage)+' · '+(L.epochs??0)+' epochs';
    $('v5Edge').textContent=pp(L.edge_vs_10pct);$('v5Edge').className='metric '+((L.edge_vs_10pct??0)>=0?'green':'red');
    $('v5Wilson').textContent='Wilson low '+pct(L.wilson_lower);setBadge($('v5Status'),n5.status);
   }
@@ -188,7 +188,7 @@ async function loadNeural(){
   if(b.ok){
    const c=await b.json();$('v51Rate').textContent=pct(c.hit_rate);
    $('v51Rate').className='metric '+(c.hit_rate==null?'muted':c.hit_rate>=.10?'green':'red');
-   $('v51Rec').textContent=c.predictions+' pruebas · '+c.wins+' wins · '+c.losses+' losses · W'+c.window;
+   $('v51Rec').textContent=c.predictions+' señales · '+c.wins+' wins · '+c.losses+' losses · cobertura '+pct(c.coverage)+' · omitidas '+(c.skipped??0)+' · threshold '+(((c.confidence_threshold??0)*100).toFixed(1))+'%';
    $('v51Bar').style.width=Math.min(100,(c.predictions||0)/10)+'%';$('v51Pct').textContent=(c.predictions||0)+' / 1000';
    setBadge($('v51Status'),c.status);
   }
