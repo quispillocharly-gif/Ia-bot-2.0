@@ -124,7 +124,14 @@ def main():
 
     Xtest_raw,ytest=raw_xy(ds,int(cfg["window"]),select_end,len(ds))
     Xtest=enc.transform(Xtest_raw)
-    test=signal_metrics(clf,Xtest,ytest,float(selected["confidence_threshold"]))
+    chosen_threshold=float(selected["confidence_threshold"])
+    test=signal_metrics(clf,Xtest,ytest,chosen_threshold)
+    parts=np.array_split(np.arange(len(ytest)),3)
+    test_blocks=[signal_metrics(clf,Xtest[ix],ytest[ix],chosen_threshold) for ix in parts if len(ix)]
+    positive_blocks=sum(1 for m in test_blocks if m["predictions"]>=100 and m["hit_rate"]>BASE)
+    eligible_block_rates=[m["hit_rate"] for m in test_blocks if m["predictions"]>=100]
+    block_floor=min(eligible_block_rates) if eligible_block_rates else 0.0
+    block_stable=positive_blocks>=2 and block_floor>=.085
     leader={
         "model":"mlp","window":int(cfg["window"]),"hidden":list(cfg["hidden"]),
         "confidence_threshold":float(selected["confidence_threshold"]),
@@ -135,6 +142,10 @@ def main():
         "selection_hit_rate":selected["selection_hit_rate"],
         "selection_wilson_lower":selected["selection_wilson_lower"],
         "selection_coverage":selected["selection_coverage"],
+        "positive_test_blocks":positive_blocks,
+        "test_block_floor":block_floor,
+        "block_stable":block_stable,
+        "test_blocks":test_blocks,
     }
 
     challenger_id=model_id(cfg,leader["confidence_threshold"],last_epoch,seed)
@@ -145,12 +156,17 @@ def main():
         run_no<=int(x.get("blocked_until_v5_run",0))
         for x in grave.get("entries",[])
     )
-    promotable=(
+    base_promotable=(
         leader["predictions"]>=MIN_PROMOTE_SIGNALS and
         leader["coverage"]>=MIN_PROMOTE_COVERAGE and
         leader["hit_rate"]>BASE and
         leader["wilson_lower"]>=MIN_PROMOTE_WILSON
     )
+    if base_promotable and block_stable:
+        challenger_streak=(int(st.get("challenger_streak",0))+1) if st.get("challenger_signature")==challenger_signature else 1
+    else:
+        challenger_streak=0
+    promotable=base_promotable and block_stable and challenger_streak>=2
 
     incumbent=json.loads(META.read_text()) if META.exists() else None
     confirm=json.loads(CONFIRM.read_text()) if CONFIRM.exists() else None
@@ -163,12 +179,18 @@ def main():
     bootstrap=incumbent is None
 
     promote=bool(
-        not blocked_by_graveyard and
-        leader["predictions"]>=MIN_PROMOTE_SIGNALS and
-        (bootstrap or (promotable and (legacy_incumbent or incumbent_failed or improves)))
+        not blocked_by_graveyard and promotable and
+        (bootstrap or legacy_incumbent or incumbent_failed or improves)
     )
 
-    promotion="HELD_GRAVEYARD" if blocked_by_graveyard else "HELD"
+    if blocked_by_graveyard:
+        promotion="HELD_GRAVEYARD"
+    elif not block_stable:
+        promotion="HELD_BLOCK_STABILITY"
+    elif challenger_streak<2:
+        promotion="HELD_STREAK"
+    else:
+        promotion="HELD"
     if promote:
         bundle={
             "search_version":SEARCH_VERSION,"model_id":challenger_id,
@@ -198,6 +220,8 @@ def main():
         status="NO_NEURAL_EDGE_DEMONSTRATED"
 
     st["runs"]=run_no; st["last_epoch"]=last_epoch
+    st["challenger_signature"]=challenger_signature
+    st["challenger_streak"]=challenger_streak
     STATE.write_text(json.dumps(st,indent=2))
     out={
         "version":"5.2-neural-evolution-lab","timestamp":int(time.time()),"runs":run_no,
@@ -206,10 +230,12 @@ def main():
         "leader":leader,"challenger_model_id":challenger_id,
         "challenger_signature":challenger_signature,
         "blocked_by_graveyard":blocked_by_graveyard,
+        "block_stable":block_stable,
+        "challenger_streak":challenger_streak,
         "candidate_model_id":incumbent.get("model_id") if incumbent else None,
         "candidate_search_version":incumbent.get("search_version") if incumbent else None,
         "selection_ranking":selection_rows,
-        "note":"Architecture and confidence threshold are selected on a chronological selection slice, then evaluated once on a later untouched test slice. Candidate promotion is separate from future confirmation."
+        "note":"Architecture and confidence threshold are selected chronologically, evaluated on a later untouched test split, checked across three test blocks, and must repeat across runs before promotion. Future confirmation remains separate."
     }
     OUT.write_text(json.dumps(out,indent=2))
     print(json.dumps(out,indent=2))
