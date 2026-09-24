@@ -13,7 +13,7 @@ async def one(ws,digit):
     req={
         "proposal":1,"amount":1,"basis":"stake","contract_type":"DIGITMATCH",
         "currency":"USD","duration":1,"duration_unit":"t","barrier":str(digit),
-        "underlying_symbol":SYMBOL,"subscribe":0,"req_id":100+digit
+        "underlying_symbol":SYMBOL,"req_id":100+digit
     }
     await ws.send(json.dumps(req))
     while True:
