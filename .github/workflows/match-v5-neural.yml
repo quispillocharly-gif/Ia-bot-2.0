@@ -2,6 +2,11 @@ name: MATCH AI - V5 Neural Lab
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "neural_v5.py"
+      - ".github/workflows/match-v5-neural.yml"
   schedule:
     - cron: "13 * * * *"
 
