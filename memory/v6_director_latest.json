@@ -1,11 +1,13 @@
 {
   "version": "6.0-autonomous-research-director",
-  "timestamp": 1790273116,
-  "decision": "COLLECT_MORE_FORWARD_DATA",
+  "timestamp": 1790273321,
+  "decision": "NO_CONFIRMED_EDGE_CONTINUE_RESEARCH",
   "forward_confirmed_systems": [],
-  "economic_status": "PAYOUT_NOT_MEASURED",
-  "drift_status": "STABLE",
-  "historical_to_future_gap": -0.0031425449655404364,
+  "economic_status": "PAYOUT_UNAVAILABLE",
+  "payout_status": "ERROR",
+  "break_even_rate": null,
+  "drift_status": "DRIFT_WATCH",
+  "historical_to_future_gap": -0.011859093730602108,
   "multiple_testing": {
     "v4": {
       "tests": 64,
@@ -18,17 +20,16 @@
   },
   "forward_evidence": {
     "v4_1_p": 0.8276609866848168,
-    "v5_2_p": 0.28418042544907096,
+    "v5_2_p": 0.5766202736827579,
     "v6_1_p": 1.0
   },
-  "registry_total": 1,
-  "graveyard_size": 0,
+  "registry_total": 2,
+  "graveyard_size": 1,
   "priorities": [
     "Do not reuse the rejected V4.1 transition_3 candidate without new independent evidence.",
-    "Continue frozen neural forward confirmation to at least 1000 emitted signals.",
+    "Rotate from the failed neural candidate after cooldown and test a materially different challenger.",
     "Treat V5 historical gains as exploratory after multiple-testing correction.",
-    "Start V6.1 forward ensemble validation.",
-    "Do not claim profitability until live MATCH payout and break-even rate are measured."
+    "Payout probe is unavailable; do not claim profitability."
   ],
   "note": "V6 records evidence, corrects exploratory multiple testing, monitors drift and failed candidates, and does not equate hit rate with profitability."
 }
