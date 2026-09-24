@@ -1,106 +1,200 @@
 <!doctype html>
-<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>MATCH AI V4.2 Visual Research</title>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#020805">
+<title>MATCH AI V4.3 MATRIX</title>
 <style>
-*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at top,#172765,#050713 58%);color:#eef5ff;font-family:system-ui,-apple-system,sans-serif}
-.wrap{max-width:1100px;margin:auto;padding:15px}.head{text-align:center;padding:16px}.head h1{margin:0;font-size:34px;background:linear-gradient(90deg,#00eaff,#a35cff,#ff48c8);-webkit-background-clip:text;color:transparent}
-.pill{display:inline-block;margin:7px 3px;padding:6px 10px;border:1px solid #00eaff;border-radius:99px;color:#72f2ff;font-size:12px}
-button{border:0;border-radius:15px;padding:15px;font-weight:900;color:white;background:linear-gradient(90deg,#4d5cff,#bd3fff,#ff3f9f)}
-.actions{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin:10px 0 14px}.card{background:#0c1230e8;border:1px solid #33458a;border-radius:18px;padding:15px;margin-bottom:12px;box-shadow:0 0 22px #071136}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px}.label{font-size:11px;letter-spacing:1.2px;color:#9daed9}.big{font-size:23px;font-weight:900}.huge{font-size:68px;line-height:1;font-weight:1000}.green{color:#64ffb1}.yellow{color:#ffd66b}.red{color:#ff7088}.cyan{color:#72f2ff}.muted{color:#9daed9}
-.console{height:300px;overflow:auto;background:#030610;border:1px solid #253a73;border-radius:13px;padding:10px;font:12px ui-monospace,monospace;line-height:1.55}.line{border-bottom:1px solid #10182e;padding:3px}
-.row{display:grid;grid-template-columns:1.4fr .7fr .7fr .7fr;gap:5px;padding:8px 0;border-bottom:1px solid #25305e;font-size:13px}.progress{height:10px;background:#20294d;border-radius:9px;overflow:hidden}.fill{height:100%;background:linear-gradient(90deg,#00eaff,#9f5cff,#ff48c8)}
-.center{text-align:center}.signal{border-color:#ff48c8;text-align:center}.status{text-align:center;font-size:12px;color:#9daed9;margin:8px}.tag{display:inline-block;padding:4px 8px;border-radius:20px;background:#151e46;margin:3px;font-size:11px}
-</style></head><body><div class="wrap">
-<div class="head"><h1>MATCH AI V4.2</h1><div class="pill">VISUAL RESEARCH</div><div class="pill">R_75 · MATCH</div><div class="pill">DEMO / INVESTIGACIÓN</div></div>
-<div class="actions"><button id="go">▶ INICIAR CEREBRO LIVE</button><button id="refresh">↻ ACTUALIZAR GITHUB</button></div>
+:root{
+ --bg:#020805;--panel:#06130ccc;--panel2:#071a10e8;--line:#0f6b39;
+ --green:#54ff91;--green2:#00ff66;--cyan:#56fff2;--lime:#b6ff61;
+ --red:#ff5d73;--yellow:#ffe66b;--text:#dfffea;--muted:#82b897;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+ margin:0;min-height:100vh;color:var(--text);font-family:ui-monospace,SFMono-Regular,Consolas,monospace;
+ background:
+ radial-gradient(circle at 50% 0,#0c3b20 0,transparent 35%),
+ linear-gradient(180deg,#020805,#010403 70%);
+ overflow-x:hidden
+}
+#matrix{position:fixed;inset:0;width:100%;height:100%;z-index:-3;opacity:.28}
+.overlay{position:fixed;inset:0;z-index:-2;pointer-events:none;background:
+ linear-gradient(rgba(0,255,102,.025) 1px,transparent 1px),
+ linear-gradient(90deg,rgba(0,255,102,.02) 1px,transparent 1px);
+ background-size:36px 36px}
+.scan{position:fixed;left:0;right:0;height:120px;top:-140px;z-index:-1;pointer-events:none;
+ background:linear-gradient(180deg,transparent,rgba(43,255,126,.05),transparent);
+ animation:scan 8s linear infinite}
+@keyframes scan{to{transform:translateY(calc(100vh + 260px))}}
+.wrap{max-width:1180px;margin:auto;padding:12px;position:relative}
+.header{text-align:center;padding:18px 5px 10px}
+.logo{
+ margin:0;font-size:clamp(32px,8vw,52px);font-weight:1000;letter-spacing:2px;
+ color:var(--green);text-shadow:0 0 8px #00ff6677,0 0 22px #00ff6644
+}
+.logo small{display:block;font-size:11px;letter-spacing:5px;color:#71b88b;text-shadow:none;margin-top:4px}
+.pills{margin-top:10px}
+.pill,.badge{display:inline-flex;align-items:center;gap:6px;padding:6px 9px;margin:3px;border:1px solid #16673a;border-radius:5px;background:#051109dd;font-size:10px;font-weight:900;box-shadow:inset 0 0 12px #00ff6610}
+.dot{width:7px;height:7px;border-radius:50%;background:#5c7767;box-shadow:0 0 10px currentColor}
+.dot.ok{background:var(--green2)}.dot.warn{background:var(--yellow)}.dot.off{background:var(--red)}
+.actions{display:grid;grid-template-columns:1.2fr 1fr .8fr;gap:8px;margin:10px 0}
+button{
+ border:1px solid #15964b;border-radius:6px;padding:14px 9px;color:var(--green);font-weight:1000;
+ background:linear-gradient(180deg,#082413,#04140b);box-shadow:0 0 18px #00ff6620,inset 0 0 12px #00ff6612;
+ text-transform:uppercase;letter-spacing:.5px
+}
+button:hover{filter:brightness(1.15);box-shadow:0 0 24px #00ff6630}
+button.alt{color:var(--cyan);border-color:#1b7f75}
+button.danger{color:var(--yellow);border-color:#7d7428}
+.card{
+ position:relative;background:linear-gradient(180deg,#07170eea,#031009e8);border:1px solid #0f6737;
+ border-radius:8px;padding:14px;margin-bottom:10px;box-shadow:0 0 24px #00ff6610,inset 0 0 20px #00ff6609
+}
+.card:before,.card:after{content:"";position:absolute;width:18px;height:18px;border-color:var(--green2);opacity:.65}
+.card:before{left:-1px;top:-1px;border-left:2px solid;border-top:2px solid}.card:after{right:-1px;bottom:-1px;border-right:2px solid;border-bottom:2px solid}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:9px}.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
+.label{font-size:10px;letter-spacing:1.6px;color:#65a97d;font-weight:900;text-transform:uppercase}
+.big{font-size:21px;font-weight:1000}.metric{font-size:29px;font-weight:1000;margin:6px 0}
+.huge{font-size:clamp(56px,15vw,94px);line-height:1;font-weight:1000}
+.green{color:var(--green)}.cyan{color:var(--cyan)}.yellow{color:var(--yellow)}.red{color:var(--red)}.muted{color:var(--muted)}
+.signal{text-align:center;border-color:#18b95a;background:radial-gradient(circle at 50% 0,#0b5f3035,transparent 58%),linear-gradient(#071b10,#031009)}
+.signal .huge{text-shadow:0 0 14px #00ff6655}
+.statusrow{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.mini{font-size:12px;color:var(--muted);line-height:1.5}
+.progress{height:11px;background:#0a2012;border:1px solid #155e34;border-radius:3px;overflow:hidden}
+.fill{height:100%;background:linear-gradient(90deg,#00a844,#00ff66,#6dff9d);box-shadow:0 0 14px #00ff6677;transition:width .4s}
+.progressLabel{display:flex;justify-content:space-between;font-size:10px;color:#7db78f;margin:5px 0}
+.voteGrid{display:grid;grid-template-columns:repeat(2,1fr);gap:7px;margin-top:9px}
+.vote{padding:8px;background:#031009;border:1px solid #135d34;border-radius:5px}
+.vtop{display:flex;justify-content:space-between;font-size:11px}.vbar{height:6px;background:#092014;border-radius:2px;overflow:hidden;margin-top:5px}.vfill{height:100%;background:linear-gradient(90deg,#00b64d,#66ff9d)}
+.tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}.tag{font-size:11px;padding:5px 7px;border:1px solid #155e34;border-radius:4px;background:#05140b}
+.tableWrap{overflow:auto;border:1px solid #155e34;border-radius:5px;margin-top:9px}table{width:100%;border-collapse:collapse;min-width:760px;font-size:12px}
+th,td{padding:8px;border-bottom:1px solid #0c3a21;text-align:left;white-space:nowrap}th{background:#06170d;color:#75c990;font-size:10px;letter-spacing:.8px}
+tr:first-child td{background:#0b2d1966;color:#caffda}
+.console{height:260px;overflow:auto;background:#010503;border:1px solid #145f34;border-radius:5px;padding:9px;font:11px ui-monospace,monospace;box-shadow:inset 0 0 28px #00ff660c}
+.line{border-bottom:1px solid #082916;padding:4px}.footer{text-align:center;color:#5f9874;font-size:11px;padding:5px 8px 18px}.delta{font-size:11px}.up{color:var(--green)}.down{color:var(--red)}
+.glitch{position:relative}.glitch:after{content:attr(data-text);position:absolute;left:2px;top:0;color:#00ff6699;clip-path:inset(40% 0 45% 0);animation:glitch 2.8s infinite steps(2,end)}
+@keyframes glitch{0%,90%,100%{transform:translate(0)}92%{transform:translate(2px,-1px)}94%{transform:translate(-2px,1px)}96%{transform:translate(1px,0)}}
+@media(max-width:850px){.grid{grid-template-columns:repeat(2,1fr)}.grid3{grid-template-columns:1fr}.actions{grid-template-columns:1fr 1fr}.actions button:last-child{grid-column:1/-1}.voteGrid{grid-template-columns:1fr}}
+@media(max-width:480px){.wrap{padding:9px}.grid{grid-template-columns:1fr}.actions{grid-template-columns:1fr}.actions button:last-child{grid-column:auto}.card{padding:12px}}
+</style>
+</head>
+<body>
+<canvas id="matrix"></canvas><div class="overlay"></div><div class="scan"></div>
+<div class="wrap">
+ <header class="header">
+  <h1 class="logo glitch" data-text="MATCH AI V4.3">MATCH AI V4.3<small>MATRIX RESEARCH CONSOLE</small></h1>
+  <div class="pills">
+   <span class="pill"><span id="liveDot" class="dot off"></span><span id="liveState">LIVE OFF</span></span>
+   <span class="pill"><span id="memDot" class="dot warn"></span><span id="memState">MEMORY SYNC</span></span>
+   <span class="pill"><span id="confirmDot" class="dot warn"></span><span id="confirmStatePill">V4.1 COLLECTING</span></span>
+   <span class="pill">R_75 / MATCH</span>
+  </div>
+ </header>
 
-<div class="card signal">
-<div class="label">SEÑAL EXPERIMENTAL ACTIVA</div><div id="sig" class="huge">–</div>
-<div id="sigInfo" class="big">Monitor detenido</div><div id="sigResult" class="muted"></div>
+ <div class="actions">
+  <button id="go">▶ INICIAR NÚCLEO LIVE</button>
+  <button id="refresh" class="alt">↻ SINCRONIZAR GITHUB</button>
+  <button id="reset" class="danger">REINICIAR LIVE LOCAL</button>
+ </div>
+
+ <section class="card signal">
+  <div class="label">SEÑAL EXPERIMENTAL LIVE</div>
+  <div id="sig" class="huge green">–</div>
+  <div id="sigInfo" class="big">NÚCLEO EN ESPERA</div>
+  <div id="sigResult" class="mini">No ejecuta compras reales.</div>
+ </section>
+
+ <section class="grid">
+  <div class="card"><div class="label">TICK ACTUAL</div><div id="tick" class="big cyan">–</div><div id="digit" class="huge">–</div><div id="tickCount" class="mini">Sin stream</div></div>
+  <div class="card"><div class="label">LÍDER HISTÓRICO V4</div><div id="leader" class="big">–</div><div id="leaderRate" class="metric green">–</div><div id="leaderDelta" class="delta muted">Sin comparación</div></div>
+  <div class="card"><div class="label">EDGE VS BASE 10%</div><div id="edge" class="metric">–</div><div id="wilson" class="big">Wilson: –</div><div id="v4state" class="mini">–</div></div>
+  <div class="card"><div class="label">CONFIRMACIÓN FUTURA</div><div id="confirmRate" class="metric">–</div><div id="confirmRec" class="mini">–</div><div class="progressLabel"><span>PROGRESO</span><span id="confirmPct">0 / 1000</span></div><div class="progress"><div id="confirmBar" class="fill" style="width:0%"></div></div></div>
+ </section>
+
+ <section class="grid3">
+  <div class="card"><div class="label">MODELO CONGELADO V4.1</div><div id="confirm" class="big">–</div><div id="confirmWilson" class="mini">Wilson lower: –</div><span id="confirmStatus" class="badge">COLLECTING</span></div>
+  <div class="card"><div class="label">LIVE LOCAL</div><div id="liveRate" class="metric">–</div><div id="liveRec" class="mini">–</div><div id="liveModel" class="mini yellow">–</div></div>
+  <div class="card"><div class="label">MEMORY CORE</div><div id="lastUpdate" class="big">–</div><div id="runs" class="mini">–</div><div id="nextRefresh" class="mini cyan">AUTO SYNC 60s</div></div>
+ </section>
+
+ <section class="card">
+  <div class="statusrow"><div><div class="label">NEURAL CONSENSUS / MODEL VOTES</div><div id="brainSummary" class="mini">Inicia el núcleo live.</div></div><span id="consensusBadge" class="badge">NO DATA</span></div>
+  <div id="votes" class="voteGrid"></div><div id="brain" class="tags"></div>
+ </section>
+
+ <section class="card">
+  <div class="statusrow"><div><div class="label">V4 MODEL TOURNAMENT / CHRONOLOGICAL HOLDOUT</div><div class="mini">Ranking por Wilson lower. Resultado experimental, no garantía futura.</div></div><span id="researchBadge" class="badge">–</span></div>
+  <div class="tableWrap"><table><thead><tr><th>#</th><th>MODELO</th><th>WAIT</th><th>WINS</th><th>RATE</th><th>EDGE</th><th>WILSON LOW</th></tr></thead><tbody id="tournament"></tbody></table></div>
+ </section>
+
+ <section class="card"><div class="label">SYSTEM TERMINAL</div><div id="console" class="console"></div></section>
+ <div id="status" class="footer">BOOTING MEMORY CORE…</div>
+ <div class="footer">MODO INVESTIGACIÓN. Los porcentajes son experimentales. No garantiza rentabilidad ni ejecuta operaciones reales.</div>
 </div>
 
-<div class="grid">
-<div class="card"><div class="label">TICK ACTUAL</div><div id="tick" class="big cyan">–</div><div id="digit" class="huge">–</div></div>
-<div class="card"><div class="label">V4 · LÍDER HISTÓRICO</div><div id="leader" class="big">–</div><div id="leaderRate" class="green">–</div><div id="v4state" class="yellow">–</div></div>
-<div class="card"><div class="label">V4.1 · CONFIRMACIÓN FUTURA</div><div id="confirm" class="big">–</div><div id="confirmRate" class="green">–</div><div id="confirmRec" class="muted">–</div><div class="progress"><div id="confirmBar" class="fill" style="width:0%"></div></div></div>
-<div class="card"><div class="label">PRUEBA LIVE LOCAL</div><div id="liveRate" class="big">–</div><div id="liveRec" class="muted">–</div><div id="liveModel" class="yellow">–</div></div>
-</div>
-
-<div class="card"><div class="label">🧠 CEREBRO IA EN VIVO · QUÉ ESTÁ CALCULANDO</div><div id="brain" class="grid"></div></div>
-<div class="card"><div class="label">🏆 TORNEO V4 · RESULTADOS EN GITHUB</div><div id="tournament"></div></div>
-<div class="card"><div class="label">🔬 CONSOLA DE INVESTIGACIÓN</div><div id="console" class="console"></div></div>
-<div class="status" id="status">Cargando memoria…</div>
-<div class="status">Los porcentajes son resultados experimentales. El sistema puede mejorar, empeorar o no demostrar ventaja; no garantiza rentabilidad.</div>
-</div>
 <script>
-const $=x=>document.getElementById(x), pct=x=>x==null?'–':(100*x).toFixed(2)+'%';
+const $=x=>document.getElementById(x),pct=x=>x==null?'–':(100*x).toFixed(2)+'%',pp=x=>x==null?'–':((100*x)>=0?'+':'')+(100*x).toFixed(2)+' pp';
 const WS='wss://api.derivws.com/trading/v1/options/ws/public';
-let seq=[],socket=null,running=false,v4=null,c4=null,signal=null,tickNo=0;
-let stats=JSON.parse(localStorage.getItem('v42Live')||'{"n":0,"w":0,"l":0}');
+let seq=[],socket=null,running=false,v4=null,c4=null,signal=null,tickNo=0,refreshLeft=60;
+let stats=JSON.parse(localStorage.getItem('matrixLive')||'{"n":0,"w":0,"l":0}');
+let previous=JSON.parse(localStorage.getItem('matrixSnapshot')||'null');
+
 const MODELS=[
  ['hot10',a=>hot(a,10)],['hot20',a=>hot(a,20)],['hot40',a=>hot(a,40)],['hot80',a=>hot(a,80)],
  ['hot120',a=>hot(a,120)],['hot200',a=>hot(a,200)],['cold20',a=>cold(a,20)],['cold80',a=>cold(a,80)],
  ['gap',gap],['transition1',a=>trans(a,1)],['transition2',a=>trans(a,2)],['transition3',a=>trans(a,3)]
 ];
-function log(s,cls=''){let e=document.createElement('div');e.className='line '+cls;e.textContent=new Date().toLocaleTimeString()+'  '+s;$('console').prepend(e);while($('console').children.length>150)$('console').lastChild.remove()}
-function hot(a,n){let z=a.slice(-n),c=Array(10).fill(0);z.forEach(x=>c[x]++);return c.indexOf(Math.max(...c))}
-function cold(a,n){let z=a.slice(-n),c=Array(10).fill(0);z.forEach(x=>c[x]++);return c.indexOf(Math.min(...c))}
-function gap(a){let g=[];for(let d=0;d<10;d++){let i=a.lastIndexOf(d);g[d]=i<0?a.length+1:a.length-1-i}return g.indexOf(Math.max(...g))}
-function trans(a,o){if(a.length<o+2)return hot(a,80);let ctx=a.slice(-o).join(','),c=Array(10).fill(0);for(let i=o;i<a.length;i++)if(a.slice(i-o,i).join(',')===ctx)c[a[i]]++;return c.reduce((s,x)=>s+x,0)?c.indexOf(Math.max(...c)):hot(a,80)}
+function log(s,cls=''){const e=document.createElement('div');e.className='line '+cls;e.textContent='['+new Date().toLocaleTimeString()+'] '+s;$('console').prepend(e);while($('console').children.length>180)$('console').lastChild.remove()}
+function hot(a,n){const z=a.slice(-n),c=Array(10).fill(0);z.forEach(x=>c[x]++);return c.indexOf(Math.max(...c))}
+function cold(a,n){const z=a.slice(-n),c=Array(10).fill(0);z.forEach(x=>c[x]++);return c.indexOf(Math.min(...c))}
+function gap(a){const g=[];for(let d=0;d<10;d++){let i=a.lastIndexOf(d);g[d]=i<0?a.length+1:a.length-1-i}return g.indexOf(Math.max(...g))}
+function trans(a,o){if(a.length<o+2)return hot(a,80);const ctx=a.slice(-o).join(','),c=Array(10).fill(0);for(let i=o;i<a.length;i++)if(a.slice(i-o,i).join(',')===ctx)c[a[i]]++;return c.reduce((s,x)=>s+x,0)?c.indexOf(Math.max(...c)):hot(a,80)}
+function showStats(){const r=stats.n?stats.w/stats.n:null;$('liveRate').textContent=pct(r);$('liveRec').textContent=stats.n+' señales · '+stats.w+' aciertos · '+stats.l+' fallos'}
+function setBadge(el,status){el.textContent=status;el.style.color=/EDGE|CONFIRMED/i.test(status)?'var(--green)':/NOT|FAIL/i.test(status)?'var(--red)':'var(--yellow)'}
 function brain(){
- let votes=Array(10).fill(0),out=[];
- MODELS.forEach(([n,f])=>{let d=f(seq);votes[d]++;out.push({n,d})});
- let best=votes.indexOf(Math.max(...votes));
- $('brain').innerHTML=out.map(x=>`<div class="tag">${x.n} → <b>MATCH ${x.d}</b></div>`).join('');
- log('Modelos: '+out.map(x=>x.n+'→'+x.d).join(' | '));
- log('Consenso experimental → MATCH '+best+' ('+Math.max(...votes)+' votos)','cyan');
- return {best,votes,out};
+ const votes=Array(10).fill(0),out=[];MODELS.forEach(([n,f])=>{const d=f(seq);votes[d]++;out.push({n,d})});
+ const max=Math.max(...votes),best=votes.indexOf(max);
+ $('brain').innerHTML=out.map(x=>'<span class="tag">'+x.n+' → MATCH '+x.d+'</span>').join('');
+ $('votes').innerHTML=votes.map((v,d)=>'<div class="vote"><div class="vtop"><span>DIGIT '+d+'</span><b>'+v+' VOTE'+(v===1?'':'S')+'</b></div><div class="vbar"><div class="vfill" style="width:'+(100*v/MODELS.length)+'%"></div></div></div>').join('');
+ $('brainSummary').textContent='Consensus MATCH '+best+' · '+max+'/'+MODELS.length+' votes';
+ $('consensusBadge').textContent=max+'/'+MODELS.length+' VOTES';return {best,max}
 }
-function showStats(){let r=stats.n?stats.w/stats.n:0;$('liveRate').textContent=pct(r);$('liveRec').textContent=stats.n+' señales · '+stats.w+' aciertos · '+stats.l+' fallos'}
 async function loadMemory(){
  try{
-  let[a,b]=await Promise.all([fetch('./memory/research_v4_latest.json?t='+Date.now(),{cache:'no-store'}),fetch('./memory/v4_1_confirmation_latest.json?t='+Date.now(),{cache:'no-store'})]);
-  if(!a.ok||!b.ok)throw Error('Memoria V4/V4.1 todavía no disponible');
-  v4=await a.json();c4=await b.json();let L=v4.leader;
-  $('leader').textContent=L.model+' · espera '+L.wait_ticks;$('leaderRate').textContent=pct(L.hit_rate)+' · '+L.wins+'/'+L.predictions;$('v4state').textContent=v4.status;
-  $('confirm').textContent=c4.frozen_model+' · '+c4.wait_ticks+' ticks';$('confirmRate').textContent=pct(c4.hit_rate);$('confirmRec').textContent=c4.predictions+' pruebas · '+c4.wins+' aciertos · '+c4.losses+' fallos';
-  $('confirmBar').style.width=Math.min(100,(c4.predictions||0)/10)+'%';
-  $('tournament').innerHTML=(v4.top_models||[]).slice(0,12).map((x,i)=>`<div class="row"><b>#${i+1} ${x.model}</b><span>${x.wait_ticks} ticks</span><span class="green">${pct(x.hit_rate)}</span><span>${x.wins}/${x.predictions}</span></div>`).join('');
-  $('status').textContent='✓ Memoria actualizada · V4 run '+v4.runs+' · V4.1 run '+c4.runs;log('GitHub actualizado: líder '+L.model+', '+pct(L.hit_rate));
- }catch(e){$('status').textContent='⚠ '+e.message;log(e.message,'red')}
+  const [a,b]=await Promise.all([fetch('./memory/research_v4_latest.json?t='+Date.now(),{cache:'no-store'}),fetch('./memory/v4_1_confirmation_latest.json?t='+Date.now(),{cache:'no-store'})]);
+  if(!a.ok||!b.ok)throw Error('memory files unavailable');
+  v4=await a.json();c4=await b.json();const L=v4.leader||{};
+  $('leader').textContent=(L.model||'–').replaceAll('_',' ')+' · '+(L.wait_ticks??'–')+' ticks';
+  $('leaderRate').textContent=pct(L.hit_rate)+' · '+(L.wins??0)+'/'+(L.predictions??0);
+  if(previous?.leaderRate!=null&&L.hit_rate!=null){const d=L.hit_rate-previous.leaderRate;$('leaderDelta').textContent=(d>=0?'▲ ':'▼ ')+Math.abs(d*100).toFixed(2)+' pp';$('leaderDelta').className='delta '+(d>=0?'up':'down')}
+  $('edge').textContent=pp(L.edge_vs_10pct);$('edge').className='metric '+((L.edge_vs_10pct??0)>=0?'green':'red');
+  $('wilson').textContent='Wilson low '+pct(L.wilson_lower);$('v4state').textContent=v4.status+' · baseline '+pct(v4.baseline);setBadge($('researchBadge'),v4.status);
+  $('confirm').textContent=(c4.frozen_model||'–').replaceAll('_',' ')+' · '+c4.wait_ticks+' ticks';$('confirmRate').textContent=pct(c4.hit_rate);
+  $('confirmRate').className='metric '+(c4.hit_rate==null?'muted':c4.hit_rate>=.10?'green':'red');$('confirmRec').textContent=c4.predictions+' pruebas · '+c4.wins+' wins · '+c4.losses+' losses';
+  $('confirmWilson').textContent='Wilson low '+pct(c4.wilson_lower)+' · baseline '+pct(c4.baseline);setBadge($('confirmStatus'),c4.status);
+  $('confirmStatePill').textContent='V4.1 '+c4.status;$('confirmDot').className='dot '+(c4.status==='CONFIRMED_EDGE'?'ok':c4.status==='NOT_CONFIRMED'?'off':'warn');
+  $('confirmBar').style.width=Math.min(100,(c4.predictions||0)/10)+'%';$('confirmPct').textContent=(c4.predictions||0)+' / 1000';
+  $('tournament').innerHTML=(v4.top_models||[]).slice(0,16).map((x,i)=>'<tr><td>#'+(i+1)+'</td><td><b>'+x.model.replaceAll('_',' ')+'</b></td><td>'+x.wait_ticks+'</td><td>'+x.wins+'/'+x.predictions+'</td><td class="'+(x.hit_rate>=.10?'green':'red')+'">'+pct(x.hit_rate)+'</td><td class="'+(x.edge_vs_10pct>=0?'green':'red')+'">'+pp(x.edge_vs_10pct)+'</td><td>'+pct(x.wilson_lower)+'</td></tr>').join('');
+  const ts=new Date((v4.timestamp||Date.now()/1000)*1000);$('lastUpdate').textContent=ts.toLocaleTimeString();$('runs').textContent='V4 run '+v4.runs+' · V4.1 run '+c4.runs+' · '+v4.ticks+' ticks';
+  $('status').textContent='MEMORY CORE ONLINE · '+ts.toLocaleString();$('memDot').className='dot ok';$('memState').textContent='MEMORY ONLINE';log('GitHub memory synced · '+(L.model||'–')+' '+pct(L.hit_rate),'green');
+  previous={leaderRate:L.hit_rate,confirmRate:c4.hit_rate};localStorage.setItem('matrixSnapshot',JSON.stringify(previous));refreshLeft=60;
+ }catch(e){$('memDot').className='dot off';$('memState').textContent='MEMORY ERROR';$('status').textContent='MEMORY ERROR · '+e.message;log('MEMORY ERROR: '+e.message,'red')}
 }
-function newSignal(){
- if(seq.length<200)return;
- let b=brain(), wait=(v4?.leader?.wait_ticks??3);
- // Live signal uses current model consensus; historical leader remains displayed separately.
- signal={match:b.best,left:wait,armed:false};
- $('sig').textContent='MATCH '+signal.match;$('sigInfo').textContent='Esperar '+wait+' ticks';$('sigResult').textContent='';
- $('liveModel').textContent='Consenso de '+MODELS.length+' modelos · espera '+wait;log('NUEVA SEÑAL FIJA: MATCH '+signal.match+' · esperar '+wait,'yellow')
-}
-function onTick(d,z){
- seq.push(d);if(seq.length>1000)seq.shift();tickNo++;$('tick').textContent=z;$('digit').textContent=d;
- if(tickNo%5===0)brain();
- if(!signal){newSignal();return}
- if(signal.armed){
-  let ok=d===signal.match;stats.n++;ok?stats.w++:stats.l++;localStorage.setItem('v42Live',JSON.stringify(stats));showStats();
-  $('sigResult').textContent=(ok?'✅ ACIERTO':'❌ FALLO')+' · salió '+d;log((ok?'ACIERTO':'FALLO')+' MATCH '+signal.match+' → salió '+d,ok?'green':'red');
-  signal=null;setTimeout(newSignal,400);return
- }
- signal.left--;
- if(signal.left<=0){signal.armed=true;$('sigInfo').textContent='⚡ ENTRAR MATCH '+signal.match+' AHORA';log('ENTRADA EXPERIMENTAL → MATCH '+signal.match+' · próximo tick','green')}
- else{$('sigInfo').textContent='Esperar '+signal.left+' tick'+(signal.left===1?'':'s')}
-}
-async function start(){
- if(running){socket?.close();running=false;$('go').textContent='▶ INICIAR CEREBRO LIVE';log('Monitor detenido');return}
- await loadMemory();socket=new WebSocket(WS);
- socket.onopen=()=>{log('Conectando con R_75…');socket.send(JSON.stringify({ticks_history:'R_75',count:1000,end:'latest',style:'ticks',req_id:1}))};
- socket.onmessage=e=>{let x=JSON.parse(e.data);if(x.error){log('ERROR: '+x.error.message,'red');return}
-  if(x.history?.prices){let p=Number(x.pip_size??4);seq=x.history.prices.map(q=>Number(Number(q).toFixed(p).slice(-1)));running=true;$('go').textContent='■ DETENER CEREBRO LIVE';log('Historial cargado: '+seq.length+' ticks','green');brain();newSignal();
-   socket.send(JSON.stringify({ticks:'R_75',subscribe:1,req_id:2}))}
-  if(x.tick){let p=Number(x.tick.pip_size??4),z=Number(x.tick.quote).toFixed(p),d=Number(z.slice(-1));onTick(d,z)}
- };
- socket.onclose=()=>{running=false;$('go').textContent='▶ INICIAR CEREBRO LIVE'}
-}
-$('go').onclick=start;$('refresh').onclick=loadMemory;showStats();loadMemory();setInterval(loadMemory,60000);
-</script></body></html>
+function newSignal(){if(seq.length<200)return;const b=brain(),wait=v4?.leader?.wait_ticks??3;signal={match:b.best,left:wait,armed:false};$('sig').textContent='MATCH '+signal.match;$('sigInfo').textContent='WAIT '+wait+' TICKS';$('sigResult').textContent='Signal locked until evaluation';$('liveModel').textContent='Consensus '+MODELS.length+' models · wait '+wait;log('SIGNAL LOCKED MATCH '+signal.match+' / WAIT '+wait,'yellow')}
+function onTick(d,z){seq.push(d);if(seq.length>1000)seq.shift();tickNo++;$('tick').textContent=z;$('digit').textContent=d;$('tickCount').textContent='LIVE ticks '+tickNo;if(tickNo%4===0)brain();if(!signal){newSignal();return}if(signal.armed){const ok=d===signal.match;stats.n++;ok?stats.w++:stats.l++;localStorage.setItem('matrixLive',JSON.stringify(stats));showStats();$('sigResult').textContent=(ok?'✅ HIT':'❌ MISS')+' · digit '+d;log((ok?'HIT':'MISS')+' MATCH '+signal.match+' → '+d,ok?'green':'red');signal=null;setTimeout(newSignal,350);return}signal.left--;if(signal.left<=0){signal.armed=true;$('sigInfo').textContent='⚡ EVALUATE MATCH '+signal.match+' NEXT TICK';log('EVALUATION ARMED MATCH '+signal.match,'green')}else $('sigInfo').textContent='WAIT '+signal.left+' TICK'+(signal.left===1?'':'S')}
+async function start(){if(running){socket?.close();return}await loadMemory();socket=new WebSocket(WS);socket.onopen=()=>{log('OPENING R_75 STREAM');socket.send(JSON.stringify({ticks_history:'R_75',count:1000,end:'latest',style:'ticks',req_id:1}))};socket.onmessage=e=>{const x=JSON.parse(e.data);if(x.error){log('WS ERROR '+x.error.message,'red');return}if(x.history?.prices){const p=Number(x.pip_size??4);seq=x.history.prices.map(q=>Number(Number(q).toFixed(p).slice(-1)));running=true;$('go').textContent='■ DETENER NÚCLEO LIVE';$('liveDot').className='dot ok';$('liveState').textContent='LIVE ON';log('STREAM ONLINE · '+seq.length+' history ticks','green');brain();newSignal();socket.send(JSON.stringify({ticks:'R_75',subscribe:1,req_id:2}))}if(x.tick){const p=Number(x.tick.pip_size??4),z=Number(x.tick.quote).toFixed(p),d=Number(z.slice(-1));onTick(d,z)}};socket.onclose=()=>{running=false;$('go').textContent='▶ INICIAR NÚCLEO LIVE';$('liveDot').className='dot off';$('liveState').textContent='LIVE OFF';log('STREAM CLOSED','yellow')}}
+$('go').onclick=start;$('refresh').onclick=()=>{loadMemory();log('MANUAL SYNC REQUESTED','cyan')};$('reset').onclick=()=>{if(confirm('¿Reiniciar estadísticas live locales de este dispositivo?')){stats={n:0,w:0,l:0};localStorage.setItem('matrixLive',JSON.stringify(stats));showStats();log('LOCAL LIVE RESET','yellow')}};
+showStats();loadMemory();setInterval(()=>{refreshLeft--;if(refreshLeft<=0)loadMemory();$('nextRefresh').textContent='AUTO SYNC '+Math.max(0,refreshLeft)+'s'},1000);
+
+// Matrix rain
+const canvas=$('matrix'),ctx=canvas.getContext('2d');let cols=[],font=15;
+function resize(){canvas.width=innerWidth;canvas.height=innerHeight;const n=Math.ceil(canvas.width/font);cols=Array(n).fill(1).map(()=>Math.random()*canvas.height/font)}
+resize();addEventListener('resize',resize);
+const chars='01MATCHAI7539<>[]{}+-*/';
+setInterval(()=>{ctx.fillStyle='rgba(1,6,3,.09)';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.fillStyle='#00ff66';ctx.font=font+'px monospace';cols.forEach((y,i)=>{const ch=chars[Math.floor(Math.random()*chars.length)];ctx.fillText(ch,i*font,y*font);if(y*font>canvas.height&&Math.random()>.975)cols[i]=0;cols[i]+=1})},45);
+</script>
+</body></html>
