@@ -12,7 +12,7 @@ OUT=M/"neural_v5_latest.json"
 STATE=M/"neural_v5_state.json"
 MODEL=M/"neural_v5_candidate.joblib"
 META=M/"neural_v5_candidate.json"
-CONFIRM=M/"v5_1_confirmation_latest.json"
+CONFIRM=M/"v5_1_confirmation_latest.json"\nGRAVE=M/"v6_graveyard.json"
 
 BASE=.10
 SEARCH_VERSION="5.2"
@@ -69,6 +69,10 @@ def choose_threshold(clf,X,y):
 def model_id(cfg,threshold,last_epoch,seed):
     raw=json.dumps({"cfg":cfg,"threshold":threshold,"last_epoch":last_epoch,"seed":seed,"v":SEARCH_VERSION},sort_keys=True).encode()
     return hashlib.sha256(raw).hexdigest()[:16]
+
+def model_signature(cfg,threshold):
+    hidden="x".join(str(x) for x in cfg["hidden"])
+    return f'w{int(cfg["window"])}-h{hidden}-t{float(threshold):.3f}'
 
 def main():
     ticks=sorted(json.loads((R/"ticks.json").read_text())["ticks"],key=lambda x:int(x["epoch"]))
@@ -133,6 +137,13 @@ def main():
     }
 
     challenger_id=model_id(cfg,leader["confidence_threshold"],last_epoch,seed)
+    challenger_signature=model_signature(cfg,leader["confidence_threshold"])
+    grave=json.loads(GRAVE.read_text()) if GRAVE.exists() else {"entries":[]}
+    blocked_by_graveyard=any(
+        x.get("signature")==challenger_signature and
+        run_no<=int(x.get("blocked_until_v5_run",0))
+        for x in grave.get("entries",[])
+    )
     promotable=(
         leader["predictions"]>=MIN_PROMOTE_SIGNALS and
         leader["coverage"]>=MIN_PROMOTE_COVERAGE and
@@ -151,11 +162,12 @@ def main():
     bootstrap=incumbent is None
 
     promote=bool(
+        not blocked_by_graveyard and
         leader["predictions"]>=MIN_PROMOTE_SIGNALS and
         (bootstrap or (promotable and (legacy_incumbent or incumbent_failed or improves)))
     )
 
-    promotion="HELD"
+    promotion="HELD_GRAVEYARD" if blocked_by_graveyard else "HELD"
     if promote:
         bundle={
             "search_version":SEARCH_VERSION,"model_id":challenger_id,
@@ -191,6 +203,8 @@ def main():
         "ticks":len(ds),"train_end":train_end,"selection_end":select_end,
         "baseline":BASE,"status":status,"promotion":promotion,
         "leader":leader,"challenger_model_id":challenger_id,
+        "challenger_signature":challenger_signature,
+        "blocked_by_graveyard":blocked_by_graveyard,
         "candidate_model_id":incumbent.get("model_id") if incumbent else None,
         "candidate_search_version":incumbent.get("search_version") if incumbent else None,
         "selection_ranking":selection_rows,

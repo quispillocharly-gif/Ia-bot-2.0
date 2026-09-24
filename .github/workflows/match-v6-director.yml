@@ -1,0 +1,37 @@
+name: MATCH AI - V6 Research Director
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "v6_director.py"
+      - ".github/workflows/match-v6-director.yml"
+  schedule:
+    - cron: "38 * * * *"
+permissions:
+  contents: write
+concurrency:
+  group: match-ai-v6-director-writer
+  cancel-in-progress: false
+jobs:
+  direct:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Evaluate all research evidence
+        run: python v6_director.py
+      - name: Persist director memory
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add memory/v6_director_latest.json memory/v6_registry.json memory/v6_graveyard.json
+          git diff --cached --quiet || git commit -m "V6 autonomous research director"
+          for attempt in 1 2 3; do
+            git pull --rebase origin main
+            if git push; then break; fi
+            if [ "$attempt" -eq 3 ]; then exit 1; fi
+            sleep 3
+          done
