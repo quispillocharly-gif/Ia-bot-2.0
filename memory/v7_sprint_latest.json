@@ -1,15 +1,15 @@
 {
   "version": "7.1-two-week-evidence-sprint",
-  "timestamp": 1790279866,
+  "timestamp": 1790280357,
   "start": "2026-09-24T00:00:00-05:00",
   "deadline": "2026-10-08T23:59:59-05:00",
-  "days_left": 14.376537961423612,
-  "hours_left": 345.03691107416665,
+  "days_left": 14.37084630659722,
+  "hours_left": 344.9003113583333,
   "status": "COLLECTING",
   "core_gates_passed": 0,
   "core_gates_total": 4,
   "pace_status": "WARMUP",
-  "elapsed_hours": 1.570033583972189,
+  "elapsed_hours": 1.7066332019699944,
   "signals_per_day": null,
   "projected_signals_at_deadline": null,
   "break_even_rate": 0.11198208286674133,
@@ -19,38 +19,38 @@
   "gates": {
     "forward_sample": {
       "pass": false,
-      "value": 326,
+      "value": 414,
       "target": 1000
     },
     "economic_hit_rate": {
       "pass": false,
-      "value": 0.10429447852760736,
+      "value": 0.10386473429951691,
       "target": 0.11198208286674133
     },
     "economic_wilson": {
       "pass": false,
-      "value": 0.07559776047161394,
+      "value": 0.07802787676765792,
       "target": 0.11198208286674133
     },
     "positive_shadow_ev": {
       "pass": false,
-      "value": -0.06865030674846628,
-      "pnl": -22.38000000000001,
+      "value": -0.07248792270531404,
+      "pnl": -30.010000000000012,
       "target": 0.0
     },
     "economic_placebo": {
       "pass": false,
-      "value": 0.6892,
+      "value": 0.7158,
       "target": 0.05
     },
     "calibration": {
       "pass": false,
-      "value": 0.0764793259749662,
+      "value": 0.07689704872531794,
       "target": 0.03
     },
     "regime_coverage": {
-      "pass": false,
-      "value": 1,
+      "pass": true,
+      "value": 2,
       "positive_regimes": 1,
       "target": 2
     }
@@ -61,7 +61,6 @@
     "Wilson lower bound is still below economic break-even; more stable evidence is required.",
     "Shadow EV must turn positive under current payout.",
     "Economic placebo probability must fall below 5%.",
-    "Collect meaningful samples in at least two detected regimes.",
     "Improve or verify probability calibration before trusting confidence thresholds."
   ],
   "note": "Sprint success means evidence of an economically plausible edge, not a guaranteed profitable system. Real-money execution remains disabled."
