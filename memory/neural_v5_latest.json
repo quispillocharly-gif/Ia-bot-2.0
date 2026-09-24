@@ -1,66 +1,150 @@
 {
-  "version": "5.0-neural-lab",
-  "timestamp": 1790270678,
-  "runs": 6,
-  "ticks": 6000,
-  "train_end": 4200,
+  "version": "5.2-neural-evolution-lab",
+  "timestamp": 1790272293,
+  "runs": 7,
+  "ticks": 10000,
+  "train_end": 5500,
+  "selection_end": 7500,
   "baseline": 0.1,
   "status": "NO_NEURAL_EDGE_DEMONSTRATED",
+  "promotion": "HELD",
   "leader": {
     "model": "mlp",
-    "window": 10,
+    "window": 30,
     "hidden": [
+      64,
       32
     ],
-    "predictions": 1800,
-    "wins": 199,
-    "hit_rate": 0.11055555555555556,
-    "wilson_lower": 0.09688993101783325,
-    "edge_vs_10pct": 0.010555555555555554,
-    "epochs": 22
+    "confidence_threshold": 0.16,
+    "predictions": 1307,
+    "wins": 127,
+    "hit_rate": 0.0971690895179801,
+    "wilson_lower": 0.08227200416083592,
+    "edge_vs_10pct": -0.002830910482019902,
+    "coverage": 0.5228,
+    "mean_confidence": 0.1889166533946991,
+    "opportunities": 2500,
+    "epochs": 13,
+    "selection_hit_rate": 0.10325047801147227,
+    "selection_wilson_lower": 0.08623841221421855,
+    "selection_coverage": 0.523
   },
+  "challenger_model_id": "c467af4cb2c331ad",
   "candidate_model_id": "4d99ca520bf96c63",
-  "top_models": [
+  "candidate_search_version": null,
+  "selection_ranking": [
+    {
+      "model": "mlp",
+      "window": 30,
+      "hidden": [
+        64,
+        32
+      ],
+      "alpha": 0.0004,
+      "learning_rate": 0.0012,
+      "epochs": 13,
+      "selection_predictions": 1046,
+      "selection_wins": 108,
+      "selection_hit_rate": 0.10325047801147227,
+      "selection_wilson_lower": 0.08623841221421855,
+      "selection_coverage": 0.523,
+      "confidence_threshold": 0.16,
+      "selection_mean_confidence": 0.188376322388649,
+      "seed": 1303
+    },
+    {
+      "model": "mlp",
+      "window": 60,
+      "hidden": [
+        96,
+        48
+      ],
+      "alpha": 0.0008,
+      "learning_rate": 0.001,
+      "epochs": 9,
+      "selection_predictions": 2000,
+      "selection_wins": 196,
+      "selection_hit_rate": 0.098,
+      "selection_wilson_lower": 0.08572999582397371,
+      "selection_coverage": 1.0,
+      "confidence_threshold": 0.0,
+      "selection_mean_confidence": 0.1399109959602356,
+      "seed": 1325
+    },
+    {
+      "model": "mlp",
+      "window": 8,
+      "hidden": [
+        32
+      ],
+      "alpha": 0.0001,
+      "learning_rate": 0.0015,
+      "epochs": 11,
+      "selection_predictions": 2000,
+      "selection_wins": 194,
+      "selection_hit_rate": 0.097,
+      "selection_wilson_lower": 0.08479110556577744,
+      "selection_coverage": 1.0,
+      "confidence_threshold": 0.0,
+      "selection_mean_confidence": 0.1367090493440628,
+      "seed": 1270
+    },
     {
       "model": "mlp",
       "window": 10,
       "hidden": [
-        32
+        48
       ],
-      "predictions": 1800,
-      "wins": 199,
-      "hit_rate": 0.11055555555555556,
-      "wilson_lower": 0.09688993101783325,
-      "edge_vs_10pct": 0.010555555555555554,
-      "epochs": 22
+      "alpha": 0.0001,
+      "learning_rate": 0.0015,
+      "epochs": 31,
+      "selection_predictions": 2000,
+      "selection_wins": 189,
+      "selection_hit_rate": 0.0945,
+      "selection_wilson_lower": 0.08244572680337758,
+      "selection_coverage": 1.0,
+      "confidence_threshold": 0.0,
+      "selection_mean_confidence": 0.21953420341014862,
+      "seed": 1281
     },
     {
       "model": "mlp",
       "window": 20,
       "hidden": [
-        48
+        64,
+        32
       ],
-      "predictions": 1800,
-      "wins": 185,
-      "hit_rate": 0.10277777777777777,
-      "wilson_lower": 0.08958440396881145,
-      "edge_vs_10pct": 0.002777777777777768,
-      "epochs": 7
+      "alpha": 0.0002,
+      "learning_rate": 0.0012,
+      "epochs": 8,
+      "selection_predictions": 1900,
+      "selection_wins": 178,
+      "selection_hit_rate": 0.09368421052631579,
+      "selection_wilson_lower": 0.08138921246582567,
+      "selection_coverage": 0.95,
+      "confidence_threshold": 0.115,
+      "selection_mean_confidence": 0.12931638956069946,
+      "seed": 1292
     },
     {
       "model": "mlp",
       "window": 40,
       "hidden": [
-        64,
-        32
+        96,
+        48
       ],
-      "predictions": 1800,
-      "wins": 179,
-      "hit_rate": 0.09944444444444445,
-      "wilson_lower": 0.08646090011442255,
-      "edge_vs_10pct": -0.0005555555555555591,
-      "epochs": 7
+      "alpha": 0.0005,
+      "learning_rate": 0.001,
+      "epochs": 8,
+      "selection_predictions": 1871,
+      "selection_wins": 169,
+      "selection_hit_rate": 0.09032602886157136,
+      "selection_wilson_lower": 0.0781628661906551,
+      "selection_coverage": 0.9355,
+      "confidence_threshold": 0.115,
+      "selection_mean_confidence": 0.1309935450553894,
+      "seed": 1314
     }
   ],
-  "note": "Neural candidates are trained only on earlier data and ranked on chronological holdout data."
+  "note": "Architecture and confidence threshold are selected on a chronological selection slice, then evaluated once on a later untouched test slice. Candidate promotion is separate from future confirmation."
 }
