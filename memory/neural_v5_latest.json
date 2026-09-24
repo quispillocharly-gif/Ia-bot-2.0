@@ -1,0 +1,67 @@
+{
+  "version": "5.0-neural-lab",
+  "timestamp": 1790258252,
+  "runs": 1,
+  "ticks": 6000,
+  "train_end": 4200,
+  "baseline": 0.1,
+  "status": "NO_NEURAL_EDGE_DEMONSTRATED",
+  "leader": {
+    "model": "mlp",
+    "window": 40,
+    "hidden": [
+      64,
+      32
+    ],
+    "predictions": 1800,
+    "wins": 183,
+    "hit_rate": 0.10166666666666667,
+    "wilson_lower": 0.08854272139828237,
+    "edge_vs_10pct": 0.0016666666666666635,
+    "epochs": 12
+  },
+  "candidate_model_id": "641ab7d55644ffbd",
+  "top_models": [
+    {
+      "model": "mlp",
+      "window": 40,
+      "hidden": [
+        64,
+        32
+      ],
+      "predictions": 1800,
+      "wins": 183,
+      "hit_rate": 0.10166666666666667,
+      "wilson_lower": 0.08854272139828237,
+      "edge_vs_10pct": 0.0016666666666666635,
+      "epochs": 12
+    },
+    {
+      "model": "mlp",
+      "window": 10,
+      "hidden": [
+        32
+      ],
+      "predictions": 1800,
+      "wins": 176,
+      "hit_rate": 0.09777777777777778,
+      "wilson_lower": 0.08490091508091425,
+      "edge_vs_10pct": -0.0022222222222222227,
+      "epochs": 8
+    },
+    {
+      "model": "mlp",
+      "window": 20,
+      "hidden": [
+        48
+      ],
+      "predictions": 1800,
+      "wins": 175,
+      "hit_rate": 0.09722222222222222,
+      "wilson_lower": 0.08438118836946573,
+      "edge_vs_10pct": -0.002777777777777782,
+      "epochs": 8
+    }
+  ],
+  "note": "Neural candidates are trained only on earlier data and ranked on chronological holdout data."
+}
