@@ -21,14 +21,17 @@ async def one(ws,digit):
         if msg.get("req_id")!=100+digit:
             continue
         if msg.get("error"):
-            # Backward-compatibility fallback for older proposal schema.
-            req.pop("underlying_symbol",None); req["symbol"]=SYMBOL
-            await ws.send(json.dumps(req))
-            while True:
-                msg=json.loads(await ws.recv())
-                if msg.get("req_id")==100+digit:break
+            first_error=msg["error"].get("message","proposal error")
+            if "underlying_symbol" in first_error.lower() and ("not allowed" in first_error.lower() or "unknown" in first_error.lower()):
+                old=dict(req); old.pop("underlying_symbol",None); old["symbol"]=SYMBOL
+                await ws.send(json.dumps(old))
+                while True:
+                    msg=json.loads(await ws.recv())
+                    if msg.get("req_id")==100+digit:break
+            else:
+                return {"digit":digit,"error":first_error,"request_schema":"new"}
         if msg.get("error"):
-            return {"digit":digit,"error":msg["error"].get("message","proposal error")}
+            return {"digit":digit,"error":msg["error"].get("message","proposal error"),"request_schema":"legacy-fallback"}
         p=msg.get("proposal") or {}
         ask=p.get("ask_price"); payout=p.get("payout")
         try:ask=float(ask)
