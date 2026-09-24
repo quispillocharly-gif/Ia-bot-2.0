@@ -35,7 +35,8 @@ def main():
     v51=load(M/"v5_1_confirmation_latest.json")
     cand=load(M/"neural_v5_candidate.json")
     ens=load(M/"v6_ensemble_latest.json")
-    payout=load(M/"payout_snapshot.json")\n    adaptive=load(M/"v7_adaptive_latest.json")
+    payout=load(M/"payout_snapshot.json")
+    adaptive=load(M/"v7_adaptive_latest.json")
 
     v4l=v4.get("leader") or {}
     v5l=v5.get("leader") or {}
