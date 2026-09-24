@@ -1,6 +1,10 @@
 name: MATCH AI - V4 Research Lab
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/match-v4-research.yml"
   schedule:
     - cron: "43 * * * *"
 permissions:
@@ -27,4 +31,13 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add audit.json ticks.json memory/
           git diff --cached --quiet || git commit -m "V4 autonomous research"
-          git push
+          for attempt in 1 2 3; do
+            git pull --rebase origin main
+            if git push; then
+              break
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              exit 1
+            fi
+            sleep 3
+          done
