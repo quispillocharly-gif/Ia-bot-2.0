@@ -1,0 +1,45 @@
+name: MATCH AI - V7 Adaptive Shadow Lab
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "v7_adaptive.py"
+      - ".github/workflows/match-v7-adaptive.yml"
+      - "requirements-ai.txt"
+  schedule:
+    - cron: "48 * * * *"
+permissions:
+  contents: write
+concurrency:
+  group: match-ai-v7-adaptive-writer
+  cancel-in-progress: false
+jobs:
+  adaptive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements-ai.txt
+      - name: Refresh audited ticks
+        env:
+          TICK_COUNT: "10000"
+        run: python collect_ticks.py
+      - name: Run V7 adaptive shadow lab
+        run: python v7_adaptive.py
+      - name: Persist V7 memory
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add memory/v7_adaptive_latest.json memory/v7_adaptive_state.json memory/v7_frozen_neural.json memory/v7_frozen_neural.joblib
+          git diff --cached --quiet || git commit -m "V7 adaptive shadow research"
+          git restore audit.json ticks.json
+          for attempt in 1 2 3; do
+            git pull --rebase origin main
+            if git push; then break; fi
+            if [ "$attempt" -eq 3 ]; then exit 1; fi
+            sleep 3
+          done

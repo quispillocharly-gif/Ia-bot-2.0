@@ -35,7 +35,7 @@ def main():
     v51=load(M/"v5_1_confirmation_latest.json")
     cand=load(M/"neural_v5_candidate.json")
     ens=load(M/"v6_ensemble_latest.json")
-    payout=load(M/"payout_snapshot.json")
+    payout=load(M/"payout_snapshot.json")\n    adaptive=load(M/"v7_adaptive_latest.json")
 
     v4l=v4.get("leader") or {}
     v5l=v5.get("leader") or {}
@@ -78,6 +78,9 @@ def main():
     for name,obj in (("V4.1",v41),("V5.2",v51),("V6.1",ens)):
         if obj and obj.get("status")=="CONFIRMED_EDGE":
             forward_confirmed.append(name); confirmed_objs.append(obj)
+    if adaptive.get("status")=="ECONOMICALLY_CONFIRMED":
+        forward_confirmed.append("V7")
+        confirmed_objs.append(adaptive)
 
     break_even=payout.get("max_break_even") if payout.get("status")=="OK" else None
     if break_even is None:
@@ -109,6 +112,11 @@ def main():
         priorities.append("Quarantine neural promotion while future performance is materially below historical performance.")
     if not ens:
         priorities.append("Start V6.1 forward ensemble validation.")
+    if adaptive:
+        if adaptive.get("status")=="COLLECTING":
+            priorities.append("Continue V7 regime/calibration/shadow EV collection without changing live execution.")
+        elif adaptive.get("status")=="NOT_CONFIRMED":
+            priorities.append("V7 adaptive shadow strategy did not confirm economic edge; use its regime and calibration diagnostics only.")
     if break_even is None:
         priorities.append("Payout probe is unavailable; do not claim profitability.")
     elif not confirmed_objs:
@@ -122,7 +130,11 @@ def main():
         "v41":{"predictions":v41.get("predictions"),"rate":v41.get("hit_rate"),"status":v41.get("status"),"p":v41_p},
         "v5":{"challenger":v5.get("challenger_model_id"),"candidate":v5.get("candidate_model_id"),"rate":v5l.get("hit_rate"),"wilson":v5l.get("wilson_lower"),"coverage":v5l.get("coverage"),"adjusted_p":v5_adj,"promotion":v5.get("promotion")},
         "v51":{"model_id":v51.get("model_id"),"predictions":v51.get("predictions"),"rate":v51.get("hit_rate"),"coverage":v51.get("coverage"),"status":v51.get("status"),"p":v51_p},
-        "v61":{"predictions":ens.get("predictions") if ens else 0,"rate":ens.get("hit_rate") if ens else None,"status":ens.get("status") if ens else "NOT_STARTED","p":ens_p}
+        "v61":{"predictions":ens.get("predictions") if ens else 0,"rate":ens.get("hit_rate") if ens else None,"status":ens.get("status") if ens else "NOT_STARTED","p":ens_p},
+        "v7":{"predictions":adaptive.get("predictions") if adaptive else 0,"rate":adaptive.get("hit_rate") if adaptive else None,
+              "wilson":adaptive.get("wilson_lower") if adaptive else None,"status":adaptive.get("status") if adaptive else "NOT_STARTED",
+              "shadow_pnl":(adaptive.get("economic") or {}).get("shadow_pnl") if adaptive else None,
+              "placebo_economic_p":(adaptive.get("placebo") or {}).get("economic_break_even_p") if adaptive else None}
     }
     snapshot["experiment_id"]=hashlib.sha256(json.dumps(snapshot,sort_keys=True).encode()).hexdigest()[:16]
     reg=load(REG,{"entries":[],"total_recorded":0})
@@ -137,7 +149,13 @@ def main():
         "break_even_rate":break_even,"drift_status":drift,
         "historical_to_future_gap":gap,
         "multiple_testing":{"v4":{"tests":tests_v4,"adjusted_p":v4_adj},"v5":{"tests":tests_v5,"adjusted_p":v5_adj}},
-        "forward_evidence":{"v4_1_p":v41_p,"v5_2_p":v51_p,"v6_1_p":ens_p},
+        "forward_evidence":{"v4_1_p":v41_p,"v5_2_p":v51_p,"v6_1_p":ens_p,
+                            "v7_economic_placebo_p":(adaptive.get("placebo") or {}).get("economic_break_even_p") if adaptive else None},
+        "adaptive_v7":{"status":adaptive.get("status","NOT_STARTED") if adaptive else "NOT_STARTED",
+                       "current_regime":adaptive.get("current_regime") if adaptive else None,
+                       "shadow_pnl":(adaptive.get("economic") or {}).get("shadow_pnl") if adaptive else None,
+                       "ev_per_signal":(adaptive.get("economic") or {}).get("ev_per_signal") if adaptive else None,
+                       "calibration_ece":(adaptive.get("calibration") or {}).get("ece") if adaptive else None},
         "registry_total":reg["total_recorded"],"graveyard_size":len(grave["entries"]),
         "priorities":priorities,
         "note":"V6 records evidence, corrects exploratory multiple testing, monitors drift and failed candidates, and does not equate hit rate with profitability."

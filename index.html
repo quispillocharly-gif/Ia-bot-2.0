@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#020805">
-<title>MATCH AI V6 MATRIX</title>
+<title>MATCH AI V7 MATRIX</title>
 <style>
 :root{
  --bg:#020805;--panel:#06130ccc;--panel2:#071a10e8;--line:#0f6b39;
@@ -86,7 +86,7 @@ tr:first-child td{background:#0b2d1966;color:#caffda}
 <canvas id="matrix"></canvas><div class="overlay"></div><div class="scan"></div>
 <div class="wrap">
  <header class="header">
-  <h1 class="logo glitch" data-text="MATCH AI V6">MATCH AI V6<small>MATRIX AUTONOMOUS RESEARCH CONSOLE</small></h1>
+  <h1 class="logo glitch" data-text="MATCH AI V7">MATCH AI V7<small>MATRIX AUTONOMOUS RESEARCH CONSOLE</small></h1>
   <div class="pills">
    <span class="pill"><span id="liveDot" class="dot off"></span><span id="liveState">LIVE OFF</span></span>
    <span class="pill"><span id="memDot" class="dot warn"></span><span id="memState">MEMORY SYNC</span></span>
@@ -135,6 +135,13 @@ tr:first-child td{background:#0b2d1966;color:#caffda}
   <div class="card"><div class="label">V6.1 FORWARD ENSEMBLE</div><div id="v61Rate" class="metric cyan">–</div><div id="v61Rec" class="mini">Esperando primera validación</div><div class="progressLabel"><span>PROGRESO</span><span id="v61Pct">0 / 1000</span></div><div class="progress"><div id="v61Bar" class="fill" style="width:0%"></div></div><span id="v61Status" class="badge">WAITING</span></div>
  </section>
 
+
+ <section class="grid3" id="v7Core">
+  <div class="card"><div class="label">V7 ADAPTIVE REGIME</div><div id="v7Regime" class="metric cyan">BOOTING…</div><div id="v7Features" class="mini">Esperando régimen futuro</div><span id="v7Status" class="badge">WAITING</span></div>
+  <div class="card"><div class="label">V7 CALIBRATION / PLACEBO</div><div id="v7Ece" class="metric">–</div><div id="v7Placebo" class="mini">ECE · Brier · placebo pendientes</div></div>
+  <div class="card"><div class="label">V7 SHADOW EV</div><div id="v7Pnl" class="metric">–</div><div id="v7Ev" class="mini">Sin operaciones reales</div><div class="progressLabel"><span>SEÑALES FORWARD</span><span id="v7Count">0 / 1000</span></div><div class="progress"><div id="v7Bar" class="fill" style="width:0%"></div></div></div>
+ </section>
+
  <section class="card">
   <div class="statusrow"><div><div class="label">LIVE CONSENSUS / MODEL VOTES</div><div id="brainSummary" class="mini">Inicia el núcleo live.</div></div><span id="consensusBadge" class="badge">NO DATA</span></div>
   <div id="votes" class="voteGrid"></div><div id="brain" class="tags"></div>
@@ -178,6 +185,24 @@ function brain(){
  $('consensusBadge').textContent=max+'/'+MODELS.length+' VOTES';return {best,max}
 }
 
+
+
+async function loadV7(){
+ try{
+  const r=await fetch('https://raw.githubusercontent.com/quispillocharly-gif/Ia-bot-2.0/main/memory/v7_adaptive_latest.json?t='+Date.now(),{cache:'no-store'});
+  if(!r.ok)return;
+  const v=await r.json(),f=v.regime_features||{},c=v.calibration||{},p=v.placebo||{},e=v.economic||{};
+  $('v7Regime').textContent=(v.current_regime||'–').replaceAll('_',' ');
+  $('v7Features').textContent='entropy '+((f.entropy??0).toFixed(3))+' · repeat '+pct(f.repeat_rate)+' · max-share '+pct(f.max_share)+' · trans-peak '+pct(f.transition_peak);
+  setBadge($('v7Status'),v.status||'WAITING');
+  $('v7Ece').textContent=c.ece==null?'–':'ECE '+(100*c.ece).toFixed(2)+' pp';
+  $('v7Placebo').textContent='Brier '+((c.brier_binary??0).toFixed(4))+' · placebo 10% '+pct(p.random_10pct_p)+' · placebo break-even '+pct(p.economic_break_even_p);
+  $('v7Pnl').textContent=e.shadow_pnl==null?'–':(e.shadow_pnl>=0?'+':'')+e.shadow_pnl.toFixed(2)+' u';
+  $('v7Pnl').className='metric '+((e.shadow_pnl??0)>=0?'green':'red');
+  $('v7Ev').textContent='EV/señal '+(e.ev_per_signal==null?'–':e.ev_per_signal.toFixed(4))+' · ROI '+pct(e.shadow_roi)+' · hit '+pct(v.hit_rate)+' · cobertura '+pct(v.coverage);
+  $('v7Count').textContent=(v.predictions||0)+' / 1000';$('v7Bar').style.width=Math.min(100,(v.predictions||0)/10)+'%';
+ }catch(e){log('V7 memory waiting','yellow')}
+}
 
 async function loadV6(){
  try{
@@ -254,8 +279,8 @@ async function loadMemory(){
 function newSignal(){if(seq.length<200)return;const b=brain(),wait=v4?.leader?.wait_ticks??3;signal={match:b.best,left:wait,armed:false};$('sig').textContent='MATCH '+signal.match;$('sigInfo').textContent='WAIT '+wait+' TICKS';$('sigResult').textContent='Signal locked until evaluation';$('liveModel').textContent='Consensus '+MODELS.length+' models · wait '+wait;log('SIGNAL LOCKED MATCH '+signal.match+' / WAIT '+wait,'yellow')}
 function onTick(d,z){seq.push(d);if(seq.length>1000)seq.shift();tickNo++;$('tick').textContent=z;$('digit').textContent=d;$('tickCount').textContent='LIVE ticks '+tickNo;if(tickNo%4===0)brain();if(!signal){newSignal();return}if(signal.armed){const ok=d===signal.match;stats.n++;ok?stats.w++:stats.l++;localStorage.setItem('matrixLive',JSON.stringify(stats));showStats();$('sigResult').textContent=(ok?'✅ HIT':'❌ MISS')+' · digit '+d;log((ok?'HIT':'MISS')+' MATCH '+signal.match+' → '+d,ok?'green':'red');signal=null;setTimeout(newSignal,350);return}signal.left--;if(signal.left<=0){signal.armed=true;$('sigInfo').textContent='⚡ EVALUATE MATCH '+signal.match+' NEXT TICK';log('EVALUATION ARMED MATCH '+signal.match,'green')}else $('sigInfo').textContent='WAIT '+signal.left+' TICK'+(signal.left===1?'':'S')}
 async function start(){if(running){socket?.close();return}await loadMemory();socket=new WebSocket(WS);socket.onopen=()=>{log('OPENING R_75 STREAM');socket.send(JSON.stringify({ticks_history:'R_75',count:1000,end:'latest',style:'ticks',req_id:1}))};socket.onmessage=e=>{const x=JSON.parse(e.data);if(x.error){log('WS ERROR '+x.error.message,'red');return}if(x.history?.prices){const p=Number(x.pip_size??4);seq=x.history.prices.map(q=>Number(Number(q).toFixed(p).slice(-1)));running=true;$('go').textContent='■ DETENER NÚCLEO LIVE';$('liveDot').className='dot ok';$('liveState').textContent='LIVE ON';log('STREAM ONLINE · '+seq.length+' history ticks','green');brain();newSignal();socket.send(JSON.stringify({ticks:'R_75',subscribe:1,req_id:2}))}if(x.tick){const p=Number(x.tick.pip_size??4),z=Number(x.tick.quote).toFixed(p),d=Number(z.slice(-1));onTick(d,z)}};socket.onclose=()=>{running=false;$('go').textContent='▶ INICIAR NÚCLEO LIVE';$('liveDot').className='dot off';$('liveState').textContent='LIVE OFF';log('STREAM CLOSED','yellow')}}
-$('go').onclick=start;$('refresh').onclick=()=>{loadMemory();loadNeural();loadV6();log('MANUAL SYNC REQUESTED','cyan')};$('reset').onclick=()=>{if(confirm('¿Reiniciar estadísticas live locales de este dispositivo?')){stats={n:0,w:0,l:0};localStorage.setItem('matrixLive',JSON.stringify(stats));showStats();log('LOCAL LIVE RESET','yellow')}};
-showStats();loadMemory();loadNeural();loadV6();setInterval(()=>{refreshLeft--;if(refreshLeft<=0){loadMemory();loadNeural();loadV6();}$('nextRefresh').textContent='AUTO SYNC '+Math.max(0,refreshLeft)+'s'},1000);
+$('go').onclick=start;$('refresh').onclick=()=>{loadMemory();loadNeural();loadV6();loadV7();log('MANUAL SYNC REQUESTED','cyan')};$('reset').onclick=()=>{if(confirm('¿Reiniciar estadísticas live locales de este dispositivo?')){stats={n:0,w:0,l:0};localStorage.setItem('matrixLive',JSON.stringify(stats));showStats();log('LOCAL LIVE RESET','yellow')}};
+showStats();loadMemory();loadNeural();loadV6();loadV7();setInterval(()=>{refreshLeft--;if(refreshLeft<=0){loadMemory();loadNeural();loadV6();loadV7();}$('nextRefresh').textContent='AUTO SYNC '+Math.max(0,refreshLeft)+'s'},1000);
 
 // Matrix rain
 const canvas=$('matrix'),ctx=canvas.getContext('2d');let cols=[],font=15;
