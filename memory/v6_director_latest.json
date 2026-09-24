@@ -1,6 +1,6 @@
 {
   "version": "6.0-autonomous-research-director",
-  "timestamp": 1790273625,
+  "timestamp": 1790274233,
   "decision": "NO_CONFIRMED_EDGE_CONTINUE_RESEARCH",
   "forward_confirmed_systems": [],
   "economic_status": "PAYOUT_READY_FORWARD_NOT_CONFIRMED",
@@ -21,14 +21,23 @@
   "forward_evidence": {
     "v4_1_p": 0.7768228949102303,
     "v5_2_p": 0.28794479397679723,
-    "v6_1_p": 0.0969654261412054
+    "v6_1_p": 0.0969654261412054,
+    "v7_economic_placebo_p": 1.0
   },
-  "registry_total": 5,
+  "adaptive_v7": {
+    "status": "COLLECTING",
+    "current_regime": "UNIFORM",
+    "shadow_pnl": 0.0,
+    "ev_per_signal": null,
+    "calibration_ece": null
+  },
+  "registry_total": 6,
   "graveyard_size": 1,
   "priorities": [
     "Do not reuse the rejected V4.1 transition_3 candidate without new independent evidence.",
     "Rotate from the failed neural candidate after cooldown and test a materially different challenger.",
     "Treat V5 historical gains as exploratory after multiple-testing correction.",
+    "Continue V7 regime/calibration/shadow EV collection without changing live execution.",
     "Current conservative MATCH break-even is 0.1120; wait for forward confirmation before economic evaluation."
   ],
   "note": "V6 records evidence, corrects exploratory multiple testing, monitors drift and failed candidates, and does not equate hit rate with profitability."
