@@ -495,6 +495,7 @@ function trace(msg,good=false){
  const el=$('tradeTrace'); if(!el)return;
  el.textContent='TRACE: '+msg; el.style.color=good?'#6affb6':'#8ca4c8';
 }
+function money2(x){return Math.round((Number(x)+Number.EPSILON)*100)/100}
 function baseStake(){return Math.min(HARD_MAX_STAKE,Math.max(.35,Number($('demoStake')?.value)||1))}
 function maxSessionStake(){return Math.min(HARD_MAX_STAKE,Math.max(baseStake(),Number($('maxStake')?.value)||HARD_MAX_STAKE))}
 function sessionStopLoss(){return Math.max(1,Number($('sessionStopLoss')?.value)||5)}
@@ -512,7 +513,7 @@ function resetProfitSession(){
  blockPauseTicks=0;lastProtectedBlock=0;
  lastBoughtBarrier=null;sameBarrierBuyStreak=0;
  recentBarrierHistory=[];matchRecoveryTicks=0;lastProfitCheckpoint=0;
- currentStake=baseStake();lastSettledContractId=null;
+ currentStake=money2(baseStake());lastSettledContractId=null;
  sessionPolicy={source:'v3',rule:'avoid_match_adaptive_all_digits',mode:'RESEARCH_DEMO',candidate_id:(latestLiveEnsemble?.ensemble_id||researchPolicy.candidate_id||'–')};
  activeMoneyPolicy=researchPolicy.money_policy?{...researchPolicy.money_policy}:{promoted:false,compound_fraction:1,pause_after_match:0,batch_size:5,stage_size:5};
  sessionBatchTrades=0;sessionBatchWins=0;sessionStage=1;sessionPauseLeft=0;
@@ -523,7 +524,7 @@ function resetProfitSession(){
  if(latestLiveEnsemble)liveEnsemble=latestLiveEnsemble;
  liveRuleId='avoid_match_adaptive_all_digits';
  $('sessionPolicy').textContent='V3 · AVOID MATCH';
- $('policyMeta').textContent='ANTI-MATCH CONTINUO - una nueva compra por tick disponible - contratos separados - stake gradual hasta USD 6 - objetivo +20';
+ $('policyMeta').textContent='ANTI-MATCH CONTINUO - stake gradual redondeado a 2 decimales - contratos separados - max USD 6 - objetivo +20';
  renderProfitSession();renderStreakLab();
  trace('SESIÓN NUEVA · meta +$20.00 · stop -$'+sessionStopLoss().toFixed(2)+' · '+$('sessionPolicy').textContent,true);
 }
@@ -535,11 +536,11 @@ function applyProfitLadder(profit){
    const rawStep=Math.max(Math.max(0,profit)*GRADUAL_WIN_GROWTH,b*MIN_WIN_STEP_RATE);
    const maxStep=Math.max(b*MIN_WIN_STEP_RATE,currentStake*MAX_WIN_STEP_RATE);
    const step=Math.min(rawStep,maxStep);
-   currentStake=Math.min(HARD_MAX_STAKE,maxSessionStake(),Math.max(b,currentStake+step));
+   currentStake=money2(Math.min(HARD_MAX_STAKE,maxSessionStake(),Math.max(b,currentStake+step)));
    if(activeMoneyPolicy.promoted)sessionBatchWins++;
  }else{
    sessionLosses++;
-   currentStake=baseStake();
+   currentStake=money2(baseStake());
    if(activeMoneyPolicy.promoted)sessionPauseLeft=Math.max(0,Number(activeMoneyPolicy.pause_after_match??0));
  }
  if(activeMoneyPolicy.promoted){
@@ -658,7 +659,7 @@ function armProposalRetry(){
    try{
      derivSocket.send(JSON.stringify({
        proposal:1,
-       amount:lastProposalReq.stake,
+       amount:money2(lastProposalReq.stake),
        basis:'stake',
        contract_type:'DIGITDIFF',
        currency:lastProposalReq.currency,
@@ -1316,7 +1317,7 @@ function maybeAutoBuy(signalOk,tickEpoch=Date.now()){
  $('liveReason').textContent='ANTI-MATCH SUAVE - D'+chosenBarrier+' - riesgo '+pct(chosenRisk)+' - uso reciente '+Number(pick.recentUse||0)+' - todos los digitos compiten';
  if(tickEpoch===lastSignalEpoch){trace('TICK YA PROCESADO');return}
  lastSignalEpoch=tickEpoch;
- const stake=Math.min(HARD_MAX_STAKE,maxSessionStake(),Math.max(.35,currentStake||baseStake()));
+ const stake=money2(Math.min(HARD_MAX_STAKE,maxSessionStake(),Math.max(.35,currentStake||baseStake())));
  const currency=derivDemoAccount?.currency||derivDemoAccount?.currency_code||'USD';
  const chosenPredictedWin=1-chosenRisk;
  const chosenRawEdge=chosenPredictedWin-currentBreakEven;
@@ -1326,7 +1327,7 @@ function maybeAutoBuy(signalOk,tickEpoch=Date.now()){
  $('lastDemoBuy').textContent='PROPUESTA '+chosenBarrier;
  trace('SEÑAL VÁLIDA DIFFER '+chosenBarrier+' · solicitando propuesta',true);
  derivSocket.send(JSON.stringify({
-   proposal:1,amount:stake,basis:'stake',contract_type:'DIGITDIFF',
+   proposal:1,amount:money2(stake),basis:'stake',contract_type:'DIGITDIFF',
    currency,duration:1,duration_unit:'t',barrier:String(chosenBarrier),
    underlying_symbol:'R_75',req_id:req
  }));
