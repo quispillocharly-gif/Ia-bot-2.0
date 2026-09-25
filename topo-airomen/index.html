@@ -328,9 +328,9 @@ const SESSION_TARGET=20;
 const WIN_STREAK_TARGET=46;
 const STREAK_BLOCK_SIZE=10;
 const HARD_MAX_STAKE=6;
-const GRADUAL_WIN_GROWTH=.60;
+const GRADUAL_WIN_GROWTH=.85;
 const MIN_WIN_STEP_RATE=.05;
-const MAX_WIN_STEP_RATE=.10;
+const MAX_WIN_STEP_RATE=.12;
 let blockPauseTicks=0,lastProtectedBlock=0;
 const STREAK_LAB_KEY='topo_airomen_streak_lab_v1';
 const EXEC_HISTORY_KEY='topo_airomen_exec_history_v1';
@@ -530,15 +530,17 @@ function selectiveAntiMatchGate(pick){
  const risk=Number(pick?.conservativeRisk??pick?.matchProb??1);
  const cold=Number(pick?.sourceConsensus||0);
  const hot=Number(pick?.dangerConsensus||0);
+ const neural=Number(pick?.neuralRisk??1);
+ const neuralRank=Number(pick?.neuralRank??10);
  const conf=Number(pick?.confidence||0);
  const gap=Number(pick?.selectionGap||0);
  const unc=Number(pick?.uncertainty||1);
 
- let maxRisk=.112,minCold=2,maxHot=4,minConf=.38,minGap=.00015,maxUnc=.090;
+ let maxRisk=.112,minCold=1,maxHot=4,minConf=.38,minGap=.00015,maxUnc=.090,maxNeural=.095,maxNeuralRank=2;
  if(n>=20&&mr!=null){
-   if(mr>=.14){maxRisk=.101;minCold=4;maxHot=1;minConf=.58;minGap=.0012;maxUnc=.055}
-   else if(mr>=.12){maxRisk=.104;minCold=3;maxHot=2;minConf=.52;minGap=.0008;maxUnc=.065}
-   else if(mr>=.10){maxRisk=.108;minCold=3;maxHot=3;minConf=.46;minGap=.00045;maxUnc=.075}
+   if(mr>=.14){maxRisk=.101;minCold=2;maxHot=1;minConf=.58;minGap=.0012;maxUnc=.055;maxNeural=.078;maxNeuralRank=1}
+   else if(mr>=.12){maxRisk=.104;minCold=2;maxHot=2;minConf=.52;minGap=.0008;maxUnc=.065;maxNeural=.082;maxNeuralRank=1}
+   else if(mr>=.10){maxRisk=.108;minCold=1;maxHot=3;minConf=.46;minGap=.00045;maxUnc=.075;maxNeural=.088;maxNeuralRank=2}
    else if(mr<=.075){maxRisk=.116;minCold=1;maxHot=4;minConf=.34;minGap=.00005;maxUnc=.100}
  }
  if(consecutiveDemoLosses>=2){maxRisk-=.004;minCold+=1;maxHot=Math.max(0,maxHot-1);minConf+=.05}
@@ -547,18 +549,22 @@ function selectiveAntiMatchGate(pick){
  const drawdown=sessionDrawdown();
  if(riskMode==='YELLOW'){
    maxRisk=Math.min(maxRisk,.106);
-   minCold=Math.max(minCold,3);
+   minCold=Math.max(minCold,1);
    maxHot=Math.min(maxHot,2);
    minConf=Math.max(minConf,.50);
    minGap=Math.max(minGap,.00065);
    maxUnc=Math.min(maxUnc,.070);
+   maxNeural=Math.min(maxNeural,.085);
+   maxNeuralRank=Math.min(maxNeuralRank,1);
  }else if(riskMode==='RED'){
    maxRisk=Math.min(maxRisk,.101);
-   minCold=Math.max(minCold,4);
+   minCold=Math.max(minCold,2);
    maxHot=Math.min(maxHot,1);
    minConf=Math.max(minConf,.58);
    minGap=Math.max(minGap,.0011);
    maxUnc=Math.min(maxUnc,.055);
+   maxNeural=Math.min(maxNeural,.078);
+   maxNeuralRank=1;
  }
 
  // MODO OPORTUNIDAD: si pasan muchos ticks sin entrada, relajamos solo
@@ -576,6 +582,8 @@ function selectiveAntiMatchGate(pick){
 
  const checks={
    risk:risk<=maxRisk,
+   neural:neural<=maxNeural,
+   neuralRank:neuralRank<=maxNeuralRank,
    cold:cold>=minCold,
    hot:hot<=maxHot,
    confidence:conf>=minConf,
@@ -583,7 +591,7 @@ function selectiveAntiMatchGate(pick){
    uncertainty:unc<=maxUnc
  };
  const pass=Object.values(checks).every(Boolean);
- return {pass,mr,n,risk,cold,hot,conf,gap,unc,maxRisk,minCold,maxHot,minConf,minGap,maxUnc,waitRelax,safeRelax,riskMode,drawdown,checks};
+ return {pass,mr,n,risk,cold,hot,neural,neuralRank,conf,gap,unc,maxRisk,minCold,maxHot,maxNeural,maxNeuralRank,minConf,minGap,maxUnc,waitRelax,safeRelax,riskMode,drawdown,checks};
 }
 function executionCalibration(){
  const z=execHistory.slice(-60),n=z.length;
@@ -631,21 +639,8 @@ function sessionRiskMode(){
  if(sessionPnl<0||dd>=1.25||consecutiveDemoLosses===1)return 'YELLOW';
  return 'GREEN';
 }
-function progressiveStakeMultiplier(){
- const p=Math.max(0,Number(sessionPnl)||0);
- if(p<1)return 1.08;
- if(p<3)return 1.25;
- if(p<6)return 1.50;
- if(p<10)return 1.85;
- if(p<14)return 2.20;
- if(p<17)return 2.55;
- return 3.00;
-}
 function sessionRiskStakeCap(){
- const b=baseStake(),mode=sessionRiskMode();
- if(mode==='RED')return b;
- if(mode==='YELLOW')return b;
- return Math.min(HARD_MAX_STAKE,maxSessionStake(),money2(b*progressiveStakeMultiplier()));
+ return Math.min(HARD_MAX_STAKE,maxSessionStake());
 }
 function renderProfitSession(){
  const progress=Math.max(0,Math.min(100,(sessionPnl/SESSION_TARGET)*100));
@@ -654,7 +649,7 @@ function renderProfitSession(){
  $('sessionProgress').textContent=progress.toFixed(1)+'% de la meta';
  $('nextStake').textContent='$'+currentStake.toFixed(2);
  const mode=sessionRiskMode(),dd=sessionDrawdown();
- $('sessionWL').textContent=sessionWins+' WIN · '+sessionLosses+' LOSS · '+mode+' · DD USD '+dd.toFixed(2)+' · x'+progressiveStakeMultiplier().toFixed(2);
+ $('sessionWL').textContent=sessionWins+' WIN · '+sessionLosses+' LOSS · '+mode+' · DD USD '+dd.toFixed(2);
 }
 function resetProfitSession(){
  sessionPnl=0;sessionWins=0;sessionLosses=0;sessionStopped=false;
@@ -675,7 +670,7 @@ function resetProfitSession(){
  if(latestLiveEnsemble)liveEnsemble=latestLiveEnsemble;
  liveRuleId='avoid_match_adaptive_all_digits';
  $('sessionPolicy').textContent='V3 · AVOID MATCH';
- $('policyMeta').textContent='ANTI-MATCH RISK SHIELD + PROGRESSIVE TURBO - stake sube por etapas en GREEN y vuelve a base en LOSS/YELLOW/RED - memoria 24/7 - objetivo +20';
+ $('policyMeta').textContent='STAKE PROGRESIVO CLASICO - sube tras cada WIN y LOSS vuelve a base · ANALISIS anti-MATCH neural + T1/T2/T3 + memoria 24/7 · objetivo +20';
  renderProfitSession();renderStreakLab();
  trace('SESIÓN NUEVA · meta +$20.00 · stop -$'+sessionStopLoss().toFixed(2)+' · '+$('sessionPolicy').textContent,true);
 }
@@ -686,17 +681,10 @@ function applyProfitLadder(profit){
  if(profit>=0){
    sessionWins++;
    const b=baseStake();
-   const mode=sessionRiskMode();
-   if(mode!=='GREEN'){
-     currentStake=money2(b);
-   }else{
-     const stageCap=sessionRiskStakeCap();
-     const streakBoost=currentWinStreak>=8?1.18:currentWinStreak>=4?1.08:1;
-     const rawStep=Math.max(Math.max(0,profit)*GRADUAL_WIN_GROWTH*streakBoost,b*.06);
-     const maxStep=Math.max(b*.06,currentStake*MAX_WIN_STEP_RATE);
-     const step=Math.min(rawStep,maxStep);
-     currentStake=money2(Math.min(HARD_MAX_STAKE,stageCap,Math.max(b,currentStake+step)));
-   }
+   const rawStep=Math.max(Math.max(0,profit)*GRADUAL_WIN_GROWTH,b*MIN_WIN_STEP_RATE);
+   const maxStep=Math.max(b*MIN_WIN_STEP_RATE,currentStake*MAX_WIN_STEP_RATE);
+   const step=Math.min(rawStep,maxStep);
+   currentStake=money2(Math.min(HARD_MAX_STAKE,maxSessionStake(),Math.max(b,currentStake+step)));
    if(activeMoneyPolicy.promoted)sessionBatchWins++;
  }else{
    sessionLosses++;
@@ -1360,6 +1348,7 @@ function scanAvoidMatchDigits(){
  const modelPs=models.map(m=>modelProbs(m,liveSeq)).filter(Boolean);
  const votes=Array(10).fill(0);
  for(const p of modelPs){let b=0;for(let d=1;d<10;d++)if(p[d]<p[b])b=d;votes[b]++}
+ const neuralOrder=Array.from({length:10},(_,d)=>d).sort((a,b)=>Number(neural[a]||0)-Number(neural[b]||0));
 
  const adaptiveSources=[transition,transition2,recent,micro,frequency,neural];
  const allSources=[transition,transition2,transition3,recent,micro,frequency,execution,contextExecution,offline,neural];
@@ -1414,7 +1403,7 @@ function scanAvoidMatchDigits(){
    rows.push({
      digit:d,matchProb:rankRisk,conservativeRisk,rawMatchProb:baseRisk,avoidProb:1-rankRisk,
      transition:transition[d],transition2:transition2[d],transition3:transition3[d],recent:recent[d],micro:micro[d],frequency:frequency[d],
-     neuralRisk:neural[d],executionRisk:execution[d],contextExecutionRisk:contextExecution[d],offlineRisk:offline[d],agree:votes[d]||0,
+     neuralRisk:neural[d],neuralRank:neuralOrder.indexOf(d)+1,executionRisk:execution[d],contextExecutionRisk:contextExecution[d],offlineRisk:offline[d],agree:votes[d]||0,
      uncertainty,sourceConsensus,dangerConsensus,regime,confidence,evidenceSupport:Number(support.effective||1)
    });
  }
@@ -1610,7 +1599,7 @@ function maybeAutoBuy(signalOk,tickEpoch=Date.now()){
  liveBarrierProb=chosenRisk;
  $('liveDiffer').textContent='DIFFER '+chosenBarrier;
  $('liveProb').textContent=pct(chosenRisk);
- $('liveReason').textContent='ENTRADA '+gate.riskMode+' - D'+chosenBarrier+' · cons '+pct(gate.risk)+' · cold '+gate.cold+' · hot '+gate.hot+' · DD '+gate.drawdown.toFixed(2)+' · relax '+pct(gate.safeRelax);
+ $('liveReason').textContent='ENTRADA D'+chosenBarrier+' · cons '+pct(gate.risk)+' · neural #'+gate.neuralRank+' '+pct(gate.neural)+' · hot '+gate.hot+' · DD '+gate.drawdown.toFixed(2);
  if(tickEpoch===lastSignalEpoch){trace('TICK YA PROCESADO');return}
  lastSignalEpoch=tickEpoch;
  const stake=money2(Math.min(HARD_MAX_STAKE,sessionRiskStakeCap(),Math.max(.35,currentStake||baseStake())));
