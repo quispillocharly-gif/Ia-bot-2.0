@@ -3,7 +3,7 @@ from pathlib import Path
 import json, math, shutil, time
 import numpy as np
 import joblib
-from scipy.stats import binomtest
+from scipy.stats import binomtest, chisquare
 
 R=Path(__file__).resolve().parent
 M=R/"memory"; M.mkdir(exist_ok=True)
@@ -102,6 +102,7 @@ def freeze(ticks):
     meta=json.loads(FMETA.read_text()); latest=int(ticks[-1]["epoch"])
     st={"version":"8.0","model_id":meta["model_id"],"start_epoch":latest,"last_epoch":latest,
         "runs":0,"history":[int(x["digit"]) for x in ticks[-1500:]],"opportunities":0,
+        "digit_counts":[0]*10,"forward_ticks":0,
         "variants":{v["id"]:{"n":0,"w":0,"pnl":0.0,"staked":0.0,"outcomes":[]} for v in VARIANTS}}
     STATE.write_text(json.dumps(st,indent=2)); return st
 
@@ -129,6 +130,10 @@ def main():
 
     for x in fresh:
         d=int(x["digit"])
+        st["forward_ticks"]=int(st.get("forward_ticks",0))+1
+        counts=list(st.get("digit_counts",[0]*10))
+        while len(counts)<10:counts.append(0)
+        counts[d]+=1; st["digit_counts"]=counts
         if len(hist)>=max(200,window):
             st["opportunities"]+=1
             X=enc.transform(np.asarray([hist[-window:]],dtype=np.int16))
@@ -174,10 +179,21 @@ def main():
         })
     rows.sort(key=lambda x:(x["status"]=="ECONOMIC_CANDIDATE",x["wilson_lower"],x["signals"]),reverse=True)
     confirmed=[x["id"] for x in rows if x["status"]=="ECONOMIC_CANDIDATE"]
+    counts=np.asarray(st.get("digit_counts",[0]*10),dtype=float)
+    total=int(counts.sum())
+    if total>=100:
+        chi=chisquare(counts,f_exp=np.full(10,total/10.0))
+        chi_p=float(chi.pvalue)
+        max_dev=float(np.max(np.abs(counts/total-.1)))
+    else:
+        chi_p=None; max_dev=None
     out={
       "version":"8.0-prospective-challenger-lab","timestamp":int(time.time()),"runs":st["runs"],
       "model_id":st["model_id"],"start_epoch":st["start_epoch"],"new_ticks_this_run":len(fresh),
       "opportunities":int(st["opportunities"]),"tests":TESTS,
+      "data_quality":{"forward_ticks":int(st.get("forward_ticks",0)),
+                      "digit_counts":[int(x) for x in st.get("digit_counts",[0]*10)],
+                      "uniformity_chi_square_p":chi_p,"max_digit_share_deviation":max_dev},
       "break_even_rate":be,"payout_fresh":payout_fresh,"payout_age_seconds":payout_age,
       "confirmed_variants":confirmed,"status":"EDGE_CANDIDATE" if confirmed else "RESEARCHING",
       "leader":rows[0] if rows else None,"variants":rows,

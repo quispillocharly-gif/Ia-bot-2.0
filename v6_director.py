@@ -39,6 +39,7 @@ def main():
     payout=load(M/"payout_snapshot.json")
     adaptive=load(M/"v7_adaptive_latest.json")
     sprint=load(M/"v7_sprint_latest.json")
+    v8=load(M/"v8_challenger_latest.json")
 
     v4l=v4.get("leader") or {}
     v5l=v5.get("leader") or {}
@@ -84,6 +85,9 @@ def main():
     if adaptive.get("status")=="ECONOMICALLY_CONFIRMED":
         forward_confirmed.append("V7")
         confirmed_objs.append(adaptive)
+    if v8.get("status")=="EDGE_CANDIDATE":
+        forward_confirmed.append("V8")
+        if v8.get("leader"): confirmed_objs.append(v8.get("leader"))
 
     break_even=payout.get("max_break_even") if payout.get("status")=="OK" else None
     payout_ts=payout.get("timestamp")
@@ -125,6 +129,11 @@ def main():
             priorities.append("Continue V7 regime/calibration/shadow EV collection without changing live execution.")
         elif adaptive.get("status")=="NOT_CONFIRMED":
             priorities.append("V7 adaptive shadow strategy did not confirm economic edge; use its regime and calibration diagnostics only.")
+    if v8:
+        if v8.get("status")=="RESEARCHING":
+            priorities.append("Continue V8 prospective challenger tournament; do not select a winner before independent forward evidence and Bonferroni correction.")
+        elif v8.get("status")=="EDGE_CANDIDATE":
+            priorities.append("V8 has an economic candidate; require continued forward stability before any downstream promotion.")
     if break_even is None:
         priorities.append("Payout probe is unavailable; do not claim profitability.")
     elif not payout_fresh:
@@ -167,6 +176,13 @@ def main():
                        "shadow_pnl":(adaptive.get("economic") or {}).get("shadow_pnl") if adaptive else None,
                        "ev_per_signal":(adaptive.get("economic") or {}).get("ev_per_signal") if adaptive else None,
                        "calibration_ece":(adaptive.get("calibration") or {}).get("ece") if adaptive else None},
+        "challenger_v8":{"status":v8.get("status","NOT_STARTED") if v8 else "NOT_STARTED",
+                         "leader_id":(v8.get("leader") or {}).get("id") if v8 else None,
+                         "leader_signals":(v8.get("leader") or {}).get("signals") if v8 else 0,
+                         "leader_hit_rate":(v8.get("leader") or {}).get("hit_rate") if v8 else None,
+                         "leader_wilson":(v8.get("leader") or {}).get("wilson_lower") if v8 else None,
+                         "leader_bonferroni_p":(v8.get("leader") or {}).get("bonferroni_p") if v8 else None,
+                         "confirmed_variants":v8.get("confirmed_variants",[]) if v8 else []},
         "evidence_sprint":{"status":sprint.get("status","NOT_STARTED") if sprint else "NOT_STARTED",
                            "days_left":sprint.get("days_left") if sprint else None,
                            "core_gates_passed":sprint.get("core_gates_passed") if sprint else 0,
