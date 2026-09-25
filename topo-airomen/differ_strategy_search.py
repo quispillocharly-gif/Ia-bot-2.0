@@ -15,7 +15,7 @@ MAX_EXAMPLES=5000
 MIN_HISTORY=220
 MIN_SIGNAL_RATE=.30
 MAX_IDLE_TICKS=18
-CADENCE_MODES=['ctx3','ctx4','ctx3_nr']
+CADENCE_MODES=['ctx3','ctx4','ctx3_nr','ctx4_nr','ctx5_nr']
 
 def load_json(path, default=None):
     try:return json.loads(path.read_text())
@@ -50,13 +50,13 @@ def trans_probs(hist,order,lookback):
 
 def cadence_wait(mode,ex,step,blocked,prev_wait):
     tail=[int(x) for x in ex.get("tail",[])]
-    max_wait=4 if mode=="ctx4" else 3
+    max_wait=5 if mode.startswith("ctx5") else (4 if mode.startswith("ctx4") else 3)
     h=17+int(step)*31+(0 if blocked is None else int(blocked)*13)
     for i,d in enumerate(tail):
         h=(h*33+d*(i+3)+7)%9973
     wait=1+(h%max_wait)
-    if mode=="ctx3_nr" and prev_wait and wait==prev_wait:
-        wait=1+(wait%3)
+    if mode.endswith("_nr") and prev_wait and wait==prev_wait:
+        wait=1+(wait%max_wait)
     return int(wait)
 
 def longest_streak(outcomes):
@@ -75,6 +75,15 @@ def perfect_windows(outcomes,size):
 
 def metrics(outcomes,opportunities):
     n=len(outcomes); w=int(sum(outcomes)); losses=n-w
+    first_match=None
+    runs=[]; cur=0
+    for i,x in enumerate(outcomes):
+        if x:
+            cur+=1
+        else:
+            if first_match is None:first_match=i+1
+            runs.append(cur); cur=0
+    runs.append(cur)
     return {
         "signals":n,
         "wins":w,
@@ -82,6 +91,8 @@ def metrics(outcomes,opportunities):
         "hit_rate":(w/n if n else None),
         "wilson_lower":wilson(w,n),
         "signal_rate":(n/opportunities if opportunities else None),
+        "first_match_at":first_match,
+        "median_anti_match_run":float(np.median(runs)) if runs else 0.0,
         "longest_anti_match_streak":longest_streak(outcomes),
         "perfect_windows_50":perfect_windows(outcomes,50),
         "perfect_windows_100":perfect_windows(outcomes,100),
@@ -103,6 +114,16 @@ def strategy_grid():
     for rank in [1,2]:
         for ms in [.105,.100,.095]:
             out.append({"id":f"struct_r{rank}_s{ms:.3f}","family":"struct","max_rank":rank,"max_score":ms})
+    for topk in [2,3,4]:
+        for mw in [.115,.110,.105,.100]:
+            for cons in [2,3,4]:
+                out.append({
+                    "id":f"veto_k{topk}_w{mw:.3f}_c{cons}",
+                    "family":"veto",
+                    "topk":topk,
+                    "max_worst":mw,
+                    "min_consensus":cons
+                })
     expanded=[]
     for cfg in out:
         for mode in CADENCE_MODES:
@@ -145,6 +166,25 @@ def choose(cfg,ex,blocked=None):
         d=int(min(allowed,key=lambda x:(score[x],n[x],x)))
         nr=int(np.where(norder==d)[0][0])+1
         emit=float(score[d])<=cfg["max_score"] and nr<=cfg["max_rank"]
+        return d if emit else None
+
+    if fam=="veto":
+        core=[n,t2,t3]
+        hot=set()
+        for src in core:
+            hot.update(np.argsort(src)[-2:].tolist())
+        bottom3=[set(np.argsort(src)[:3].tolist()) for src in (n,recent,t1,t2,t3)]
+        cand=[int(d) for d in norder[:min(cfg["topk"],len(norder))] if int(d) not in hot]
+        if not cand:
+            return None
+        def key(d):
+            worst=max(float(n[d]),float(t2[d]),float(t3[d]))
+            avg=.35*float(n[d])+.10*float(recent[d])+.15*float(t1[d])+.20*float(t2[d])+.20*float(t3[d])
+            return (worst,avg,d)
+        d=min(cand,key=key)
+        consensus=sum(int(d in z) for z in bottom3)
+        worst=max(float(n[d]),float(t2[d]),float(t3[d]))
+        emit=worst<=cfg["max_worst"] and consensus>=cfg["min_consensus"]
         return d if emit else None
 
     return None
@@ -201,7 +241,7 @@ def main():
     if len(idx)>MAX_EXAMPLES:idx=idx[-MAX_EXAMPLES:]
 
     if len(idx)<240:
-        out={"version":"1.0-strategy-search","timestamp":int(time.time()),"status":"COLLECTING",
+        out={"version":"2.0-zero-match-seek","timestamp":int(time.time()),"status":"COLLECTING",
              "forward_examples":len(idx),"target":"Search for 100% anti-MATCH on chronological validation/holdout without claiming a guarantee."}
         OUT.write_text(json.dumps(out,indent=2)); print(json.dumps(out,indent=2)); return
 
@@ -232,21 +272,22 @@ def main():
     for cfg in grid:
         m,_=eval_strategy(cfg,discovery)
         if m["signals"]<50 or not m.get("frequency_ok"):continue
-        ranked.append((m["wilson_lower"],m["hit_rate"] or 0,m["signal_rate"] or 0,m["signals"],cfg,m))
-    ranked.sort(reverse=True,key=lambda x:(x[0],x[1],x[2],x[3]))
-    top=[x[4] for x in ranked[:18]]
+        ranked.append((m["longest_anti_match_streak"],m["wilson_lower"],m["hit_rate"] or 0,m["signal_rate"] or 0,m["signals"],cfg,m))
+    ranked.sort(reverse=True,key=lambda x:(x[0],x[1],x[2],x[3],x[4]))
+    top=[x[5] for x in ranked[:36]]
 
     validated=[]
     for cfg in top:
         md,_=eval_strategy(cfg,discovery)
         mv,_=eval_strategy(cfg,validation)
         if mv["signals"]<40 or not mv.get("frequency_ok"):continue
-        validated.append((mv["wilson_lower"],mv["hit_rate"] or 0,mv["signal_rate"] or 0,mv["signals"],cfg,md,mv))
-    validated.sort(reverse=True,key=lambda x:(x[0],x[1],x[2],x[3]))
-    finalists=validated[:10]
+        stable_streak=min(md["longest_anti_match_streak"],mv["longest_anti_match_streak"])
+        validated.append((stable_streak,mv["wilson_lower"],mv["hit_rate"] or 0,mv["signal_rate"] or 0,mv["signals"],cfg,md,mv))
+    validated.sort(reverse=True,key=lambda x:(x[0],x[1],x[2],x[3],x[4]))
+    finalists=validated[:18]
 
     results=[]
-    for _,_,_,_,cfg,md,mv in finalists:
+    for _,_,_,_,_,cfg,md,mv in finalists:
         mh,oh=eval_strategy(cfg,holdout)
         perfect=bool(
             mv["signals"]>=50 and mh["signals"]>=50 and
@@ -261,6 +302,7 @@ def main():
 
     results.sort(key=lambda x:(
         x["zero_match_validation_and_holdout"],
+        min(x["validation"]["longest_anti_match_streak"],x["holdout"]["longest_anti_match_streak"]),
         x["holdout"]["wilson_lower"],
         x["holdout"]["hit_rate"] or 0,
         x["holdout"]["signals"]
@@ -280,8 +322,8 @@ def main():
         "leader":leader,
         "perfect_candidates":perfect,
         "status":"PERFECT_FORWARD_CANDIDATE" if perfect else "SEARCHING",
-        "target":"Find dynamic cadence + no-repeat-digit strategies with 0 MATCH in validation and holdout, while keeping signal_rate >= 30% and max idle <= 18 ticks. Evidence, not a guarantee.",
-        "note":"Sparse or frozen strategies are rejected. A 100% result only counts if it keeps buying often enough: signal_rate >= 30% and no gap above 18 ticks in validation/holdout."
+        "target":"Maximize the minimum anti-MATCH streak across chronological validation and holdout while keeping signal_rate >= 30% and max idle <= 18 ticks; also search for 0-MATCH blocks.",
+        "note":"ZERO-MATCH SEEK tests weighted, consensus, minimax-veto and dynamic cadence families (including 1-4 and 1-5 no-repeat). Sparse/frozen strategies are rejected; finite 0-MATCH results are not a future guarantee."
     }
     OUT.write_text(json.dumps(out,indent=2)); print(json.dumps(out,indent=2))
 
