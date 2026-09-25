@@ -12,6 +12,7 @@ FROZEN=M/"differ_v2_frozen.joblib"; FMETA=M/"differ_v2_frozen.json"
 STATE=M/"differ_v2_state.json"; OUT=M/"differ_v2_latest.json"
 PAYOUT=M/"differ_payout_snapshot.json"; GRAVE=M/"differ_v2_graveyard.json"
 PAYOUT_MAX_AGE=7200; BASE=.90
+SESSION_TARGET=20.0; SESSION_STOP=5.0; SESSION_BASE_STAKE=1.0; SESSION_MAX_STAKE=5.0
 VARIANTS=[
  {"id":"vote2_margin005","agree":2,"margin":.005,"cal":False,"stable":False},
  {"id":"vote2_margin010","agree":2,"margin":.010,"cal":False,"stable":False},
@@ -80,7 +81,9 @@ def freeze(ticks):
       "ensemble_id":meta.get("ensemble_id"),"start_epoch":last,"last_epoch":last,"runs":0,
       "history":[int(x["digit"]) for x in ticks[-1500:]],"forward_ticks":0,
       "variants":{v["id"]:{
-        "n":0,"w":0,"pnl":0.0,"staked":0.0,"outcomes":[],"equity":0.0,"peak":0.0,"max_drawdown":0.0
+        "n":0,"w":0,"pnl":0.0,"staked":0.0,"outcomes":[],"equity":0.0,"peak":0.0,"max_drawdown":0.0,
+        "session_pnl":0.0,"session_stake":SESSION_BASE_STAKE,"session_trades":0,
+        "session_targets":0,"session_stops":0,"session_completed":0
       } for v in VARIANTS}
     }
     STATE.write_text(json.dumps(st,indent=2)); return st
@@ -157,6 +160,27 @@ def main():
                     s["pnl"]+=delta; s["staked"]+=ask
                     s["equity"]+=delta; s["peak"]=max(float(s["peak"]),float(s["equity"]))
                     s["max_drawdown"]=max(float(s["max_drawdown"]),float(s["peak"])-float(s["equity"]))
+
+                    stake=float(s.get("session_stake",SESSION_BASE_STAKE))
+                    spnl=float(s.get("session_pnl",0.0))
+                    if hit:
+                        win_ratio=(payout-ask)/ask if ask else 0.0
+                        sess_profit=stake*win_ratio
+                        spnl+=sess_profit
+                        stake=min(SESSION_MAX_STAKE,max(SESSION_BASE_STAKE,stake+sess_profit))
+                    else:
+                        spnl-=stake
+                        stake=SESSION_BASE_STAKE
+                    s["session_trades"]=int(s.get("session_trades",0))+1
+                    if spnl>=SESSION_TARGET:
+                        s["session_targets"]=int(s.get("session_targets",0))+1
+                        s["session_completed"]=int(s.get("session_completed",0))+1
+                        spnl=0.0; stake=SESSION_BASE_STAKE; s["session_trades"]=0
+                    elif spnl<=-SESSION_STOP:
+                        s["session_stops"]=int(s.get("session_stops",0))+1
+                        s["session_completed"]=int(s.get("session_completed",0))+1
+                        spnl=0.0; stake=SESSION_BASE_STAKE; s["session_trades"]=0
+                    s["session_pnl"]=spnl; s["session_stake"]=stake
         hist.append(d)
         if len(hist)>1500:hist=hist[-1500:]
         st["last_epoch"]=int(x["epoch"])
@@ -171,11 +195,20 @@ def main():
         adj=min(1.0,raw*TESTS); bs=blocks(s["outcomes"])
         stable=bool(len(bs)==3 and all(b["hit_rate"]>threshold for b in bs))
         confirmed=bool(n>=2000 and payout_fresh and wilson(w,n)>threshold and float(s["pnl"])>0 and adj<.05 and stable)
+        completed=int(s.get("session_completed",0))
+        targets=int(s.get("session_targets",0)); stops=int(s.get("session_stops",0))
         rows.append({
           "id":cfg["id"],"signals":n,"wins":w,"losses":n-w,"hit_rate":rate,
           "wilson_lower":wilson(w,n),"raw_economic_p":raw,"bonferroni_p":adj,
           "shadow_pnl":float(s["pnl"]),"shadow_roi":float(s["pnl"])/float(s["staked"]) if s["staked"] else None,
           "max_drawdown_flat_stake":float(s["max_drawdown"]),"temporal_blocks":bs,"block_stable":stable,
+          "prospective_sessions":{
+            "target":SESSION_TARGET,"stop_loss":SESSION_STOP,"base_stake":SESSION_BASE_STAKE,"max_stake":SESSION_MAX_STAKE,
+            "completed":completed,"targets":targets,"stops":stops,
+            "target_rate":float(targets/completed) if completed else None,
+            "open_pnl":float(s.get("session_pnl",0.0)),"open_stake":float(s.get("session_stake",SESSION_BASE_STAKE)),
+            "open_trades":int(s.get("session_trades",0))
+          },
           "status":"ECONOMIC_CANDIDATE" if confirmed else ("COLLECTING" if n<2000 else "NOT_CONFIRMED")
         })
     rows.sort(key=lambda r:(r["status"]=="ECONOMIC_CANDIDATE",r["wilson_lower"],r["shadow_pnl"],r["signals"]),reverse=True)
