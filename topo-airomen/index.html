@@ -182,7 +182,7 @@ function syncAutoDemoUI(){
 function setAutoDemo(next){
  if(next){
    if(sessionStopped){
-     $('autoDemoState').textContent='La sesión ya alcanzó +$20 netos. Pulsa REINICIAR META +$20 para comenzar otra.';
+     $('autoDemoState').textContent='La sesión está finalizada por meta o stop-loss. Pulsa REINICIAR META +$20 para comenzar otra.';
      trace('SESIÓN FINALIZADA · reinicia para volver a operar');
      return false;
    }
