@@ -54,7 +54,7 @@ button:disabled{opacity:.45;cursor:not-allowed}
 </div>
 
 <div class="card signal">
- <div class="lab">ULTRA LOW MATCH · COMPRA SOLO EL #1 MENOS PROBABLE</div>
+ <div class="lab">ULTRA LOW MATCH + STREAK SHIELD · PROTEGE RACHAS LARGAS</div>
  <div id="bestDigit" class="digit">DIFFER –</div>
  <div id="signalMeta" class="mini">Esperando historial R_75…</div>
  <div id="ranking" class="chips"></div>
@@ -103,13 +103,14 @@ button:disabled{opacity:.45;cursor:not-allowed}
 <script>
 'use strict';
 
-const BUILD='CLEAN-1.2-ULTRA-LOW-MATCH';
+const BUILD='CLEAN-1.3-STREAK-SHIELD';
 const SYMBOL='R_75';
 const TARGET=10;
 const HARD_MAX=6;
 const MARKET_URL='wss://api.derivws.com/trading/v1/options/ws/public';
 const RAW_BASE='https://raw.githubusercontent.com/quispillocharly-gif/Ia-bot-2.0/main/topo-airomen/memory/';
 const EXEC_KEY='topo_clean_exec_v1';
+const STREAK_KEY='topo_clean_best_streak_v1';
 
 const $=id=>document.getElementById(id);
 const clamp=(x,a,b)=>Math.max(a,Math.min(b,Number(x)||0));
@@ -126,6 +127,7 @@ let activeContract=null,pendingOrder=null,req=1000,buyContexts=new Map();
 let proposalTimer=null,buyTimer=null;
 
 let sessionPnl=0,sessionWins=0,sessionMatches=0,currentStake=1;
+let antiMatchStreak=0,bestAntiMatchStreak=0;
 let currentDecision=null,stableDigit=null,stableTicks=0,lastStabilityEpoch=0;
 let recoveryTicks=0;
 
@@ -133,6 +135,9 @@ let execHistory=[];
 try{
   const x=JSON.parse(localStorage.getItem(EXEC_KEY)||'[]');
   if(Array.isArray(x))execHistory=x.slice(-500);
+}catch(_){}
+try{
+  bestAntiMatchStreak=Math.max(0,Number(localStorage.getItem(STREAK_KEY)||0));
 }catch(_){}
 
 function saveExec(){
@@ -165,13 +170,14 @@ function stopLoss(){
 function renderSession(){
   $('sessionPnl').textContent=(sessionPnl>=0?'+':'')+'$'+sessionPnl.toFixed(2);
   $('sessionPnl').className='big '+(sessionPnl>=0?'green':'red');
-  $('sessionWL').textContent=sessionWins+' WIN · '+sessionMatches+' MATCH';
+  $('sessionWL').textContent=sessionWins+' WIN · '+sessionMatches+' MATCH · RACHA '+antiMatchStreak+' · BEST '+bestAntiMatchStreak;
   $('nextStake').textContent='$'+money(currentStake).toFixed(2);
   $('progressMeta').textContent=Math.max(0,Math.min(100,sessionPnl/TARGET*100)).toFixed(1)+'% de +$10';
 }
 
 function resetSession(){
   sessionPnl=0;sessionWins=0;sessionMatches=0;sessionStopped=false;
+  antiMatchStreak=0;
   currentStake=baseStake();pending=false;pendingOrder=null;
   stableDigit=null;stableTicks=0;recoveryTicks=0;
   renderSession();
@@ -184,8 +190,15 @@ function applyResult(profit,snapshot){
   sessionPnl=money(sessionPnl+Number(profit||0));
   if(profit>=0){
     sessionWins++;
+    antiMatchStreak++;
+    if(antiMatchStreak>bestAntiMatchStreak){
+      bestAntiMatchStreak=antiMatchStreak;
+      try{localStorage.setItem(STREAK_KEY,String(bestAntiMatchStreak))}catch(_){}
+      log('NUEVA MEJOR RACHA ANTI-MATCH · '+bestAntiMatchStreak);
+    }
   }else{
     sessionMatches++;
+    antiMatchStreak=0;
     recoveryTicks=actualMatchRate(30)>=.14?2:1;
   }
 
@@ -451,6 +464,50 @@ function analyze(){
     }
   }
 
+  // STREAK SHIELD: cuanto más larga la racha, más protegida la siguiente entrada.
+  let streakPhase='BASE';
+  if(antiMatchStreak>=20){
+    streakPhase='SHIELD 20+';
+    maxRisk=Math.min(maxRisk,.099);
+    maxNeural=Math.min(maxNeural,.086);
+    maxNeuralRank=1;
+    maxHot=Math.min(maxHot,1);
+    minCold=Math.max(minCold,4);
+    minGap=Math.max(minGap,.0010);
+    maxContext=Math.min(maxContext,.095);
+    maxStructure=Math.min(maxStructure,.105);
+  }else if(antiMatchStreak>=12){
+    streakPhase='SHIELD 12+';
+    maxRisk=Math.min(maxRisk,.101);
+    maxNeural=Math.min(maxNeural,.088);
+    maxNeuralRank=1;
+    maxHot=Math.min(maxHot,1);
+    minCold=Math.max(minCold,3);
+    minGap=Math.max(minGap,.00075);
+    maxContext=Math.min(maxContext,.097);
+    maxStructure=Math.min(maxStructure,.107);
+  }else if(antiMatchStreak>=8){
+    streakPhase='SHIELD 8+';
+    maxRisk=Math.min(maxRisk,.103);
+    maxNeural=Math.min(maxNeural,.090);
+    maxNeuralRank=1;
+    maxHot=Math.min(maxHot,2);
+    minCold=Math.max(minCold,3);
+    minGap=Math.max(minGap,.00055);
+    maxContext=Math.min(maxContext,.100);
+    maxStructure=Math.min(maxStructure,.110);
+  }else if(antiMatchStreak>=4){
+    streakPhase='SHIELD 4+';
+    maxRisk=Math.min(maxRisk,.106);
+    maxNeural=Math.min(maxNeural,.093);
+    maxNeuralRank=Math.min(maxNeuralRank,2);
+    maxHot=Math.min(maxHot,2);
+    minCold=Math.max(minCold,2);
+    minGap=Math.max(minGap,.00035);
+    maxContext=Math.min(maxContext,.102);
+    maxStructure=Math.min(maxStructure,.112);
+  }
+
   const structureRisk=Math.max(best.t2,best.t3,best.off);
   const veryStrong=
     best.combined<=.097 &&
@@ -460,7 +517,7 @@ function analyze(){
     best.cold>=3 &&
     gap>=.0008;
 
-  const stableNeed=veryStrong?1:2;
+  const stableNeed=(veryStrong&&antiMatchStreak<8)?1:2;
   if(lastEpoch!==lastStabilityEpoch){
     lastStabilityEpoch=lastEpoch;
     if(stableDigit===best.digit)stableTicks++;
@@ -487,7 +544,7 @@ function analyze(){
   return {
     best,rows,gap,mr,ok,stableNeed,checks,
     thresholds:{maxRisk,maxNeural,maxNeuralRank,maxStructHot,maxHot,minCold,minGap,maxContext,maxStructure},
-    structureRisk
+    structureRisk,streakPhase,antiMatchStreak,bestAntiMatchStreak
   };
 }
 function renderDecision(){
@@ -509,6 +566,7 @@ function renderDecision(){
     ' · riesgo '+pct(d.best.combined)+
     ' · gap '+pct(d.gap)+
     ' · MATCH real '+(d.mr==null?'–':pct(d.mr))+
+    ' · racha '+antiMatchStreak+' · '+d.streakPhase+
     ' · estabilidad '+stableTicks+'/'+d.stableNeed+
     (failed?' · falta '+failed:'');
 
