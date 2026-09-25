@@ -1,6 +1,6 @@
 {
   "version": "2.0-differ-director",
-  "timestamp": 1790336034,
+  "timestamp": 1790336481,
   "decision": "COLLECT_V2_FORWARD_DATA",
   "baseline_random": 0.9,
   "payout_status": "OK",
@@ -9,17 +9,36 @@
   "v2_status": "RESEARCHING",
   "v4_status": "COLLECTING",
   "v1_leader": {
-    "id": "cold_consensus",
-    "signals": 195,
-    "wins": 180,
-    "losses": 15,
-    "hit_rate": 0.9230769230769231,
-    "wilson_lower": 0.8769737324244411,
-    "raw_economic_p": 0.4520537673472892,
+    "id": "neural_p08",
+    "signals": 905,
+    "wins": 813,
+    "losses": 92,
+    "hit_rate": 0.8983425414364641,
+    "wilson_lower": 0.8769394763852246,
+    "raw_economic_p": 0.9818011135197641,
     "bonferroni_p": 1.0,
-    "shadow_pnl": 1.200000000000011,
-    "shadow_roi": 0.00615384615384621,
-    "temporal_blocks": [],
+    "shadow_pnl": -18.830000000000076,
+    "shadow_roi": -0.02080662983425423,
+    "temporal_blocks": [
+      {
+        "n": 302,
+        "wins": 271,
+        "hit_rate": 0.8973509933774835,
+        "wilson_lower": 0.8579810698549328
+      },
+      {
+        "n": 302,
+        "wins": 271,
+        "hit_rate": 0.8973509933774835,
+        "wilson_lower": 0.8579810698549328
+      },
+      {
+        "n": 301,
+        "wins": 271,
+        "hit_rate": 0.9003322259136213,
+        "wilson_lower": 0.8612831859663831
+      }
+    ],
     "block_stable": false,
     "status": "COLLECTING"
   },
@@ -78,18 +97,18 @@
   "ensemble_id": "a337adc1941d899d",
   "live_policy": {
     "version": "2.0-live-policy",
-    "timestamp": 1790336034,
+    "timestamp": 1790336481,
     "source": "v1",
-    "rule": "cold_consensus",
+    "rule": "neural_p08",
     "candidate_id": "918759d678c921ba",
     "mode": "RESEARCH_DEMO",
     "confirmed": false,
-    "economic_qualified": true,
+    "economic_qualified": false,
     "break_even_rate": 0.9174311926605504,
-    "leader_signals": 195,
-    "leader_hit_rate": 0.9230769230769231,
-    "leader_wilson": 0.8769737324244411,
-    "leader_shadow_pnl": 1.200000000000011,
+    "leader_signals": 905,
+    "leader_hit_rate": 0.8983425414364641,
+    "leader_wilson": 0.8769394763852246,
+    "leader_shadow_pnl": -18.830000000000076,
     "money_policy": null,
     "note": "Demo-only policy. Research continues in parallel. The DIFFER digit is recalculated across 0-9 every tick; no digit is frozen. Money-management policy remains session-scoped."
   },
