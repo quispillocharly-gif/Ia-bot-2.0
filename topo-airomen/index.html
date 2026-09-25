@@ -14,6 +14,7 @@ button:disabled{opacity:.55;cursor:not-allowed}.formgrid{display:grid;grid-templ
 .signalbox{text-align:center;background:radial-gradient(circle at 50% 0,#123c6b55,transparent 55%),linear-gradient(180deg,#0b1228,#070b18)}
 .signalDigit{font-size:clamp(46px,13vw,82px);font-weight:1000;line-height:1;margin:10px 0;color:var(--blue);text-shadow:0 0 18px #4ddcff77}
 .controls{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.chips{display:flex;flex-wrap:wrap;gap:7px;justify-content:center;margin-top:10px}.chip{border:1px solid #355984;border-radius:999px;padding:7px 10px;font-size:12px;background:#071024}.chip.best{border-color:#2f8d68;color:#6affb6;box-shadow:0 0 14px #6affb622}.chip.wait{color:#8ca4c8}
 @media(max-width:760px){.grid{grid-template-columns:1fr}.formgrid{grid-template-columns:1fr}}
 </style></head><body><div class="wrap">
 <div class="head"><div class="logo">TOPO AIROMEN</div><div class="sub">DIFFER AI · R_75 · FORWARD RESEARCH CORE</div></div>
@@ -36,6 +37,17 @@ button:disabled{opacity:.55;cursor:not-allowed}.formgrid{display:grid;grid-templ
  <div class="card"><div class="lab">+20 SESSION LAB</div><div id="sessionLabTarget" class="big cyan">–</div><div id="sessionLabMeta" class="mini">Bootstrap forward pendiente</div></div>
  <div class="card"><div class="lab">RIESGO +20 / -5</div><div id="sessionLabStop" class="big yellow">–</div><div id="sessionLabRisk" class="mini">Sin estimación</div></div>
  <div class="card"><div class="lab">V2 SESIONES REALES</div><div id="v2RealSessions" class="big vio">0</div><div id="v2RealMeta" class="mini">Prospectivas · sin reutilizar histórico</div></div>
+</div>
+<div class="grid">
+ <div class="card"><div class="lab">V3 AVOID-MATCH</div><div id="v3Rate" class="big cyan">–</div><div id="v3Meta" class="mini">Buscando el número menos probable del siguiente tick</div><span id="v3Status" class="badge">WAITING</span></div>
+ <div class="card"><div class="lab">OPORTUNIDADES / 1000 TICKS</div><div id="v3Throughput" class="big vio">–</div><div id="v3Avoided" class="mini">MATCH evitados / 1000: –</div></div>
+ <div class="card"><div class="lab">V3 SHADOW ECONOMY</div><div id="v3Pnl" class="big">–</div><div id="v3Risk" class="mini">Sin datos</div></div>
+</div>
+<div class="card signalbox">
+ <div class="lab">NEXT DIGIT AVOID-MATCH SCANNER · 0–9</div>
+ <div id="avoidBest" class="signalDigit">DIFFER –</div>
+ <div id="avoidMeta" class="mini">Calculando qué dígito tiene menor probabilidad de ser el siguiente…</div>
+ <div id="avoidRanking" class="chips"><span class="chip wait">Esperando ensemble y ticks…</span></div>
 </div>
 <div class="card">
  <div class="lab">DERIV DEMO / DBOT BRIDGE</div>
@@ -90,15 +102,16 @@ function badge(el,s){el.textContent=s;el.style.color=/CANDIDATE|CONFIRMED/.test(
 async function load(){
  try{
   const base='https://raw.githubusercontent.com/quispillocharly-gif/Ia-bot-2.0/main/topo-airomen/memory/';
-  const [a,b,c,d,e,g]=await Promise.all([
+  const [a,b,c,d,e,g,h]=await Promise.all([
    fetch(base+'differ_director_latest.json?t='+Date.now(),{cache:'no-store'}),
    fetch(base+'differ_forward_latest.json?t='+Date.now(),{cache:'no-store'}),
    fetch(base+'differ_train_latest.json?t='+Date.now(),{cache:'no-store'}),
    fetch(base+'differ_payout_snapshot.json?t='+Date.now(),{cache:'no-store'}),
    fetch(base+'differ_v2_latest.json?t='+Date.now(),{cache:'no-store'}),
-   fetch(base+'differ_session_eval_latest.json?t='+Date.now(),{cache:'no-store'})
+   fetch(base+'differ_session_eval_latest.json?t='+Date.now(),{cache:'no-store'}),
+   fetch(base+'differ_v3_latest.json?t='+Date.now(),{cache:'no-store'})
   ]);
-  const director=a.ok?await a.json():{},f=b.ok?await b.json():{},t=c.ok?await c.json():{},p=d.ok?await d.json():{},v2=e.ok?await e.json():{},sess=g.ok?await g.json():{},L=f.leader||{},L2=v2.leader||{};
+  const director=a.ok?await a.json():{},f=b.ok?await b.json():{},t=c.ok?await c.json():{},p=d.ok?await d.json():{},v2=e.ok?await e.json():{},sess=g.ok?await g.json():{},v3=h.ok?await h.json():{},L=f.leader||{},L2=v2.leader||{},L3=v3.leader||{};
   currentBreakEven=Number(p.max_break_even??director.break_even_rate??.9174311926605504);
   researchPolicy=director.live_policy||{source:'v1',rule:L.id||'neural_argmin',mode:'RESEARCH_DEMO',candidate_id:f.model_id};
   $('decision').textContent=(director.decision||'WAITING').replaceAll('_',' ');
@@ -128,6 +141,13 @@ async function load(){
   const PS=L2.prospective_sessions||{};
   $('v2RealSessions').textContent=(PS.completed??0)+' cerradas';
   $('v2RealMeta').textContent=(PS.targets??0)+' meta · '+(PS.stops??0)+' stop · open '+((PS.open_pnl??0)>=0?'+':'')+(PS.open_pnl??0).toFixed(2);
+  $('v3Rate').textContent=pct(L3.hit_rate);badge($('v3Status'),L3.status||v3.status||'WAITING');
+  $('v3Meta').textContent=(L3.id||'–')+' · '+(L3.signals||0)+' señales · Wilson '+pct(L3.wilson_lower);
+  $('v3Throughput').textContent=L3.signals_per_1000_ticks==null?'–':L3.signals_per_1000_ticks.toFixed(1);
+  $('v3Avoided').textContent='MATCH evitados / 1000: '+(L3.matches_avoided_per_1000_ticks==null?'–':L3.matches_avoided_per_1000_ticks.toFixed(1));
+  $('v3Pnl').textContent=L3.shadow_pnl==null?'–':(L3.shadow_pnl>=0?'+':'')+L3.shadow_pnl.toFixed(2);
+  $('v3Pnl').className='big '+((L3.shadow_pnl??0)>=0?'green':'red');
+  $('v3Risk').textContent='ROI '+pct(L3.shadow_roi)+' · DD '+((L3.max_drawdown??0).toFixed(2))+' · coverage '+pct(L3.coverage);
  }catch(e){$('decision').textContent='MEMORY WAITING'}
 }
 
@@ -380,6 +400,43 @@ function ensembleDecision(){
  else if(rule==='stable_vote2_calibrated'){score=consWin;ok=agree>=2&&consWin>=currentBreakEven+.002&&reg==='STABLE'}
  return {barrier:b,lossProb:1-score,winProb:score,agree,regime:reg,ok};
 }
+function scanAvoidMatchDigits(){
+ const models=liveEnsemble?.models||[];
+ if(models.length<3)return [];
+ const ps=models.map(m=>modelProbs(m,liveSeq));
+ if(ps.some(x=>!x))return [];
+ const rows=[];
+ for(let d=0;d<10;d++){
+   const vals=ps.map(p=>Number(p[d]));
+   const avg=vals.reduce((a,b)=>a+b,0)/vals.length;
+   const variance=vals.reduce((z,x)=>z+(x-avg)*(x-avg),0)/vals.length;
+   const sd=Math.sqrt(variance);
+   rows.push({digit:d,matchProb:avg,avoidProb:1-avg,sd,margin:(1-avg)-currentBreakEven});
+ }
+ rows.sort((a,b)=>a.matchProb-b.matchProb||a.sd-b.sd||a.digit-b.digit);
+ return rows;
+}
+function avoidMatchDecision(){
+ const rows=scanAvoidMatchDigits();
+ if(!rows.length)return null;
+ const best=rows[0];
+ const ok=best.avoidProb>=currentBreakEven+.002 && best.sd<=.025;
+ return {...best,ok,rows};
+}
+function renderAvoidMatchScanner(){
+ const d=avoidMatchDecision();
+ if(!d){
+   $('avoidBest').textContent='DIFFER –';
+   $('avoidMeta').textContent='Esperando ensemble y ticks suficientes…';
+   $('avoidRanking').innerHTML='<span class="chip wait">Esperando datos…</span>';
+   return null;
+ }
+ $('avoidBest').textContent='DIFFER '+d.digit;
+ $('avoidBest').style.color=d.ok?'#6affb6':'#ffe66d';
+ $('avoidMeta').textContent='Prob. MATCH '+pct(d.matchProb)+' · evitar MATCH '+pct(d.avoidProb)+' · margen '+pct(d.margin)+' · dispersión '+pct(d.sd)+' · '+(d.ok?'SEÑAL VÁLIDA':'ESPERAR');
+ $('avoidRanking').innerHTML=d.rows.map((x,i)=>'<span class="chip '+(i===0?'best':'')+'">D'+x.digit+' · MATCH '+pct(x.matchProb)+'</span>').join('');
+ return d;
+}
 function coldDigit(a,n){
  const z=a.slice(-n),c=Array(10).fill(0);z.forEach(d=>c[d]++);
  let best=0;for(let d=1;d<10;d++)if(c[d]<c[best])best=d;return best;
@@ -402,13 +459,14 @@ function liveGate(barrier,pmin){
  return {ok:true,agree};
 }
 function renderLiveDecision(){
- if(sessionPolicy?.source==='v2'){
-   const d=ensembleDecision();
-   if(!d){$('liveReason').textContent='Esperando ensemble V2/ticks suficientes…';return false}
-   liveBarrier=d.barrier;liveBarrierProb=d.lossProb;
-   $('liveDiffer').textContent='DIFFER '+d.barrier;$('liveProb').textContent=pct(d.lossProb);
-   $('liveReason').textContent='V2 · '+liveRuleId+' · win conservador '+pct(d.winProb)+' · acuerdo '+d.agree+'/3 · '+d.regime+' · '+(d.ok?'SEÑAL VÁLIDA':'ESPERAR');
-   $('liveDiffer').style.color=d.ok?'#4ddcff':'#ffe66d';return d.ok;
+ const a=renderAvoidMatchScanner();
+ if(a){
+   liveBarrier=a.digit;liveBarrierProb=a.matchProb;
+   $('liveDiffer').textContent='DIFFER '+a.digit;
+   $('liveProb').textContent=pct(a.matchProb);
+   $('liveReason').textContent='AVOID-MATCH · siguiente dígito menos probable · evitar MATCH '+pct(a.avoidProb)+' · '+(a.ok?'SEÑAL VÁLIDA':'ESPERAR');
+   $('liveDiffer').style.color=a.ok?'#4ddcff':'#ffe66d';
+   return a.ok;
  }
  const p=neuralProbs(liveSeq);
  if(!p){$('liveReason').textContent='Esperando suficientes ticks/modelo neural…';return false}
