@@ -1,4 +1,4 @@
-name: TOPO AIROMEN - DIFFER V3 Multi Lab
+name: TOPO AIROMEN - DIFFER V3 Avoid Match Lab
 on:
   workflow_dispatch:
   push:
@@ -38,14 +38,14 @@ jobs:
         env:
           TICK_COUNT: "10000"
         run: python topo-airomen/collect_ticks.py
-      - name: Run V3 multi-DIFFER portfolio lab
+      - name: Run V3 next-digit avoid-match lab
         run: python topo-airomen/differ_v3_multidiffer.py
       - name: Persist V3 state
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add topo-airomen/memory/differ_payout_snapshot.json topo-airomen/memory/differ_v3_latest.json topo-airomen/memory/differ_v3_state.json topo-airomen/memory/differ_v3_frozen.json topo-airomen/memory/differ_v3_frozen.joblib
-          git diff --cached --quiet || git commit -m "TOPO AIROMEN V3 multi-DIFFER research"
+          git diff --cached --quiet || git commit -m "TOPO AIROMEN V3 avoid-match research"
           rm -f topo-airomen/ticks.json topo-airomen/audit.json
           for attempt in 1 2 3; do
             git pull --rebase origin main
