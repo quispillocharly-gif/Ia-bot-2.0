@@ -541,8 +541,8 @@ function analyze(){
   // ANTI-FREEZE: no permite que los filtros secundarios bloqueen para siempre.
   // Los límites principales (riesgo total, neural y estructura) permanecen duros.
   let freezePhase='NORMAL';
-  if(idleTradeTicks>=36){
-    freezePhase='RECOVERY 36+';
+  if(idleTradeTicks>=22){
+    freezePhase='RECOVERY 14+';
     maxRisk=Math.max(maxRisk,.108);
     maxNeural=Math.max(maxNeural,.096);
     maxNeuralRank=Math.max(maxNeuralRank,2);
@@ -551,7 +551,7 @@ function analyze(){
     minGap=Math.min(minGap,.00005);
     maxContext=Math.max(maxContext,.106);
     maxStructure=Math.max(maxStructure,.114);
-  }else if(idleTradeTicks>=22){
+  }else if(idleTradeTicks>=14){
     freezePhase='RECOVERY 22+';
     maxNeuralRank=Math.max(maxNeuralRank,2);
     maxHot=Math.max(maxHot,3);
@@ -559,8 +559,8 @@ function analyze(){
     minGap=Math.min(minGap,.00012);
     maxContext=Math.max(maxContext,.104);
     maxStructure=Math.max(maxStructure,.113);
-  }else if(idleTradeTicks>=12){
-    freezePhase='RECOVERY 12+';
+  }else if(idleTradeTicks>=8){
+    freezePhase='RECOVERY 8+';
     maxHot=Math.max(maxHot,2);
     minCold=Math.min(minCold,2);
     minGap=Math.min(minGap,.00020);
@@ -575,7 +575,7 @@ function analyze(){
     best.cold>=3 &&
     gap>=.0008;
 
-  const stableNeed=(veryStrong&&antiMatchStreak<8)?1:(idleTradeTicks>=18?1:2);
+  const stableNeed=(veryStrong&&antiMatchStreak<8)?1:(idleTradeTicks>=12?1:2);
   if(lastEpoch!==lastStabilityEpoch){
     lastStabilityEpoch=lastEpoch;
     if(stableDigit===best.digit)stableTicks++;
@@ -600,11 +600,11 @@ function analyze(){
 
   const normalOk=Object.values(checks).every(Boolean);
   const safeFallback=
-    idleTradeTicks>=48 &&
+    idleTradeTicks>=28 &&
     memoryReady &&
     (lastBoughtDigit==null||Number(best.digit)!==Number(lastBoughtDigit)) &&
-    best.combined<=.110 &&
-    best.calibratedNeural<=.098 &&
+    best.combined<=.108 &&
+    best.calibratedNeural<=.096 &&
     best.structHot===0 &&
     best.context<=.108 &&
     structureRisk<=.116;
