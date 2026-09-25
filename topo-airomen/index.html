@@ -103,7 +103,7 @@ button:disabled{opacity:.45;cursor:not-allowed}
 <script>
 'use strict';
 
-const BUILD='CLEAN-1.7-ANTI-FREEZE';
+const BUILD='CLEAN-1.8-FINAL-LEG-SHIELD';
 const CADENCE_MIN=1,CADENCE_MAX=3;
 const SYMBOL='R_75';
 const TARGET=10;
@@ -131,6 +131,7 @@ let proposalTimer=null,buyTimer=null;
 
 let sessionPnl=0,sessionWins=0,sessionMatches=0,currentStake=1;
 let antiMatchStreak=0,bestAntiMatchStreak=0;
+let consecutiveMatches=0,targetRecoveryShield=false;
 let currentDecision=null,stableDigit=null,stableTicks=0,lastStabilityEpoch=0;
 let recoveryTicks=0;
 let cadenceStep=0,ticksIntoCadence=0,currentCadenceWait=1,lastCadenceWait=0,lastBoughtDigit=null;
@@ -193,7 +194,7 @@ function renderSession(){
 
 function resetSession(){
   sessionPnl=0;sessionWins=0;sessionMatches=0;sessionStopped=false;
-  antiMatchStreak=0;
+  antiMatchStreak=0;consecutiveMatches=0;targetRecoveryShield=false;
   currentStake=baseStake();pending=false;pendingOrder=null;
   stableDigit=null;stableTicks=0;recoveryTicks=0;
   cadenceStep=0;ticksIntoCadence=0;lastCadenceWait=0;currentCadenceWait=deriveCadenceWait(0,null,0);lastBoughtDigit=null;
@@ -205,9 +206,12 @@ function resetSession(){
 }
 
 function applyResult(profit,snapshot){
+  const pnlBefore=sessionPnl;
   sessionPnl=money(sessionPnl+Number(profit||0));
   if(profit>=0){
     sessionWins++;
+    consecutiveMatches=0;
+    targetRecoveryShield=false;
     antiMatchStreak++;
     if(antiMatchStreak>bestAntiMatchStreak){
       bestAntiMatchStreak=antiMatchStreak;
@@ -216,6 +220,8 @@ function applyResult(profit,snapshot){
     }
   }else{
     sessionMatches++;
+    consecutiveMatches++;
+    if(pnlBefore>=7)targetRecoveryShield=true;
     antiMatchStreak=0;
     recoveryTicks=0;
   }
@@ -542,7 +548,7 @@ function analyze(){
   // Los límites principales (riesgo total, neural y estructura) permanecen duros.
   let freezePhase='NORMAL';
   if(idleTradeTicks>=22){
-    freezePhase='RECOVERY 14+';
+    freezePhase='RECOVERY 22+';
     maxRisk=Math.max(maxRisk,.108);
     maxNeural=Math.max(maxNeural,.096);
     maxNeuralRank=Math.max(maxNeuralRank,2);
@@ -552,7 +558,7 @@ function analyze(){
     maxContext=Math.max(maxContext,.106);
     maxStructure=Math.max(maxStructure,.114);
   }else if(idleTradeTicks>=14){
-    freezePhase='RECOVERY 22+';
+    freezePhase='RECOVERY 14+';
     maxNeuralRank=Math.max(maxNeuralRank,2);
     maxHot=Math.max(maxHot,3);
     minCold=Math.min(minCold,1);
@@ -566,6 +572,36 @@ function analyze(){
     minGap=Math.min(minGap,.00020);
   }
 
+  // FINAL LEG SHIELD: cerca de +10 no se relaja el análisis por inactividad.
+  const remainingToTarget=Math.max(0,TARGET-sessionPnl);
+  const finalLeg=sessionPnl>=7 || remainingToTarget<=3;
+  let finalLegPhase='OFF';
+  if(finalLeg){
+    finalLegPhase='FINAL LEG';
+    freezePhase='FINAL LEG · NO RELAX';
+    maxRisk=Math.min(maxRisk,.100);
+    maxNeural=Math.min(maxNeural,.087);
+    maxNeuralRank=1;
+    maxStructHot=0;
+    maxHot=Math.min(maxHot,1);
+    minCold=Math.max(minCold,3);
+    minGap=Math.max(minGap,.00075);
+    maxContext=Math.min(maxContext,.097);
+    maxStructure=Math.min(maxStructure,.106);
+  }
+  if(targetRecoveryShield||consecutiveMatches>=1){
+    finalLegPhase=targetRecoveryShield?'RECOVERY AFTER FINAL-LEG MATCH':'LOSS SHIELD';
+    maxRisk=Math.min(maxRisk,.098);
+    maxNeural=Math.min(maxNeural,.085);
+    maxNeuralRank=1;
+    maxStructHot=0;
+    maxHot=Math.min(maxHot,1);
+    minCold=Math.max(minCold,3);
+    minGap=Math.max(minGap,.0010);
+    maxContext=Math.min(maxContext,.095);
+    maxStructure=Math.min(maxStructure,.104);
+  }
+
   const structureRisk=Math.max(best.t2,best.t3,best.off);
   const veryStrong=
     best.combined<=.097 &&
@@ -575,7 +611,7 @@ function analyze(){
     best.cold>=3 &&
     gap>=.0008;
 
-  const stableNeed=(veryStrong&&antiMatchStreak<8)?1:(idleTradeTicks>=12?1:2);
+  const stableNeed=(finalLeg||targetRecoveryShield||consecutiveMatches>=1)?2:((veryStrong&&antiMatchStreak<8)?1:(idleTradeTicks>=12?1:2));
   if(lastEpoch!==lastStabilityEpoch){
     lastStabilityEpoch=lastEpoch;
     if(stableDigit===best.digit)stableTicks++;
@@ -600,6 +636,9 @@ function analyze(){
 
   const normalOk=Object.values(checks).every(Boolean);
   const safeFallback=
+    !finalLeg &&
+    !targetRecoveryShield &&
+    consecutiveMatches===0 &&
     idleTradeTicks>=28 &&
     memoryReady &&
     (lastBoughtDigit==null||Number(best.digit)!==Number(lastBoughtDigit)) &&
@@ -614,7 +653,7 @@ function analyze(){
   return {
     best,rows,gap,mr,ok,stableNeed,checks,
     thresholds:{maxRisk,maxNeural,maxNeuralRank,maxStructHot,maxHot,minCold,minGap,maxContext,maxStructure},
-    structureRisk,streakPhase,freezePhase,idleTradeTicks,safeFallback,antiMatchStreak,bestAntiMatchStreak,
+    structureRisk,streakPhase,freezePhase,finalLegPhase,remainingToTarget,consecutiveMatches,targetRecoveryShield,idleTradeTicks,safeFallback,antiMatchStreak,bestAntiMatchStreak,
     cadenceWait:currentCadenceWait,cadenceStep,ticksIntoCadence,lastBoughtDigit
   };
 }
@@ -638,6 +677,7 @@ function renderDecision(){
     ' · gap '+pct(d.gap)+
     ' · MATCH real '+(d.mr==null?'–':pct(d.mr))+
     ' · racha '+antiMatchStreak+' · '+d.streakPhase+
+    ' · faltan $'+d.remainingToTarget.toFixed(2)+' · '+d.finalLegPhase+
     ' · idle '+d.idleTradeTicks+' · '+d.freezePhase+
     (d.safeFallback?' · SAFE FALLBACK':'')+
     ' · cadena dinámica paso '+d.cadenceStep+' · espera '+d.ticksIntoCadence+'/'+d.cadenceWait+
