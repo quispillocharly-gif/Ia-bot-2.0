@@ -1,6 +1,6 @@
 {
   "version": "2.0-differ-director",
-  "timestamp": 1790327803,
+  "timestamp": 1790327906,
   "decision": "COLLECT_V2_FORWARD_DATA",
   "baseline_random": 0.9,
   "payout_status": "OK",
@@ -10,37 +10,18 @@
   "v4_status": "COLLECTING",
   "v1_leader": {
     "id": "neural_argmin",
-    "signals": 2387,
-    "wins": 2176,
-    "losses": 211,
-    "hit_rate": 0.9116045245077503,
-    "wilson_lower": 0.8995450908302742,
-    "raw_economic_p": 0.8577307540087876,
+    "signals": 0,
+    "wins": 0,
+    "losses": 0,
+    "hit_rate": null,
+    "wilson_lower": 0.0,
+    "raw_economic_p": 1.0,
     "bonferroni_p": 1.0,
-    "shadow_pnl": -15.160000000000267,
-    "shadow_roi": -0.006351068286552269,
-    "temporal_blocks": [
-      {
-        "n": 796,
-        "wins": 723,
-        "hit_rate": 0.9082914572864321,
-        "wilson_lower": 0.8862326386276087
-      },
-      {
-        "n": 796,
-        "wins": 737,
-        "hit_rate": 0.9258793969849246,
-        "wilson_lower": 0.9055638659027068
-      },
-      {
-        "n": 795,
-        "wins": 716,
-        "hit_rate": 0.9006289308176101,
-        "wilson_lower": 0.8778673258028998
-      }
-    ],
+    "shadow_pnl": 0.0,
+    "shadow_roi": null,
+    "temporal_blocks": [],
     "block_stable": false,
-    "status": "NOT_CONFIRMED"
+    "status": "COLLECTING"
   },
   "v2_leader": {
     "id": "vote2_margin005",
@@ -93,22 +74,22 @@
   "v4_leader": null,
   "v1_confirmed": [],
   "v2_confirmed": [],
-  "candidate_model_id": "23352d380d362771",
-  "ensemble_id": "8c3cc077eb40bd9e",
+  "candidate_model_id": "a85eb789057878a6",
+  "ensemble_id": "320c976f4a93845f",
   "live_policy": {
     "version": "2.0-live-policy",
-    "timestamp": 1790327803,
-    "source": "v1",
-    "rule": "neural_argmin",
-    "candidate_id": "f32e2858ae10b449",
+    "timestamp": 1790327906,
+    "source": "v2",
+    "rule": "vote2_margin005",
+    "candidate_id": "f81db252073342fe",
     "mode": "RESEARCH_DEMO",
     "confirmed": false,
     "economic_qualified": false,
     "break_even_rate": 0.9174311926605504,
-    "leader_signals": 2387,
-    "leader_hit_rate": 0.9116045245077503,
-    "leader_wilson": 0.8995450908302742,
-    "leader_shadow_pnl": -15.160000000000267,
+    "leader_signals": 733,
+    "leader_hit_rate": 0.8949522510231923,
+    "leader_wilson": 0.8706583555063486,
+    "leader_shadow_pnl": -17.96000000000009,
     "money_policy": null,
     "note": "Demo-only policy. Research continues in parallel. The DIFFER digit is recalculated across 0-9 every tick; no digit is frozen. Money-management policy remains session-scoped."
   },
