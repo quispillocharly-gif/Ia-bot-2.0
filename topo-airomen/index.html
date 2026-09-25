@@ -8,7 +8,10 @@
 .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.card{background:linear-gradient(180deg,#0b1228e8,#070b18e8);border:1px solid #25466c;border-radius:12px;padding:15px;margin-bottom:10px;box-shadow:0 0 24px #4ddcff12}
 .lab{font-size:10px;letter-spacing:1.4px;color:#79a7d7}.big{font-size:28px;font-weight:1000;margin:7px 0}.green{color:var(--g)}.red{color:var(--r)}.yellow{color:var(--y)}.cyan{color:var(--blue)}.vio{color:var(--vio)}
 .badge{display:inline-block;border:1px solid #355984;border-radius:6px;padding:6px 9px;font-size:11px;margin-top:7px}.mini{font-size:12px;color:var(--m);line-height:1.5}.scroll{overflow:auto}table{width:100%;border-collapse:collapse;min-width:760px;font-size:12px}th,td{padding:9px;border-bottom:1px solid #182b46;text-align:left}
-.footer{text-align:center;color:#60799c;font-size:11px;padding:10px}@media(max-width:760px){.grid{grid-template-columns:1fr}}
+.footer{text-align:center;color:#60799c;font-size:11px;padding:10px}input,select,button{width:100%;padding:11px 12px;border-radius:8px;border:1px solid #355984;background:#071024;color:var(--t);font:inherit}
+button{cursor:pointer;background:linear-gradient(180deg,#123866,#0b2140);color:var(--blue);font-weight:900}
+button:disabled{opacity:.55;cursor:not-allowed}.formgrid{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end}.statusline{margin-top:10px}
+@media(max-width:760px){.grid{grid-template-columns:1fr}.formgrid{grid-template-columns:1fr}}
 </style></head><body><div class="wrap">
 <div class="head"><div class="logo">TOPO AIROMEN</div><div class="sub">DIFFER AI · R_75 · FORWARD RESEARCH CORE</div></div>
 <div class="grid">
@@ -20,6 +23,16 @@
  <div class="card"><div class="lab">CANDIDATO NEURAL</div><div id="model" class="big">–</div><div id="trainMeta" class="mini">Entrenamiento cronológico</div></div>
  <div class="card"><div class="lab">FORWARD LEADER</div><div id="rate" class="big cyan">–</div><div id="leaderMeta" class="mini">Sin datos</div><span id="forwardStatus" class="badge">WAITING</span></div>
  <div class="card"><div class="lab">SHADOW ECONOMY</div><div id="pnl" class="big">–</div><div id="econMeta" class="mini">Sin dinero real</div></div>
+</div>
+<div class="card">
+ <div class="lab">DERIV DEMO / DBOT BRIDGE</div>
+ <div class="formgrid">
+  <div><div class="mini">APP ID</div><input id="derivAppId" inputmode="numeric" autocomplete="off" placeholder="Tu Deriv App ID"></div>
+  <div><div class="mini">PAT</div><input id="derivPat" type="password" autocomplete="new-password" placeholder="Personal Access Token"></div>
+  <div><button id="derivConnect">CONECTAR DEMO</button></div>
+ </div>
+ <div id="derivStatus" class="statusline mini">DESCONECTADO · solo demo · auto-buy OFF</div>
+ <div id="derivAccount" class="mini">El PAT se usa solo en esta pestaña y no se guarda en GitHub.</div>
 </div>
 <div class="card"><div class="lab">TOURNAMENT · 6 VARIANTES PREDECLARADAS</div><div class="scroll"><table>
 <thead><tr><th>VARIANTE</th><th>SEÑALES</th><th>WINS</th><th>HIT</th><th>WILSON</th><th>ADJ-P</th><th>P&L</th><th>ESTADO</th></tr></thead><tbody id="rows"></tbody>
@@ -59,5 +72,55 @@ async function load(){
   $('rows').innerHTML=(f.variants||[]).map(x=>'<tr><td><b>'+x.id+'</b></td><td>'+x.signals+'</td><td>'+x.wins+'</td><td>'+pct(x.hit_rate)+'</td><td>'+pct(x.wilson_lower)+'</td><td>'+(x.bonferroni_p??1).toFixed(4)+'</td><td>'+((x.shadow_pnl??0)>=0?'+':'')+(x.shadow_pnl??0).toFixed(2)+'</td><td>'+x.status+'</td></tr>').join('');
  }catch(e){$('decision').textContent='MEMORY WAITING'}
 }
+
+let derivSocket=null,derivDemoAccount=null;
+function derivMsg(msg,ok=false){
+ const el=$('derivStatus'); el.textContent=msg; el.style.color=ok?'#6affb6':'#ffe66d';
+}
+function apiError(j,fallback){
+ return (j&&j.errors&&j.errors[0]&&(j.errors[0].message||j.errors[0].code))||fallback;
+}
+async function connectDerivDemo(){
+ const appId=$('derivAppId').value.trim(),pat=$('derivPat').value.trim(),btn=$('derivConnect');
+ if(!appId||!pat){derivMsg('FALTA APP ID O PAT');return}
+ btn.disabled=true; derivMsg('VALIDANDO PAT Y BUSCANDO CUENTA DEMO…');
+ try{
+  const headers={'Authorization':'Bearer '+pat,'Deriv-App-ID':appId,'Accept':'application/json'};
+  const ar=await fetch('https://api.derivws.com/trading/v1/options/accounts',{method:'GET',headers});
+  const aj=await ar.json().catch(()=>({}));
+  if(!ar.ok)throw Error(apiError(aj,'No se pudieron leer las cuentas'));
+  const accounts=Array.isArray(aj.data)?aj.data:(Array.isArray(aj.data?.accounts)?aj.data.accounts:[]);
+  const demo=accounts.find(a=>{
+   const id=String(a.account_id||a.id||a.loginid||'').toUpperCase();
+   const type=String(a.account_type||a.group||a.type||'').toLowerCase();
+   return type.includes('demo')||id.startsWith('VRT')||id.startsWith('VRTC');
+  });
+  if(!demo)throw Error('No encontré una cuenta demo de Options para este PAT');
+  const accountId=demo.account_id||demo.id||demo.loginid;
+  derivDemoAccount=demo;
+  $('derivAccount').textContent='DEMO '+accountId+' · '+(demo.currency||'USD')+' · balance '+(demo.balance??'–');
+  derivMsg('GENERANDO OTP DE CONEXIÓN…');
+  const or=await fetch('https://api.derivws.com/trading/v1/options/accounts/'+encodeURIComponent(accountId)+'/otp',{method:'POST',headers});
+  const oj=await or.json().catch(()=>({}));
+  if(!or.ok)throw Error(apiError(oj,'No se pudo generar OTP'));
+  const wsUrl=oj?.data?.url;
+  if(!wsUrl)throw Error('Deriv no devolvió la URL WebSocket demo');
+  if(derivSocket)try{derivSocket.close()}catch(_){}
+  derivSocket=new WebSocket(wsUrl);
+  derivSocket.onopen=()=>{derivMsg('CONECTADO A DERIV DEMO · AUTO-BUY OFF',true);btn.textContent='RECONECTAR DEMO';btn.disabled=false};
+  derivSocket.onclose=()=>{derivMsg('CONEXIÓN DEMO CERRADA');btn.disabled=false};
+  derivSocket.onerror=()=>{derivMsg('ERROR EN WEBSOCKET DEMO');btn.disabled=false};
+  derivSocket.onmessage=e=>{
+   try{
+    const m=JSON.parse(e.data);
+    if(m.error||m.errors)derivMsg('DERIV: '+apiError(m,'respuesta de error'));
+   }catch(_){}
+  };
+ }catch(e){
+  derivMsg('ERROR: '+e.message); btn.disabled=false;
+ }
+}
+$('derivConnect').onclick=connectDerivDemo;
+
 load();setInterval(load,30000);
 </script></body></html>
