@@ -15,12 +15,15 @@ PAYOUT_MAX_AGE=7200
 # One DIFFER barrier per tick. Goal: maximize usable ticks while avoiding the
 # next digit MATCH and remaining above the real economic break-even.
 VARIANTS=[
- {"id":"every_tick_best","margin":-1.0,"sd":1.0,"agree":0},
- {"id":"be_only","margin":0.0,"sd":1.0,"agree":0},
- {"id":"margin002_sd025","margin":.002,"sd":.025,"agree":0},
- {"id":"margin005_sd020","margin":.005,"sd":.020,"agree":0},
- {"id":"agree2_margin002","margin":.002,"sd":.025,"agree":2},
- {"id":"agree3_margin002","margin":.002,"sd":.025,"agree":3},
+ {"id":"every_tick_best","margin":-1.0,"sd":1.0,"agree":0,"gap":0.0,"recent":1.0,"trans":1.0},
+ {"id":"be_only","margin":0.0,"sd":1.0,"agree":0,"gap":0.0,"recent":1.0,"trans":1.0},
+ {"id":"margin002_sd025","margin":.002,"sd":.025,"agree":0,"gap":0.0,"recent":1.0,"trans":1.0},
+ {"id":"margin005_sd020","margin":.005,"sd":.020,"agree":0,"gap":0.0,"recent":1.0,"trans":1.0},
+ {"id":"agree2_margin002","margin":.002,"sd":.025,"agree":2,"gap":0.0,"recent":1.0,"trans":1.0},
+ {"id":"agree2_gap001","margin":.002,"sd":.025,"agree":2,"gap":.001,"recent":1.0,"trans":1.0},
+ {"id":"agree2_gap001_r14","margin":.002,"sd":.025,"agree":2,"gap":.001,"recent":.14,"trans":1.0},
+ {"id":"safety_full","margin":.002,"sd":.025,"agree":2,"gap":.001,"recent":.14,"trans":.16},
+ {"id":"agree3_margin002","margin":.002,"sd":.025,"agree":3,"gap":0.0,"recent":1.0,"trans":1.0},
 ]
 
 def loadj(path,default=None):
@@ -51,6 +54,21 @@ def probs(model,hist):
     full=np.ones(10,dtype=float)
     for j,c in enumerate(model["clf"].classes_):full[int(c)]=float(p[j])
     return full
+
+def recent_share(hist,digit,n=80):
+    a=hist[-n:]
+    return (sum(1 for x in a if x==digit)/len(a)) if a else .1
+
+def transition_risk(hist,digit,n=500):
+    a=hist[-n:]
+    if len(a)<2:return .1
+    last=a[-1]; total=0; hits=0
+    for x,y in zip(a[:-1],a[1:]):
+        if x==last:
+            total+=1
+            if y==digit:hits+=1
+    # Shrink to 10% prior to avoid tiny transition samples dominating.
+    return float((hits+2)/(total+20))
 
 def freeze(ticks):
     if not CAND.exists() or not CANDMETA.exists():raise RuntimeError("No ensemble candidate")
@@ -89,6 +107,16 @@ def main():
             st=freeze(ticks)
     else:st=freeze(ticks)
 
+    # Add newly declared research variants without resetting accumulated history.
+    template={
+      "signals":0,"wins":0,"pnl":0.0,"staked":0.0,"outcomes":[],
+      "equity":0.0,"peak":0.0,"max_drawdown":0.0,
+      "sum_predicted_win":0.0,"sum_agreement":0.0
+    }
+    for cfg in VARIANTS:
+        if cfg["id"] not in st["variants"]:
+            st["variants"][cfg["id"]]=dict(template)
+
     bundle=joblib.load(FROZEN);models=bundle["models"]
     maxw=max(int(m["window"]) for m in models)
     fresh=[x for x in ticks if int(x["epoch"])>int(st["last_epoch"])]
@@ -105,12 +133,20 @@ def main():
             barrier=int(np.argmin(avg))
             predicted_loss=float(avg[barrier]);predicted_win=1-predicted_loss
             agreement=int(np.sum(individual==barrier))
+            ordered=np.argsort(avg)
+            second=int(ordered[1]) if len(ordered)>1 else barrier
+            gap=float(avg[second]-avg[barrier])
+            rshare=recent_share(hist,barrier,80)
+            trisk=transition_risk(hist,barrier,500)
 
             for cfg in VARIANTS:
                 emit=True
                 if cfg["margin"]>=0:
                     emit=predicted_win>=threshold+cfg["margin"]
                 emit=emit and float(sd[barrier])<=cfg["sd"] and agreement>=cfg["agree"]
+                emit=emit and gap>=cfg.get("gap",0.0)
+                emit=emit and rshare<=cfg.get("recent",1.0)
+                emit=emit and trisk<=cfg.get("trans",1.0)
                 if not emit:continue
 
                 s=st["variants"][cfg["id"]]
@@ -149,6 +185,7 @@ def main():
           "matches_avoided_per_1000_ticks":(w/ft*1000) if ft else 0.0,
           "avg_predicted_win":float(s["sum_predicted_win"]/n) if n else None,
           "avg_model_agreement":float(s["sum_agreement"]/n) if n else None,
+          "safety_gate":{"min_gap":cfg.get("gap",0.0),"max_recent_share":cfg.get("recent",1.0),"max_transition_risk":cfg.get("trans",1.0)},
           "shadow_pnl":float(s["pnl"]),
           "shadow_roi":float(s["pnl"])/float(s["staked"]) if s["staked"] else None,
           "max_drawdown":float(s["max_drawdown"]),
@@ -168,7 +205,7 @@ def main():
     )
     confirmed=[r["id"] for r in rows if r["status"]=="AVOID_MATCH_CANDIDATE"]
     out={
-      "version":"3.1-next-digit-avoid-match","timestamp":int(time.time()),"runs":st["runs"],
+      "version":"3.2-next-digit-avoid-match-safety","timestamp":int(time.time()),"runs":st["runs"],
       "ensemble_id":st.get("ensemble_id"),"new_ticks_this_run":len(fresh),
       "forward_ticks":ft,"break_even_rate":be,"payout_fresh":payout_fresh,
       "payout_age_seconds":age,"leader":rows[0] if rows else None,
