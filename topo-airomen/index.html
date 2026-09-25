@@ -54,7 +54,7 @@ button:disabled{opacity:.45;cursor:not-allowed}
 </div>
 
 <div class="card signal">
- <div class="lab">ANTI-MATCH ENGINE · SIGUIENTE TICK</div>
+ <div class="lab">ULTRA LOW MATCH · COMPRA SOLO EL #1 MENOS PROBABLE</div>
  <div id="bestDigit" class="digit">DIFFER –</div>
  <div id="signalMeta" class="mini">Esperando historial R_75…</div>
  <div id="ranking" class="chips"></div>
@@ -103,7 +103,7 @@ button:disabled{opacity:.45;cursor:not-allowed}
 <script>
 'use strict';
 
-const BUILD='CLEAN-1.1-FAST';
+const BUILD='CLEAN-1.2-ULTRA-LOW-MATCH';
 const SYMBOL='R_75';
 const TARGET=10;
 const HARD_MAX=6;
@@ -126,7 +126,7 @@ let activeContract=null,pendingOrder=null,req=1000,buyContexts=new Map();
 let proposalTimer=null,buyTimer=null;
 
 let sessionPnl=0,sessionWins=0,sessionMatches=0,currentStake=1;
-let currentDecision=null,stableDigit=null,stableTicks=0;
+let currentDecision=null,stableDigit=null,stableTicks=0,lastStabilityEpoch=0;
 let recoveryTicks=0;
 
 let execHistory=[];
@@ -429,43 +429,66 @@ function analyze(){
 
   rows.sort((a,b)=>a.combined-b.combined||a.neuralRank-b.neuralRank||a.structHot-b.structHot);
 
-  // FAST SAFE: buscar dentro de los 3 mejores neurales y vetar doble calor estructural.
-  let eligible=rows.filter(x=>x.neuralRank<=3&&x.structHot<2);
-  if(!eligible.length)eligible=rows.filter(x=>x.neuralRank<=3);
-  if(!eligible.length)eligible=rows;
-  eligible.sort((a,b)=>a.combined-b.combined||a.neuralRank-b.neuralRank);
-  const best=eligible[0];
-  const second=eligible[1]||best;
+  // ULTRA LOW MATCH:
+  // se compra SOLO el #1 absoluto del ranking 0-9. Si no supera todos
+  // los vetos de seguridad, no sustituimos por el #2/#3: esperamos otro tick.
+  const best=rows[0];
+  const second=rows[1]||best;
 
   const mr=actualMatchRate(50);
   const gap=Math.max(0,second.combined-best.combined);
+  const memoryReady=!!offline&&!!model;
 
-  let maxRisk=.119,maxNeural=.105,maxNeuralRank=3,maxStructHot=1,maxHot=5,minGap=0;
+  let maxRisk=.1085,maxNeural=.095,maxNeuralRank=2,maxStructHot=0,maxHot=3,minCold=2,minGap=.00025,maxContext=.105,maxStructure=.115;
+
   if(mr!=null&&execHistory.length>=20){
-    if(mr>=.15){
-      maxRisk=.103;maxNeural=.083;maxNeuralRank=1;maxStructHot=0;maxHot=2;minGap=.00035;
-    }else if(mr>=.12){
-      maxRisk=.109;maxNeural=.091;maxNeuralRank=2;maxStructHot=1;maxHot=3;minGap=.00012;
-    }else if(mr>=.095){
-      maxRisk=.115;maxNeural=.099;maxNeuralRank=2;maxStructHot=1;maxHot=4;minGap=.00004;
+    if(mr>=.13){
+      maxRisk=.099;maxNeural=.085;maxNeuralRank=1;maxStructHot=0;maxHot=1;minCold=3;minGap=.0010;maxContext=.095;maxStructure=.105;
+    }else if(mr>=.10){
+      maxRisk=.104;maxNeural=.090;maxNeuralRank=1;maxStructHot=0;maxHot=2;minCold=2;minGap=.00050;maxContext=.100;maxStructure=.110;
+    }else if(mr<=.07&&execHistory.length>=30){
+      maxRisk=.112;maxNeural=.098;maxNeuralRank=2;maxStructHot=0;maxHot=3;minCold=2;minGap=.00015;maxContext=.108;maxStructure=.118;
     }
   }
 
-  // Solo exige estabilidad extra si el MATCH real está claramente alto.
-  const stableNeed=(mr!=null&&mr>=.15)?2:1;
-  if(stableDigit===best.digit)stableTicks++;
-  else{stableDigit=best.digit;stableTicks=1}
+  const structureRisk=Math.max(best.t2,best.t3,best.off);
+  const veryStrong=
+    best.combined<=.097 &&
+    best.calibratedNeural<=.090 &&
+    best.neuralRank===1 &&
+    best.structHot===0 &&
+    best.cold>=3 &&
+    gap>=.0008;
 
-  const ok=
-    best.combined<=maxRisk &&
-    best.calibratedNeural<=maxNeural &&
-    best.neuralRank<=maxNeuralRank &&
-    best.structHot<=maxStructHot &&
-    best.hot<=maxHot &&
-    gap>=minGap &&
-    stableTicks>=stableNeed;
+  const stableNeed=veryStrong?1:2;
+  if(lastEpoch!==lastStabilityEpoch){
+    lastStabilityEpoch=lastEpoch;
+    if(stableDigit===best.digit)stableTicks++;
+    else{stableDigit=best.digit;stableTicks=1}
+  }
 
-  return {best,rows,gap,mr,ok,stableNeed};
+  const checks={
+    memory:memoryReady,
+    absoluteMin:best===rows[0],
+    risk:best.combined<=maxRisk,
+    neural:best.calibratedNeural<=maxNeural,
+    neuralRank:best.neuralRank<=maxNeuralRank,
+    structuralHeat:best.structHot<=maxStructHot,
+    hot:best.hot<=maxHot,
+    cold:best.cold>=minCold,
+    context:best.context<=maxContext,
+    structure:structureRisk<=maxStructure,
+    gap:gap>=minGap,
+    stable:stableTicks>=stableNeed
+  };
+
+  const ok=Object.values(checks).every(Boolean);
+
+  return {
+    best,rows,gap,mr,ok,stableNeed,checks,
+    thresholds:{maxRisk,maxNeural,maxNeuralRank,maxStructHot,maxHot,minCold,minGap,maxContext,maxStructure},
+    structureRisk
+  };
 }
 function renderDecision(){
   const d=analyze();
@@ -479,11 +502,15 @@ function renderDecision(){
   $('bestDigit').textContent='DIFFER '+d.best.digit;
   $('riskView').textContent=pct(d.best.combined);
   $('riskMeta').textContent='neural #'+d.best.neuralRank+' '+pct(d.best.calibratedNeural)+' · structHot '+d.best.structHot+' · ctx '+pct(d.best.context);
+  const failed=d.checks?Object.entries(d.checks).filter(([,v])=>!v).map(([k])=>k).join(','):'';
   $('signalMeta').textContent=
-    (d.ok?'LISTO':'ANALIZANDO')+
+    (d.ok?'ULTRA-LOW LISTO':'ESPERAR')+
+    ' · #1 absoluto D'+d.best.digit+
+    ' · riesgo '+pct(d.best.combined)+
     ' · gap '+pct(d.gap)+
     ' · MATCH real '+(d.mr==null?'–':pct(d.mr))+
-    ' · estabilidad '+stableTicks+'/'+d.stableNeed;
+    ' · estabilidad '+stableTicks+'/'+d.stableNeed+
+    (failed?' · falta '+failed:'');
 
   $('ranking').innerHTML=d.rows.map((x,i)=>
     '<span class="chip '+(i===0?'best':'')+'">D'+x.digit+' '+pct(x.combined)+' N#'+x.neuralRank+'</span>'
