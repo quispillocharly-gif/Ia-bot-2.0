@@ -253,6 +253,9 @@ async function load(){
 let derivSocket=null,derivDemoAccount=null,publicSocket=null,liveModel=null,liveEnsemble=null,latestLiveModel=null,latestLiveEnsemble=null,liveSeq=[],livePip=4,liveBarrier=null,liveBarrierProb=null,liveRuleId='neural_argmin',autoDemo=false,pendingTrade=false,activeContractId=null,tradeReq=5000,lastProposalReq=null,lastSignalEpoch=0;
 let latestPublicTickEpoch=0,latestPublicTickDigit=null,latestPublicTickQuote=null,ticksWithoutSignal=0;
 let lastAvoidDecision=null,pendingLearnSnapshot=null;
+let lastBoughtBarrier=null,sameBarrierBuyStreak=0,pendingBuyBarrier=null,activeTradeBarrier=null;
+const MAX_SAME_BARRIER_BUYS=2;
+const ALT_RISK_TOLERANCE=.005;
 const ONLINE_LEARNER_KEY='topo_airomen_avoidmatch_learner_v2';
 let researchPolicy={source:'v1',rule:'neural_argmin',mode:'RESEARCH_DEMO'},sessionPolicy={source:'v1',rule:'neural_argmin',mode:'RESEARCH_DEMO'},currentBreakEven=.9174311926605504;
 let activeMoneyPolicy={promoted:false,compound_fraction:1,pause_after_match:0,batch_size:5,stage_size:5};
@@ -300,11 +303,12 @@ function resetProfitSession(){
  sessionPolicy={source:'v3',rule:'avoid_match_adaptive_all_digits',mode:'RESEARCH_DEMO',candidate_id:(latestLiveEnsemble?.ensemble_id||researchPolicy.candidate_id||'–')};
  activeMoneyPolicy=researchPolicy.money_policy?{...researchPolicy.money_policy}:{promoted:false,compound_fraction:1,pause_after_match:0,batch_size:5,stage_size:5};
  sessionBatchTrades=0;sessionBatchWins=0;sessionStage=1;sessionPauseLeft=0;
+ lastBoughtBarrier=null;sameBarrierBuyStreak=0;pendingBuyBarrier=null;activeTradeBarrier=null;
  if(latestLiveModel)liveModel=latestLiveModel;
  if(latestLiveEnsemble)liveEnsemble=latestLiveEnsemble;
  liveRuleId='avoid_match_adaptive_all_digits';
  $('sessionPolicy').textContent='V3 · AVOID MATCH';
- $('policyMeta').textContent='RESEARCH_DEMO · selector 0–9 dinámico · sin espera fija · compra solo con oportunidad válida · aprendizaje continuo';
+ $('policyMeta').textContent='RESEARCH_DEMO · selector 0–9 dinámico · anti-fijo máx. 2 compras por dígito · compra solo con oportunidad válida';
  renderProfitSession();
  trace('SESIÓN NUEVA · meta +$20.00 · stop -$'+sessionStopLoss().toFixed(2)+' · '+$('sessionPolicy').textContent,true);
 }
@@ -438,6 +442,7 @@ async function connectDerivDemo(){
       const p=m.proposal||{};
       if(!p.id){pendingTrade=false;lastProposalReq=null;trace('PROPUESTA SIN ID');return}
       const maxPrice=Number(p.ask_price??lastProposalReq.stake);
+      pendingBuyBarrier=Number(lastProposalReq.barrier);
       trace('PROPUESTA OK · enviando BUY',true);
       derivSocket.send(JSON.stringify({buy:p.id,price:maxPrice,req_id:++tradeReq}));
       $('lastDemoBuy').textContent='COMPRANDO…';
@@ -448,8 +453,12 @@ async function connectDerivDemo(){
       const b=m.buy||{};
       activeContractId=b.contract_id;
       pendingTrade=false;
-      trace('BUY OK · contrato '+activeContractId,true);
-      $('lastDemoBuy').textContent='DIFFER '+liveBarrier;
+      activeTradeBarrier=(pendingBuyBarrier==null?liveBarrier:Number(pendingBuyBarrier));
+      pendingBuyBarrier=null;
+      if(activeTradeBarrier===lastBoughtBarrier)sameBarrierBuyStreak++;
+      else{lastBoughtBarrier=activeTradeBarrier;sameBarrierBuyStreak=1;}
+      trace('BUY OK · contrato '+activeContractId+' · DIFFER '+activeTradeBarrier+' · repetición '+sameBarrierBuyStreak+'/'+MAX_SAME_BARRIER_BUYS,true);
+      $('lastDemoBuy').textContent='DIFFER '+activeTradeBarrier;
       $('lastDemoBuy').className='big yellow';
       $('autoDemoState').textContent='Contrato demo activo '+activeContractId+' · esperando resultado.';
       derivSocket.send(JSON.stringify({proposal_open_contract:1,contract_id:activeContractId,subscribe:1,req_id:++tradeReq}));
@@ -464,7 +473,7 @@ async function connectDerivDemo(){
         if(cid)lastSettledContractId=cid;
         $('lastDemoBuy').textContent=(profit>=0?'WIN ':'LOSS ')+(profit>=0?'+':'')+profit.toFixed(2);
         $('lastDemoBuy').className='big '+(profit>=0?'green':'red');
-        activeContractId=null; pendingTrade=false;
+        activeContractId=null; pendingTrade=false;activeTradeBarrier=null;
         applyProfitLadder(profit);
         if(!sessionStopped)$('autoDemoState').textContent='Contrato demo cerrado · reanalizando los 10 dígitos hasta detectar otra oportunidad anti-MATCH.';
         trace('CONTRATO CERRADO · '+(profit>=0?'WIN ':'LOSS ')+profit.toFixed(2)+' · P&L sesión '+sessionPnl.toFixed(2),profit>=0);
@@ -740,17 +749,40 @@ function maybeAutoBuy(signalOk,tickEpoch=Date.now()){
  if(activeContractId){trace('CONTRATO '+activeContractId+' AÚN ABIERTO');return}
  if(!derivSocket||derivSocket.readyState!==WebSocket.OPEN){trace('WEBSOCKET DEMO NO LISTO');return}
  if(liveBarrier==null){trace('SIN DÍGITO DIFFER');return}
+
+ let chosenBarrier=Number(liveBarrier);
+ if(chosenBarrier===lastBoughtBarrier && sameBarrierBuyStreak>=MAX_SAME_BARRIER_BUYS){
+   const rows=lastAvoidDecision?.rows||[];
+   const bestRisk=Number(rows[0]?.matchProb??1);
+   const maxRisk=Number(lastAvoidDecision?.maxMatchRisk??.08);
+   const alt=rows.find(x=>
+     Number(x.digit)!==Number(lastBoughtBarrier) &&
+     Number(x.matchProb)<=maxRisk &&
+     Number(x.matchProb)-bestRisk<=ALT_RISK_TOLERANCE
+   );
+   if(!alt){
+     trace('ANTI-FIJO · D'+lastBoughtBarrier+' ya se usó '+sameBarrierBuyStreak+' veces · esperando otro dígito válido');
+     $('autoDemoState').textContent='ANTI-FIJO: esperando que otro de los 9 dígitos pase el filtro anti-MATCH.';
+     return;
+   }
+   chosenBarrier=Number(alt.digit);
+   liveBarrier=chosenBarrier;
+   liveBarrierProb=Number(alt.matchProb);
+   $('liveDiffer').textContent='DIFFER '+chosenBarrier;
+   $('liveProb').textContent=pct(liveBarrierProb);
+   $('liveReason').textContent='ANTI-FIJO · cambia de D'+lastBoughtBarrier+' a D'+chosenBarrier+' porque ambos cumplen bajo riesgo de MATCH';
+ }
  if(tickEpoch===lastSignalEpoch){trace('TICK YA PROCESADO');return}
  lastSignalEpoch=tickEpoch;
  const stake=Math.max(.35,currentStake||baseStake());
  const currency=derivDemoAccount?.currency||derivDemoAccount?.currency_code||'USD';
  pendingTrade=true;
- const req=++tradeReq;lastProposalReq={req,stake,barrier:liveBarrier};
- $('lastDemoBuy').textContent='PROPUESTA '+liveBarrier;
- trace('SEÑAL VÁLIDA DIFFER '+liveBarrier+' · solicitando propuesta',true);
+ const req=++tradeReq;lastProposalReq={req,stake,barrier:chosenBarrier};
+ $('lastDemoBuy').textContent='PROPUESTA '+chosenBarrier;
+ trace('SEÑAL VÁLIDA DIFFER '+chosenBarrier+' · solicitando propuesta',true);
  derivSocket.send(JSON.stringify({
    proposal:1,amount:stake,basis:'stake',contract_type:'DIGITDIFF',
-   currency,duration:1,duration_unit:'t',barrier:String(liveBarrier),
+   currency,duration:1,duration_unit:'t',barrier:String(chosenBarrier),
    underlying_symbol:'R_75',req_id:req
  }));
 }
