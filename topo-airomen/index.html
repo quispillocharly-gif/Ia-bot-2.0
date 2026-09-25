@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#050713"><title>TOPO AIROMEN</title>
+<style>
+:root{--bg:#050713;--panel:#0b1025;--blue:#4ddcff;--vio:#ad73ff;--g:#6affb6;--r:#ff6b82;--y:#ffe66d;--t:#eff7ff;--m:#8ca4c8}
+*{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(circle at 50% 0,#173467 0,transparent 33%),linear-gradient(#050713,#02040a);color:var(--t);font-family:ui-monospace,Consolas,monospace}
+.wrap{max-width:1120px;margin:auto;padding:14px}.head{text-align:center;padding:24px 6px}.logo{font-size:clamp(38px,10vw,70px);font-weight:1000;letter-spacing:3px;color:var(--blue);text-shadow:0 0 16px #4ddcff77,0 0 36px #ad73ff55}.sub{font-size:11px;letter-spacing:3px;color:var(--m)}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.card{background:linear-gradient(180deg,#0b1228e8,#070b18e8);border:1px solid #25466c;border-radius:12px;padding:15px;margin-bottom:10px;box-shadow:0 0 24px #4ddcff12}
+.lab{font-size:10px;letter-spacing:1.4px;color:#79a7d7}.big{font-size:28px;font-weight:1000;margin:7px 0}.green{color:var(--g)}.red{color:var(--r)}.yellow{color:var(--y)}.cyan{color:var(--blue)}.vio{color:var(--vio)}
+.badge{display:inline-block;border:1px solid #355984;border-radius:6px;padding:6px 9px;font-size:11px;margin-top:7px}.mini{font-size:12px;color:var(--m);line-height:1.5}.scroll{overflow:auto}table{width:100%;border-collapse:collapse;min-width:760px;font-size:12px}th,td{padding:9px;border-bottom:1px solid #182b46;text-align:left}
+.footer{text-align:center;color:#60799c;font-size:11px;padding:10px}@media(max-width:760px){.grid{grid-template-columns:1fr}}
+</style></head><body><div class="wrap">
+<div class="head"><div class="logo">TOPO AIROMEN</div><div class="sub">DIFFER AI · R_75 · FORWARD RESEARCH CORE</div></div>
+<div class="grid">
+ <div class="card"><div class="lab">DIRECTOR</div><div id="decision" class="big cyan">BOOTING…</div><div id="directorMeta" class="mini">Esperando memoria</div><span id="directorStatus" class="badge">WAITING</span></div>
+ <div class="card"><div class="lab">PAYOUT / BREAK-EVEN</div><div id="breakEven" class="big yellow">–</div><div id="payoutMeta" class="mini">Actualizando propuestas DIGITDIFF</div></div>
+ <div class="card"><div class="lab">BASELINE</div><div class="big vio">90.00%</div><div class="mini">Acierto aleatorio aproximado en DIFFER. El objetivo real es superar el break-even económico.</div></div>
+</div>
+<div class="grid">
+ <div class="card"><div class="lab">CANDIDATO NEURAL</div><div id="model" class="big">–</div><div id="trainMeta" class="mini">Entrenamiento cronológico</div></div>
+ <div class="card"><div class="lab">FORWARD LEADER</div><div id="rate" class="big cyan">–</div><div id="leaderMeta" class="mini">Sin datos</div><span id="forwardStatus" class="badge">WAITING</span></div>
+ <div class="card"><div class="lab">SHADOW ECONOMY</div><div id="pnl" class="big">–</div><div id="econMeta" class="mini">Sin dinero real</div></div>
+</div>
+<div class="card"><div class="lab">TOURNAMENT · 6 VARIANTES PREDECLARADAS</div><div class="scroll"><table>
+<thead><tr><th>VARIANTE</th><th>SEÑALES</th><th>WINS</th><th>HIT</th><th>WILSON</th><th>ADJ-P</th><th>P&L</th><th>ESTADO</th></tr></thead><tbody id="rows"></tbody>
+</table></div></div>
+<div class="grid">
+ <div class="card"><div class="lab">DATA QUALITY</div><div id="ticks" class="big">0</div><div id="quality" class="mini">Forward ticks</div></div>
+ <div class="card"><div class="lab">CONFIRMED VARIANTS</div><div id="confirmed" class="big green">0</div><div class="mini">Requiere ≥2000 señales, Wilson sobre break-even, Bonferroni &lt;5%, P&L positivo y 3 bloques estables.</div></div>
+ <div class="card"><div class="lab">SEGURIDAD</div><div class="big green">SHADOW</div><div class="mini">No ejecuta compras reales. Investiga, aprende, valida y descarta.</div></div>
+</div>
+<div class="footer">TOPO AIROMEN · DIFERENCIADO DEL PROYECTO MATCH · 100% NO SE PRESUPONE NI SE GARANTIZA</div>
+</div><script>
+const $=x=>document.getElementById(x),pct=x=>x==null?'–':(100*x).toFixed(2)+'%';
+function badge(el,s){el.textContent=s;el.style.color=/CANDIDATE|CONFIRMED/.test(s)?'#6affb6':/NOT/.test(s)?'#ff6b82':'#ffe66d'}
+async function load(){
+ try{
+  const base='https://raw.githubusercontent.com/quispillocharly-gif/Ia-bot-2.0/main/topo-airomen/memory/';
+  const [a,b,c,d]=await Promise.all([
+   fetch(base+'differ_director_latest.json?t='+Date.now(),{cache:'no-store'}),
+   fetch(base+'differ_forward_latest.json?t='+Date.now(),{cache:'no-store'}),
+   fetch(base+'differ_train_latest.json?t='+Date.now(),{cache:'no-store'}),
+   fetch(base+'differ_payout_snapshot.json?t='+Date.now(),{cache:'no-store'})
+  ]);
+  const director=a.ok?await a.json():{},f=b.ok?await b.json():{},t=c.ok?await c.json():{},p=d.ok?await d.json():{},L=f.leader||{};
+  $('decision').textContent=(director.decision||'WAITING').replaceAll('_',' ');
+  badge($('directorStatus'),director.decision||'WAITING');
+  $('directorMeta').textContent='forward '+(director.forward_status||'–')+' · candidate '+(director.candidate_model_id||'–');
+  $('breakEven').textContent=pct(p.max_break_even);$('payoutMeta').textContent=(p.status||'MISSING')+' · '+(p.valid_digits||0)+'/10 digits';
+  const C=t.candidate||{};$('model').textContent=C.model_id||'–';$('trainMeta').textContent=C.model_id?'W'+C.window+' · '+(C.hidden||[]).join('×')+' · test '+pct(C.test?.hit_rate):'Esperando entrenamiento';
+  $('rate').textContent=pct(L.hit_rate);badge($('forwardStatus'),L.status||f.status||'WAITING');
+  $('leaderMeta').textContent=(L.id||'–')+' · '+(L.signals||0)+' señales · Wilson '+pct(L.wilson_lower);
+  $('pnl').textContent=L.shadow_pnl==null?'–':(L.shadow_pnl>=0?'+':'')+L.shadow_pnl.toFixed(2);
+  $('pnl').className='big '+((L.shadow_pnl??0)>=0?'green':'red');
+  $('econMeta').textContent='ROI '+pct(L.shadow_roi)+' · adj-p '+((L.bonferroni_p??1).toFixed(4));
+  $('ticks').textContent=f.data_quality?.forward_ticks??0;
+  $('quality').textContent='chi-square p '+(f.data_quality?.uniformity_chi_square_p==null?'–':f.data_quality.uniformity_chi_square_p.toFixed(4))+' · max dev '+pct(f.data_quality?.max_digit_share_deviation);
+  $('confirmed').textContent=(f.confirmed_variants||[]).length;
+  $('rows').innerHTML=(f.variants||[]).map(x=>'<tr><td><b>'+x.id+'</b></td><td>'+x.signals+'</td><td>'+x.wins+'</td><td>'+pct(x.hit_rate)+'</td><td>'+pct(x.wilson_lower)+'</td><td>'+(x.bonferroni_p??1).toFixed(4)+'</td><td>'+((x.shadow_pnl??0)>=0?'+':'')+(x.shadow_pnl??0).toFixed(2)+'</td><td>'+x.status+'</td></tr>').join('');
+ }catch(e){$('decision').textContent='MEMORY WAITING'}
+}
+load();setInterval(load,30000);
+</script></body></html>
