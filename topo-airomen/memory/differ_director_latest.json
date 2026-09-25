@@ -1,6 +1,6 @@
 {
   "version": "2.0-differ-director",
-  "timestamp": 1790362364,
+  "timestamp": 1790362703,
   "decision": "COLLECT_V2_FORWARD_DATA",
   "baseline_random": 0.9,
   "payout_status": "OK",
@@ -9,38 +9,38 @@
   "v2_status": "RESEARCHING",
   "v4_status": "COLLECTING",
   "v1_leader": {
-    "id": "neural_p08",
-    "signals": 2273,
-    "wins": 2046,
-    "losses": 227,
-    "hit_rate": 0.9001319841619005,
-    "wilson_lower": 0.8871227597435999,
-    "raw_economic_p": 0.9984377554933479,
+    "id": "neural_p07",
+    "signals": 1835,
+    "wins": 1667,
+    "losses": 168,
+    "hit_rate": 0.9084468664850136,
+    "wilson_lower": 0.8943843078173086,
+    "raw_economic_p": 0.923484050363123,
     "bonferroni_p": 1.0,
-    "shadow_pnl": -42.859999999997214,
-    "shadow_roi": -0.01885613726352715,
+    "shadow_pnl": -17.970000000000205,
+    "shadow_roi": -0.009792915531335262,
     "temporal_blocks": [
       {
-        "n": 758,
-        "wins": 672,
-        "hit_rate": 0.8865435356200527,
-        "wilson_lower": 0.8619891554076471
+        "n": 612,
+        "wins": 538,
+        "hit_rate": 0.8790849673202614,
+        "wilson_lower": 0.8508619006929369
       },
       {
-        "n": 758,
-        "wins": 684,
-        "hit_rate": 0.9023746701846965,
-        "wilson_lower": 0.8791717542229377
+        "n": 612,
+        "wins": 563,
+        "hit_rate": 0.9199346405228758,
+        "wilson_lower": 0.8957206845932504
       },
       {
-        "n": 757,
-        "wins": 690,
-        "hit_rate": 0.9114927344782034,
-        "wilson_lower": 0.889125883494165
+        "n": 611,
+        "wins": 566,
+        "hit_rate": 0.9263502454991817,
+        "wilson_lower": 0.9028686583087356
       }
     ],
     "block_stable": false,
-    "status": "NOT_CONFIRMED"
+    "status": "COLLECTING"
   },
   "v2_leader": {
     "id": "vote2_margin005",
@@ -78,18 +78,18 @@
   "ensemble_id": "eacc45a0ee29feed",
   "live_policy": {
     "version": "2.0-live-policy",
-    "timestamp": 1790362364,
+    "timestamp": 1790362703,
     "source": "v1",
-    "rule": "neural_p08",
+    "rule": "neural_p07",
     "candidate_id": "9f88c3b4cfceb9f6",
     "mode": "RESEARCH_DEMO",
     "confirmed": false,
     "economic_qualified": false,
     "break_even_rate": 0.9174311926605504,
-    "leader_signals": 2273,
-    "leader_hit_rate": 0.9001319841619005,
-    "leader_wilson": 0.8871227597435999,
-    "leader_shadow_pnl": -42.859999999997214,
+    "leader_signals": 1835,
+    "leader_hit_rate": 0.9084468664850136,
+    "leader_wilson": 0.8943843078173086,
+    "leader_shadow_pnl": -17.970000000000205,
     "money_policy": null,
     "note": "Demo-only policy. Research continues in parallel. The DIFFER digit is recalculated across 0-9 every tick; no digit is frozen. Money-management policy remains session-scoped."
   },
