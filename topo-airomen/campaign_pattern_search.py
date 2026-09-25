@@ -68,23 +68,25 @@ def features(digits):
 
 def candidate_grid():
     out=[]
+    # Second-stage search around the strongest family found in v1.
     weights=[
-      ("balanced",(0.10,0.15,0.20,0.25,0.30)),
-      ("t23",(0.05,0.10,0.10,0.30,0.45)),
-      ("recent",(0.25,0.20,0.15,0.18,0.22)),
       ("t3",(0.05,0.08,0.10,0.22,0.55)),
+      ("t23",(0.05,0.10,0.10,0.30,0.45)),
     ]
-    triggers=["any","uniform","very_uniform","no_repeat","gap3","gap5","balanced_gap"]
+    triggers=["no_repeat","uniform","very_uniform","balanced_gap","gap3","gap5"]
     for name,w in weights:
-      for bottom_need in [2,3,4]:
+      for bottom_need in [3,4,5]:
         for recent_penalty in [0.0,.0015,.0030]:
-          for age_bonus in [0.0,.00025,.0005]:
+          for age_bonus in [0.0,.0005]:
             for trigger in triggers:
-              out.append({
-                "id":f"{name}_b{bottom_need}_rp{recent_penalty:.4f}_ab{age_bonus:.5f}_trg-{trigger}",
-                "weights":w,"bottom_need":bottom_need,
-                "recent_penalty":recent_penalty,"age_bonus":age_bonus,"trigger":trigger
-              })
+              for shadow_need in [2,3,4,5,8]:
+                for max_score in [.095,.100,.105,.110]:
+                  out.append({
+                    "id":f"{name}_b{bottom_need}_rp{recent_penalty:.4f}_ab{age_bonus:.5f}_trg-{trigger}_sh{shadow_need}_mx{max_score:.3f}",
+                    "weights":w,"bottom_need":bottom_need,
+                    "recent_penalty":recent_penalty,"age_bonus":age_bonus,
+                    "trigger":trigger,"shadow_need":shadow_need,"max_score":max_score
+                  })
     return out
 
 def trigger_ok(ex,mode):
@@ -115,7 +117,10 @@ def choose(ex,cfg):
         vals.append((s,-votes,-int(ex["ages"][d]),d))
     if not vals:return None
     vals.sort()
-    return int(vals[0][3])
+    best=vals[0]
+    if float(best[0])>float(cfg.get("max_score",1.0)):
+        return None
+    return int(best[3])
 
 def evaluate(cfg,examples):
     campaigns=0;completed=0
@@ -123,32 +128,58 @@ def evaluate(cfg,examples):
     signals=0;wins=0
     streak=0;best_streak=0
     starts_wait=[];wait=0
-    outcomes=[]
+    shadow_need=int(cfg.get("shadow_need",0))
+    shadow_streak=0
+    shadow_signals=0;shadow_wins=0
+    armed=False
+
     for ex in examples:
         wait+=1
-        if current==0 and not trigger_ok(ex,cfg["trigger"]):
-            continue
         d=choose(ex,cfg)
         if d is None:
             continue
+        outcome=int(ex["target"]!=d)
+
         if current==0:
+            # Start building confirmation only when the context trigger is active.
+            if not trigger_ok(ex,cfg["trigger"]):
+                shadow_streak=0;armed=False
+                continue
+
+            if not armed:
+                shadow_signals+=1
+                shadow_wins+=outcome
+                if outcome:
+                    shadow_streak+=1
+                    if shadow_streak>=shadow_need:
+                        armed=True
+                else:
+                    shadow_streak=0
+                # The confirming shadow outcome is never counted as a paid trade.
+                continue
+
+            # Armed: the NEXT qualifying signal starts the real 21-trade campaign.
             campaigns+=1
             starts_wait.append(wait);wait=0
-        ok=int(ex["target"]!=d)
-        outcomes.append(ok)
-        signals+=1;wins+=ok
-        if ok:
+            current=0
+            shadow_streak=0;armed=False
+
+        signals+=1;wins+=outcome
+        if outcome:
             current+=1;streak+=1;best_streak=max(best_streak,streak)
             if current>=CAMPAIGN_WINS:
                 completed+=1;current=0;streak=0
         else:
             current=0;streak=0
+
     rate=wins/signals if signals else 0.0
     completion=completed/campaigns if campaigns else 0.0
     return {
       "campaigns":campaigns,"completed_21":completed,"completion_rate":completion,
       "signals":signals,"wins":wins,"losses":signals-wins,"hit_rate":rate,
       "longest_streak":best_streak,
+      "shadow_need":shadow_need,"shadow_signals":shadow_signals,"shadow_wins":shadow_wins,
+      "shadow_hit_rate":shadow_wins/shadow_signals if shadow_signals else None,
       "avg_start_wait":float(np.mean(starts_wait)) if starts_wait else None,
       "max_start_wait":int(max(starts_wait)) if starts_wait else None
     }
@@ -164,7 +195,7 @@ def main():
     ranked=[]
     for cfg in grid:
         m=evaluate(cfg,discovery)
-        if m["campaigns"]<20:continue
+        if m["campaigns"]<12:continue
         ranked.append((m["completion_rate"],m["completed_21"],m["longest_streak"],m["hit_rate"],cfg,m))
     ranked.sort(reverse=True,key=lambda x:(x[0],x[1],x[2],x[3]))
     top=[x[4] for x in ranked[:80]]
@@ -172,7 +203,7 @@ def main():
     val=[]
     for cfg in top:
         md=evaluate(cfg,discovery);mv=evaluate(cfg,validation)
-        if mv["campaigns"]<8:continue
+        if mv["campaigns"]<6:continue
         stable=min(md["completion_rate"],mv["completion_rate"])
         val.append((stable,min(md["completed_21"],mv["completed_21"]),min(md["longest_streak"],mv["longest_streak"]),cfg,md,mv))
     val.sort(reverse=True,key=lambda x:(x[0],x[1],x[2]))
@@ -195,7 +226,7 @@ def main():
     ),reverse=True)
 
     out={
-      "version":"1.0-campaign-21-pattern-search",
+      "version":"2.0-shadow-confirmed-campaign-21",
       "timestamp":int(time.time()),
       "ticks":len(digits),"examples":len(ex),
       "split":{"discovery":len(discovery),"validation":len(validation),"holdout":len(holdout)},
@@ -207,7 +238,7 @@ def main():
       "leader":results[0] if results else None,
       "finalists":results,
       "status":"CANDIDATE_FOUND" if results and results[0]["repeated_21_both"] else "SEARCHING",
-      "note":"Historical chronological discovery/validation/holdout search. A 21+ streak is not a guarantee; forward-only challenge remains required."
+      "note":"Second-stage search: a pattern must first produce a configurable shadow winning streak before a paid 21-trade campaign is started. Historical chronological evidence is not a future guarantee; forward challenge remains required."
     }
     OUT.parent.mkdir(exist_ok=True)
     OUT.write_text(json.dumps(out,indent=2))
