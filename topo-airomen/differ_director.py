@@ -20,6 +20,7 @@ def main():
     train=load("differ_train_latest.json")
     v1=load("differ_forward_latest.json")
     v2=load("differ_v2_latest.json")
+    v4=load("differ_v4_batch5_latest.json")
     pay=load("differ_payout_snapshot.json")
     be=pay.get("max_break_even")
     l1=v1.get("leader") or {}
@@ -54,6 +55,18 @@ def main():
         candidate_id=v1.get("model_id")
 
     economic_ok=viable(leader,be)
+    money=v4.get("leader") if v4.get("status")=="POLICY_CANDIDATE" else None
+    if money:
+        money={
+          "source":money.get("source"),"policy":money.get("policy"),
+          "compound_fraction":money.get("compound_fraction",0.0),
+          "pause_after_match":money.get("pause_after_match",0),
+          "batch_size":money.get("batch_size",5),
+          "stage_size":money.get("stage_size",5.0),
+          "sessions_completed":money.get("sessions_completed",0),
+          "target_rate":money.get("target_rate"),
+          "promoted":True
+        }
     policy={
       "version":"2.0-live-policy","timestamp":int(time.time()),
       "source":source,"rule":rule,"candidate_id":candidate_id,
@@ -64,15 +77,16 @@ def main():
       "leader_hit_rate":leader.get("hit_rate"),
       "leader_wilson":leader.get("wilson_lower"),
       "leader_shadow_pnl":leader.get("shadow_pnl"),
-      "note":"Demo-only policy. Research continues in parallel. A session freezes its selected policy until reset."
+      "money_policy":money,
+      "note":"Demo-only policy. Research continues in parallel. A session freezes its selected entry and money-management policy until reset."
     }
     POLICY.write_text(json.dumps(policy,indent=2))
 
     out={
       "version":"2.0-differ-director","timestamp":int(time.time()),"decision":decision,
       "baseline_random":.90,"payout_status":pay.get("status","MISSING"),"break_even_rate":be,
-      "v1_status":v1.get("status","NOT_STARTED"),"v2_status":v2.get("status","NOT_STARTED"),
-      "v1_leader":l1,"v2_leader":l2,
+      "v1_status":v1.get("status","NOT_STARTED"),"v2_status":v2.get("status","NOT_STARTED"),"v4_status":v4.get("status","NOT_STARTED"),
+      "v1_leader":l1,"v2_leader":l2,"v4_leader":v4.get("leader"),
       "v1_confirmed":c1,"v2_confirmed":c2,
       "candidate_model_id":(train.get("candidate") or {}).get("model_id"),
       "ensemble_id":(train.get("ensemble_candidate") or {}).get("ensemble_id"),
