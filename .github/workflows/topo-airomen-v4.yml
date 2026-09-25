@@ -28,11 +28,12 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          cp topo-airomen/memory/differ_v4_batch5_state.json /tmp/differ_v4_batch5_state.json
+          cp topo-airomen/memory/differ_v4_batch5_latest.json /tmp/differ_v4_batch5_latest.json
+          git fetch origin main
+          git reset --hard origin/main
+          cp /tmp/differ_v4_batch5_state.json topo-airomen/memory/differ_v4_batch5_state.json
+          cp /tmp/differ_v4_batch5_latest.json topo-airomen/memory/differ_v4_batch5_latest.json
           git add topo-airomen/memory/differ_v4_batch5_state.json topo-airomen/memory/differ_v4_batch5_latest.json
           git diff --cached --quiet || git commit -m "TOPO AIROMEN V4 Batch5 research"
-          for attempt in 1 2 3; do
-            git pull --rebase origin main
-            if git push; then break; fi
-            if [ "$attempt" -eq 3 ]; then exit 1; fi
-            sleep 3
-          done
+          git push
