@@ -54,7 +54,7 @@ button:disabled{opacity:.45;cursor:not-allowed}
 </div>
 
 <div class="card signal">
- <div class="lab">ANTI-MATCH CADENA DINÁMICA · ESPERA VARIABLE 1–3 · NO REPITE DÍGITO</div>
+ <div class="lab">FORWARD STREAK CORE · HYBRID K2 · CADENA DINÁMICA 1–3 · NO REPITE DÍGITO</div>
  <div id="bestDigit" class="digit">DIFFER –</div>
  <div id="signalMeta" class="mini">Esperando historial R_75…</div>
  <div id="ranking" class="chips"></div>
@@ -103,7 +103,7 @@ button:disabled{opacity:.45;cursor:not-allowed}
 <script>
 'use strict';
 
-const BUILD='CLEAN-1.10-NO-FREEZE-GUARD';
+const BUILD='CLEAN-2.0-FORWARD-STREAK';
 const CADENCE_MIN=1,CADENCE_MAX=3;
 const SYMBOL='R_75';
 const TARGET=10;
@@ -173,8 +173,8 @@ function stopLoss(){
   return Math.max(1,Number($('stopLoss').value)||5);
 }
 
-function deriveCadenceWait(step,blocked,prevWait){
-  const tail=seq.slice(-6);
+function deriveCadenceWait(step,blocked,prevWait,tailOverride=null){
+  const tail=Array.isArray(tailOverride)?tailOverride.slice(-6):seq.slice(-6);
   let h=17+(Number(step)||0)*31+(blocked==null?0:Number(blocked)*13);
   for(let i=0;i<tail.length;i++)h=(h*33+Number(tail[i])*(i+3)+7)%9973;
   let wait=CADENCE_MIN+(h%(CADENCE_MAX-CADENCE_MIN+1));
@@ -235,7 +235,7 @@ function applyResult(profit,snapshot){
     idleTradeTicks=0;
     cadenceStep++;
     lastCadenceWait=currentCadenceWait;
-    currentCadenceWait=deriveCadenceWait(cadenceStep,lastBoughtDigit,lastCadenceWait);
+    currentCadenceWait=deriveCadenceWait(cadenceStep,lastBoughtDigit,lastCadenceWait,snapshot?.cadenceTail);
     ticksIntoCadence=0;
     execHistory.push({
       win:profit>=0?1:0,
@@ -412,305 +412,74 @@ function actualMatchRate(n=50){
 }
 
 function analyze(){
-  if(seq.length<20)return null;
+  if(seq.length<220 || !model)return null;
 
-  const t1=transitionVector(1,900);
+  // Exact core validated in forward lab:
+  // hybrid_k2_s0.105_h1_ctx3_nr
+  const recent=distRecent(80);
+  const t1=transitionVector(1,1000);
   const t2=transitionVector(2,1200);
   const t3=transitionVector(3,1500);
-  const recent=distRecent(100);
-  const off=offlineVector();
   const neural=neuralVector();
-  const calNeural=neural.map(calibratedNeuralRisk);
-  const exec=execRiskVector();
-  const context=contextualMatchVector();
 
   const digits=[0,1,2,3,4,5,6,7,8,9];
-  const neuralOrder=[...digits].sort((a,b)=>calNeural[a]-calNeural[b]);
-  const allSources=[t1,t2,t3,recent,off,calNeural,exec,context];
-  const coldSets=allSources.map(v=>[...digits].sort((a,b)=>v[a]-v[b]).slice(0,2));
-  const bottom3Sets=allSources.map(v=>[...digits].sort((a,b)=>v[a]-v[b]).slice(0,3));
-  const hotSets=allSources.map(v=>[...digits].sort((a,b)=>v[b]-v[a]).slice(0,2));
-  const coreSources=[calNeural,t2,t3,off];
-  const coreBottom2=coreSources.map(v=>[...digits].sort((a,b)=>v[a]-v[b]).slice(0,2));
-  const coreHot2=coreSources.map(v=>[...digits].sort((a,b)=>v[b]-v[a]).slice(0,2));
-  const t2Hot=[...digits].sort((a,b)=>t2[b]-t2[a]).slice(0,2);
-  const t3Hot=[...digits].sort((a,b)=>t3[b]-t3[a]).slice(0,2);
-  const offHot=[...digits].sort((a,b)=>off[b]-off[a]).slice(0,2);
+  const allowed=(lastBoughtDigit==null)
+    ?digits
+    :digits.filter(d=>Number(d)!==Number(lastBoughtDigit));
 
-  const rows=[];
-  for(const d of digits){
-    const cold=coldSets.reduce((n,a)=>n+(a.includes(d)?1:0),0);
-    const consensus3=bottom3Sets.reduce((n,a)=>n+(a.includes(d)?1:0),0);
-    const hot=hotSets.reduce((n,a)=>n+(a.includes(d)?1:0),0);
-    const coreCold=coreBottom2.reduce((n,a)=>n+(a.includes(d)?1:0),0);
-    const coreHot=coreHot2.reduce((n,a)=>n+(a.includes(d)?1:0),0);
-    const structHot=
-      (t2Hot.includes(d)?1:0)+
-      (t3Hot.includes(d)?1:0)+
-      (offHot.includes(d)?1:0);
+  const neuralOrder=[...allowed].sort((x,y)=>neural[x]-neural[y]||x-y);
+  const top2=neuralOrder.slice(0,2);
+  const t2Hot=[...digits].sort((x,y)=>t2[y]-t2[x]).slice(0,2);
+  const t3Hot=[...digits].sort((x,y)=>t3[y]-t3[x]).slice(0,2);
+  const hotSet=new Set([...t2Hot,...t3Hot]);
 
-    // Neural manda; transición/contexto vetan falsos "fríos".
-    const core=
-      .42*calNeural[d]+
-      .07*t1[d]+
-      .15*t2[d]+
-      .13*t3[d]+
-      .06*recent[d]+
-      .09*off[d]+
-      .04*exec[d]+
-      .04*context[d];
+  const rows=digits.map(d=>{
+    const score=
+      .45*Number(neural[d]||.1)+
+      .10*Number(recent[d]||.1)+
+      .13*Number(t1[d]||.1)+
+      .17*Number(t2[d]||.1)+
+      .15*Number(t3[d]||.1);
+    return {
+      digit:d,
+      score,
+      combined:score,
+      neural:Number(neural[d]||.1),
+      calibratedNeural:Number(neural[d]||.1),
+      neuralRank:neuralOrder.includes(d)?neuralOrder.indexOf(d)+1:99,
+      structHot:hotSet.has(d)?1:0,
+      t1:Number(t1[d]||.1),
+      t2:Number(t2[d]||.1),
+      t3:Number(t3[d]||.1),
+      recent:Number(recent[d]||.1)
+    };
+  });
 
-    const vals=allSources.map(v=>Number(v[d]||.1));
-    const unc=Math.max(...vals)-Math.min(...vals);
-    const combined=Math.min(.30,Math.max(.001,
-      core+
-      .022*unc+
-      .0023*structHot+
-      .0007*hot-
-      .00035*cold+
-      recentBarrierLossPenalty(d)
-    ));
+  const candidates=top2.map(d=>rows[d]).sort((x,y)=>x.score-y.score||x.neural-y.neural||x.digit-y.digit);
+  const best=candidates[0];
+  const second=candidates[1]||best;
 
-    rows.push({
-      digit:d,combined,
-      neural:neural[d],calibratedNeural:calNeural[d],
-      neuralRank:neuralOrder.indexOf(d)+1,
-      cold,consensus3,hot,coreCold,coreHot,structHot,unc,
-      t1:t1[d],t2:t2[d],t3:t3[d],off:off[d],context:context[d]
-    });
-  }
+  const ok=!!best &&
+    best.score<=.105 &&
+    best.structHot<=1 &&
+    (lastBoughtDigit==null||Number(best.digit)!==Number(lastBoughtDigit));
 
-  rows.sort((a,b)=>a.combined-b.combined||a.neuralRank-b.neuralRank||a.structHot-b.structHot);
-
-  // CADENCE 1-2-3 + NO REPEAT:
-  // El último dígito comprado queda bloqueado para la siguiente entrada.
-  // Entre los 9 permitidos se toma el de menor riesgo estimado.
-  const allowedRows=(lastBoughtDigit==null)
-    ?rows
-    :rows.filter(x=>Number(x.digit)!==Number(lastBoughtDigit));
-  const best=allowedRows[0]||rows[0];
-  const second=allowedRows[1]||best;
-
+  const gap=Math.max(0,Number(second?.score||best.score)-Number(best.score));
   const mr=actualMatchRate(50);
-  const gap=Math.max(0,second.combined-best.combined);
-  const memoryReady=!!offline&&!!model;
-
-  let maxRisk=.1085,maxNeural=.095,maxNeuralRank=2,maxStructHot=0,maxHot=3,minCold=2,minGap=.00025,maxContext=.105,maxStructure=.115;
-
-  if(mr!=null&&execHistory.length>=20){
-    if(mr>=.13){
-      maxRisk=.099;maxNeural=.085;maxNeuralRank=1;maxStructHot=0;maxHot=1;minCold=3;minGap=.0010;maxContext=.095;maxStructure=.105;
-    }else if(mr>=.10){
-      maxRisk=.104;maxNeural=.090;maxNeuralRank=1;maxStructHot=0;maxHot=2;minCold=2;minGap=.00050;maxContext=.100;maxStructure=.110;
-    }else if(mr<=.07&&execHistory.length>=30){
-      maxRisk=.112;maxNeural=.098;maxNeuralRank=2;maxStructHot=0;maxHot=3;minCold=2;minGap=.00015;maxContext=.108;maxStructure=.118;
-    }
-  }
-
-  // STREAK SHIELD: cuanto más larga la racha, más protegida la siguiente entrada.
-  let streakPhase='BASE';
-  if(antiMatchStreak>=20){
-    streakPhase='SHIELD 20+';
-    maxRisk=Math.min(maxRisk,.099);
-    maxNeural=Math.min(maxNeural,.086);
-    maxNeuralRank=1;
-    maxHot=Math.min(maxHot,1);
-    minCold=Math.max(minCold,4);
-    minGap=Math.max(minGap,.0010);
-    maxContext=Math.min(maxContext,.095);
-    maxStructure=Math.min(maxStructure,.105);
-  }else if(antiMatchStreak>=12){
-    streakPhase='SHIELD 12+';
-    maxRisk=Math.min(maxRisk,.101);
-    maxNeural=Math.min(maxNeural,.088);
-    maxNeuralRank=1;
-    maxHot=Math.min(maxHot,1);
-    minCold=Math.max(minCold,3);
-    minGap=Math.max(minGap,.00075);
-    maxContext=Math.min(maxContext,.097);
-    maxStructure=Math.min(maxStructure,.107);
-  }else if(antiMatchStreak>=8){
-    streakPhase='SHIELD 8+';
-    maxRisk=Math.min(maxRisk,.103);
-    maxNeural=Math.min(maxNeural,.090);
-    maxNeuralRank=1;
-    maxHot=Math.min(maxHot,2);
-    minCold=Math.max(minCold,3);
-    minGap=Math.max(minGap,.00055);
-    maxContext=Math.min(maxContext,.100);
-    maxStructure=Math.min(maxStructure,.110);
-  }else if(antiMatchStreak>=4){
-    streakPhase='SHIELD 4+';
-    maxRisk=Math.min(maxRisk,.106);
-    maxNeural=Math.min(maxNeural,.093);
-    maxNeuralRank=Math.min(maxNeuralRank,2);
-    maxHot=Math.min(maxHot,2);
-    minCold=Math.max(minCold,2);
-    minGap=Math.max(minGap,.00035);
-    maxContext=Math.min(maxContext,.102);
-    maxStructure=Math.min(maxStructure,.112);
-  }
-
-  // ANTI-FREEZE: no permite que los filtros secundarios bloqueen para siempre.
-  // Los límites principales (riesgo total, neural y estructura) permanecen duros.
-  let freezePhase='NORMAL';
-  if(idleTradeTicks>=22){
-    freezePhase='RECOVERY 22+';
-    maxRisk=Math.max(maxRisk,.108);
-    maxNeural=Math.max(maxNeural,.096);
-    maxNeuralRank=Math.max(maxNeuralRank,2);
-    maxHot=Math.max(maxHot,3);
-    minCold=Math.min(minCold,1);
-    minGap=Math.min(minGap,.00005);
-    maxContext=Math.max(maxContext,.106);
-    maxStructure=Math.max(maxStructure,.114);
-  }else if(idleTradeTicks>=14){
-    freezePhase='RECOVERY 14+';
-    maxNeuralRank=Math.max(maxNeuralRank,2);
-    maxHot=Math.max(maxHot,3);
-    minCold=Math.min(minCold,1);
-    minGap=Math.min(minGap,.00012);
-    maxContext=Math.max(maxContext,.104);
-    maxStructure=Math.max(maxStructure,.113);
-  }else if(idleTradeTicks>=8){
-    freezePhase='RECOVERY 8+';
-    maxHot=Math.max(maxHot,2);
-    minCold=Math.min(minCold,2);
-    minGap=Math.min(minGap,.00020);
-  }
-
-  // FINAL LEG SHIELD: cerca de +10 no se relaja el análisis por inactividad.
-  const remainingToTarget=Math.max(0,TARGET-sessionPnl);
-  const finalLeg=sessionPnl>=7 || remainingToTarget<=3;
-  let finalLegPhase='OFF';
-  if(finalLeg){
-    finalLegPhase='FINAL LEG';
-    freezePhase='FINAL LEG · PROTECT';
-    maxRisk=Math.min(maxRisk,.100);
-    maxNeural=Math.min(maxNeural,.087);
-    maxNeuralRank=1;
-    maxStructHot=0;
-    maxHot=Math.min(maxHot,1);
-    minCold=Math.max(minCold,3);
-    minGap=Math.max(minGap,.00075);
-    maxContext=Math.min(maxContext,.097);
-    maxStructure=Math.min(maxStructure,.106);
-  }
-  if(targetRecoveryShield||consecutiveMatches>=1){
-    finalLegPhase=targetRecoveryShield?'RECOVERY AFTER FINAL-LEG MATCH':'LOSS SHIELD';
-    maxRisk=Math.min(maxRisk,.098);
-    maxNeural=Math.min(maxNeural,.085);
-    maxNeuralRank=1;
-    maxStructHot=0;
-    maxHot=Math.min(maxHot,1);
-    minCold=Math.max(minCold,3);
-    minGap=Math.max(minGap,.0010);
-    maxContext=Math.min(maxContext,.095);
-    maxStructure=Math.min(maxStructure,.104);
-  }
-
-  let minConsensus3=5,minCoreCold=2,maxCoreHot=0;
-  if(idleTradeTicks>=14 && !finalLeg && !targetRecoveryShield){
-    minConsensus3=4;
-    minCoreCold=1;
-  }
-  if(finalLeg||targetRecoveryShield||consecutiveMatches>=1){
-    minConsensus3=6;
-    minCoreCold=3;
-    maxCoreHot=0;
-  }
-
-  // NO-FREEZE GUARD: incluso en FINAL LEG hay una salida gradual.
-  // Nunca relaja coreHot ni structHot: solo frecuencia/consenso secundario.
-  let noFreezePhase='NORMAL';
-  if(idleTradeTicks>=26){
-    noFreezePhase='ACTIVE 26+';
-    maxRisk=Math.max(maxRisk,.105);
-    maxNeural=Math.max(maxNeural,.093);
-    maxNeuralRank=Math.max(maxNeuralRank,2);
-    maxHot=Math.max(maxHot,3);
-    minCold=Math.min(minCold,1);
-    minGap=Math.min(minGap,.00010);
-    maxContext=Math.max(maxContext,.103);
-    maxStructure=Math.max(maxStructure,.112);
-    minConsensus3=Math.min(minConsensus3,4);
-    minCoreCold=Math.min(minCoreCold,1);
-  }else if(idleTradeTicks>=18){
-    noFreezePhase='ACTIVE 18+';
-    maxRisk=Math.max(maxRisk,.103);
-    maxNeural=Math.max(maxNeural,.091);
-    maxNeuralRank=Math.max(maxNeuralRank,2);
-    maxHot=Math.max(maxHot,2);
-    minCold=Math.min(minCold,2);
-    minGap=Math.min(minGap,.00025);
-    maxContext=Math.max(maxContext,.100);
-    maxStructure=Math.max(maxStructure,.109);
-    minConsensus3=Math.min(minConsensus3,4);
-    minCoreCold=Math.min(minCoreCold,2);
-  }else if(idleTradeTicks>=10){
-    noFreezePhase='ACTIVE 10+';
-    maxHot=Math.max(maxHot,2);
-    minGap=Math.min(minGap,.00050);
-    minConsensus3=Math.min(minConsensus3,5);
-    minCoreCold=Math.min(minCoreCold,2);
-  }
-
-  const structureRisk=Math.max(best.t2,best.t3,best.off);
-  const veryStrong=
-    best.combined<=.097 &&
-    best.calibratedNeural<=.090 &&
-    best.neuralRank===1 &&
-    best.structHot===0 &&
-    best.cold>=3 &&
-    gap>=.0008;
-
-  const stableNeed=idleTradeTicks>=16?1:((finalLeg||targetRecoveryShield||consecutiveMatches>=1)?2:((veryStrong&&antiMatchStreak<8)?1:(idleTradeTicks>=12?1:2)));
-  if(lastEpoch!==lastStabilityEpoch){
-    lastStabilityEpoch=lastEpoch;
-    if(stableDigit===best.digit)stableTicks++;
-    else{stableDigit=best.digit;stableTicks=1}
-  }
-
-  const checks={
-    memory:memoryReady,
-    allowedMin:best===allowedRows[0],
-    noRepeat:lastBoughtDigit==null||Number(best.digit)!==Number(lastBoughtDigit),
-    risk:best.combined<=maxRisk,
-    neural:best.calibratedNeural<=maxNeural,
-    neuralRank:best.neuralRank<=maxNeuralRank,
-    consensus:best.consensus3>=minConsensus3,
-    coreCold:best.coreCold>=minCoreCold,
-    coreHot:best.coreHot<=maxCoreHot,
-    structuralHeat:best.structHot<=maxStructHot,
-    hot:best.hot<=maxHot,
-    cold:best.cold>=minCold,
-    context:best.context<=maxContext,
-    structure:structureRisk<=maxStructure,
-    gap:gap>=minGap,
-    stable:stableTicks>=stableNeed
-  };
-
-  const normalOk=Object.values(checks).every(Boolean);
-  const safeFallback=
-    idleTradeTicks>=30 &&
-    memoryReady &&
-    (lastBoughtDigit==null||Number(best.digit)!==Number(lastBoughtDigit)) &&
-    best.combined<=(finalLeg?.104:.108) &&
-    best.calibratedNeural<=(finalLeg?.092:.096) &&
-    best.consensus3>=4 &&
-    best.coreCold>=1 &&
-    best.coreHot===0 &&
-    best.structHot===0 &&
-    best.context<=(finalLeg?.101:.108) &&
-    structureRisk<=(finalLeg?.110:.116);
-
-  const ok=normalOk||safeFallback;
 
   return {
-    best,rows,gap,mr,ok,stableNeed,checks,
-    thresholds:{maxRisk,maxNeural,maxNeuralRank,maxStructHot,maxHot,minCold,minGap,maxContext,maxStructure,minConsensus3,minCoreCold,maxCoreHot},
-    structureRisk,streakPhase,freezePhase,noFreezePhase,finalLegPhase,remainingToTarget,consecutiveMatches,targetRecoveryShield,idleTradeTicks,safeFallback,antiMatchStreak,bestAntiMatchStreak,
-    cadenceWait:currentCadenceWait,cadenceStep,ticksIntoCadence,lastBoughtDigit
+    best,
+    rows:[...rows].sort((x,y)=>x.score-y.score||x.neural-y.neural),
+    ok,
+    gap,
+    mr,
+    strategyId:'hybrid_k2_s0.105_h1_ctx3_nr',
+    remainingToTarget:Math.max(0,TARGET-sessionPnl),
+    cadenceWait:currentCadenceWait,
+    cadenceStep,
+    ticksIntoCadence,
+    lastBoughtDigit,
+    idleTradeTicks
   };
 }
 function renderDecision(){
@@ -718,35 +487,32 @@ function renderDecision(){
   currentDecision=d;
   if(!d){
     $('bestDigit').textContent='DIFFER –';
-    $('signalMeta').textContent='Recolectando contexto…';
+    $('signalMeta').textContent='Cargando modelo/contexto…';
     return null;
   }
 
   $('bestDigit').textContent='DIFFER '+d.best.digit;
-  $('riskView').textContent=pct(d.best.combined);
-  $('riskMeta').textContent='neural #'+d.best.neuralRank+' '+pct(d.best.calibratedNeural)+' · consenso '+d.best.consensus3+'/8 · core '+d.best.coreCold+'/4 · hot '+d.best.coreHot;
-  const failed=d.checks?Object.entries(d.checks).filter(([,v])=>!v).map(([k])=>k).join(','):'';
+  $('riskView').textContent=pct(d.best.score);
+  $('riskMeta').textContent=
+    'FORWARD STREAK · neural #'+d.best.neuralRank+
+    ' '+pct(d.best.neural)+
+    ' · hybrid '+pct(d.best.score)+
+    ' · hot '+d.best.structHot;
+
   $('signalMeta').textContent=
-    (d.ok?'ULTRA-LOW LISTO':'ESPERAR')+
-    ' · #1 absoluto D'+d.best.digit+
-    ' · riesgo '+pct(d.best.combined)+
-    ' · gap '+pct(d.gap)+
-    ' · MATCH real '+(d.mr==null?'–':pct(d.mr))+
-    ' · racha '+antiMatchStreak+' · '+d.streakPhase+
-    ' · faltan $'+d.remainingToTarget.toFixed(2)+' · '+d.finalLegPhase+
-    ' · idle '+d.idleTradeTicks+' · '+d.freezePhase+' · '+d.noFreezePhase+
-    (d.safeFallback?' · SAFE FALLBACK':'')+
-    ' · cadena dinámica paso '+d.cadenceStep+' · espera '+d.ticksIntoCadence+'/'+d.cadenceWait+
-    (d.lastBoughtDigit==null?'':' · bloqueado D'+d.lastBoughtDigit)+
-    ' · estabilidad '+stableTicks+'/'+d.stableNeed+
-    (failed?' · falta '+failed:'');
+    (d.ok?'LISTO':'ESPERAR')+
+    ' · '+d.strategyId+
+    ' · racha '+antiMatchStreak+
+    ' · faltan $'+d.remainingToTarget.toFixed(2)+
+    ' · cadena '+d.cadenceStep+
+    ' espera '+d.ticksIntoCadence+'/'+d.cadenceWait+
+    (d.lastBoughtDigit==null?'':' · bloqueado D'+d.lastBoughtDigit);
 
   $('ranking').innerHTML=d.rows.map((x,i)=>
-    '<span class="chip '+(i===0?'best':'')+'">D'+x.digit+' '+pct(x.combined)+' N#'+x.neuralRank+'</span>'
+    '<span class="chip '+(x.digit===d.best.digit?'best':'')+'">D'+x.digit+' '+pct(x.score)+' N#'+x.neuralRank+'</span>'
   ).join('');
   return d;
 }
-
 function syncAuto(){
   const online=!!tradeSocket&&tradeSocket.readyState===WebSocket.OPEN;
   const live=autoWanted&&online&&!sessionStopped;
@@ -777,18 +543,10 @@ function sendTrade(payload){
 function requestProposal(decision){
   if(!canTrade()||pending||activeContract||!decision?.ok)return false;
 
-  // REVALIDACIÓN FINAL: el candidato debe seguir siendo el mismo #1
-  // y conservar consenso fuerte justo antes de pedir la propuesta.
+  // Revalidación inmediata con la MISMA estrategia forward.
   const confirm=analyze();
   if(!confirm?.ok || Number(confirm.best.digit)!==Number(decision.best.digit)){
-    log('CANCEL BUY · candidato cambió en revalidación');
-    return false;
-  }
-  const needConsensus=
-    confirm.idleTradeTicks>=18?4:
-    ((confirm.finalLegPhase!=='OFF'||confirm.targetRecoveryShield||confirm.consecutiveMatches>=1)?6:4);
-  if(Number(confirm.best.consensus3||0)<needConsensus || Number(confirm.best.coreHot||0)>0){
-    log('CANCEL BUY · consenso final insuficiente D'+confirm.best.digit+' '+confirm.best.consensus3+'/8 · coreHot '+confirm.best.coreHot);
+    log('CANCEL BUY · señal forward cambió');
     return false;
   }
 
@@ -808,14 +566,15 @@ function requestProposal(decision){
       neural:decision.best.neural,
       calibratedNeural:decision.best.calibratedNeural,
       neuralRank:decision.best.neuralRank,
-      cold:decision.best.cold,
-      hot:decision.best.hot,
-      structHot:decision.best.structHot,
+      cold:0,
+      hot:Number(decision.best.structHot||0),
+      structHot:Number(decision.best.structHot||0),
       last1:seq[seq.length-1],
       last2:seq[seq.length-2],
       last3:seq[seq.length-3],
       cadenceWait:currentCadenceWait,
       cadenceStep,
+      cadenceTail:seq.slice(-6),
       previousBarrier:lastBoughtDigit,
       noFreezePhase:decision.noFreezePhase,
       epoch:lastEpoch
