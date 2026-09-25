@@ -103,7 +103,7 @@ button:disabled{opacity:.45;cursor:not-allowed}
 <script>
 'use strict';
 
-const BUILD='CLEAN-1.9-MULTI-CONSENSUS';
+const BUILD='CLEAN-1.10-NO-FREEZE-GUARD';
 const CADENCE_MIN=1,CADENCE_MAX=3;
 const SYMBOL='R_75';
 const TARGET=10;
@@ -585,7 +585,7 @@ function analyze(){
   let finalLegPhase='OFF';
   if(finalLeg){
     finalLegPhase='FINAL LEG';
-    freezePhase='FINAL LEG · NO RELAX';
+    freezePhase='FINAL LEG · PROTECT';
     maxRisk=Math.min(maxRisk,.100);
     maxNeural=Math.min(maxNeural,.087);
     maxNeuralRank=1;
@@ -620,6 +620,41 @@ function analyze(){
     maxCoreHot=0;
   }
 
+  // NO-FREEZE GUARD: incluso en FINAL LEG hay una salida gradual.
+  // Nunca relaja coreHot ni structHot: solo frecuencia/consenso secundario.
+  let noFreezePhase='NORMAL';
+  if(idleTradeTicks>=26){
+    noFreezePhase='ACTIVE 26+';
+    maxRisk=Math.max(maxRisk,.105);
+    maxNeural=Math.max(maxNeural,.093);
+    maxNeuralRank=Math.max(maxNeuralRank,2);
+    maxHot=Math.max(maxHot,3);
+    minCold=Math.min(minCold,1);
+    minGap=Math.min(minGap,.00010);
+    maxContext=Math.max(maxContext,.103);
+    maxStructure=Math.max(maxStructure,.112);
+    minConsensus3=Math.min(minConsensus3,4);
+    minCoreCold=Math.min(minCoreCold,1);
+  }else if(idleTradeTicks>=18){
+    noFreezePhase='ACTIVE 18+';
+    maxRisk=Math.max(maxRisk,.103);
+    maxNeural=Math.max(maxNeural,.091);
+    maxNeuralRank=Math.max(maxNeuralRank,2);
+    maxHot=Math.max(maxHot,2);
+    minCold=Math.min(minCold,2);
+    minGap=Math.min(minGap,.00025);
+    maxContext=Math.max(maxContext,.100);
+    maxStructure=Math.max(maxStructure,.109);
+    minConsensus3=Math.min(minConsensus3,4);
+    minCoreCold=Math.min(minCoreCold,2);
+  }else if(idleTradeTicks>=10){
+    noFreezePhase='ACTIVE 10+';
+    maxHot=Math.max(maxHot,2);
+    minGap=Math.min(minGap,.00050);
+    minConsensus3=Math.min(minConsensus3,5);
+    minCoreCold=Math.min(minCoreCold,2);
+  }
+
   const structureRisk=Math.max(best.t2,best.t3,best.off);
   const veryStrong=
     best.combined<=.097 &&
@@ -629,7 +664,7 @@ function analyze(){
     best.cold>=3 &&
     gap>=.0008;
 
-  const stableNeed=(finalLeg||targetRecoveryShield||consecutiveMatches>=1)?2:((veryStrong&&antiMatchStreak<8)?1:(idleTradeTicks>=12?1:2));
+  const stableNeed=idleTradeTicks>=16?1:((finalLeg||targetRecoveryShield||consecutiveMatches>=1)?2:((veryStrong&&antiMatchStreak<8)?1:(idleTradeTicks>=12?1:2)));
   if(lastEpoch!==lastStabilityEpoch){
     lastStabilityEpoch=lastEpoch;
     if(stableDigit===best.digit)stableTicks++;
@@ -657,27 +692,24 @@ function analyze(){
 
   const normalOk=Object.values(checks).every(Boolean);
   const safeFallback=
-    !finalLeg &&
-    !targetRecoveryShield &&
-    consecutiveMatches===0 &&
-    idleTradeTicks>=28 &&
+    idleTradeTicks>=30 &&
     memoryReady &&
     (lastBoughtDigit==null||Number(best.digit)!==Number(lastBoughtDigit)) &&
-    best.combined<=.108 &&
-    best.calibratedNeural<=.096 &&
+    best.combined<=(finalLeg?.104:.108) &&
+    best.calibratedNeural<=(finalLeg?.092:.096) &&
     best.consensus3>=4 &&
     best.coreCold>=1 &&
     best.coreHot===0 &&
     best.structHot===0 &&
-    best.context<=.108 &&
-    structureRisk<=.116;
+    best.context<=(finalLeg?.101:.108) &&
+    structureRisk<=(finalLeg?.110:.116);
 
   const ok=normalOk||safeFallback;
 
   return {
     best,rows,gap,mr,ok,stableNeed,checks,
     thresholds:{maxRisk,maxNeural,maxNeuralRank,maxStructHot,maxHot,minCold,minGap,maxContext,maxStructure,minConsensus3,minCoreCold,maxCoreHot},
-    structureRisk,streakPhase,freezePhase,finalLegPhase,remainingToTarget,consecutiveMatches,targetRecoveryShield,idleTradeTicks,safeFallback,antiMatchStreak,bestAntiMatchStreak,
+    structureRisk,streakPhase,freezePhase,noFreezePhase,finalLegPhase,remainingToTarget,consecutiveMatches,targetRecoveryShield,idleTradeTicks,safeFallback,antiMatchStreak,bestAntiMatchStreak,
     cadenceWait:currentCadenceWait,cadenceStep,ticksIntoCadence,lastBoughtDigit
   };
 }
@@ -702,7 +734,7 @@ function renderDecision(){
     ' · MATCH real '+(d.mr==null?'–':pct(d.mr))+
     ' · racha '+antiMatchStreak+' · '+d.streakPhase+
     ' · faltan $'+d.remainingToTarget.toFixed(2)+' · '+d.finalLegPhase+
-    ' · idle '+d.idleTradeTicks+' · '+d.freezePhase+
+    ' · idle '+d.idleTradeTicks+' · '+d.freezePhase+' · '+d.noFreezePhase+
     (d.safeFallback?' · SAFE FALLBACK':'')+
     ' · cadena dinámica paso '+d.cadenceStep+' · espera '+d.ticksIntoCadence+'/'+d.cadenceWait+
     (d.lastBoughtDigit==null?'':' · bloqueado D'+d.lastBoughtDigit)+
@@ -752,7 +784,9 @@ function requestProposal(decision){
     log('CANCEL BUY · candidato cambió en revalidación');
     return false;
   }
-  const needConsensus=(confirm.finalLegPhase!=='OFF'||confirm.targetRecoveryShield||confirm.consecutiveMatches>=1)?6:4;
+  const needConsensus=
+    confirm.idleTradeTicks>=18?4:
+    ((confirm.finalLegPhase!=='OFF'||confirm.targetRecoveryShield||confirm.consecutiveMatches>=1)?6:4);
   if(Number(confirm.best.consensus3||0)<needConsensus || Number(confirm.best.coreHot||0)>0){
     log('CANCEL BUY · consenso final insuficiente D'+confirm.best.digit+' '+confirm.best.consensus3+'/8 · coreHot '+confirm.best.coreHot);
     return false;
@@ -783,6 +817,7 @@ function requestProposal(decision){
       cadenceWait:currentCadenceWait,
       cadenceStep,
       previousBarrier:lastBoughtDigit,
+      noFreezePhase:decision.noFreezePhase,
       epoch:lastEpoch
     }
   };
