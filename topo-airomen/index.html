@@ -31,7 +31,7 @@ button:disabled{opacity:.55;cursor:not-allowed}.formgrid{display:grid;grid-templ
 <div class="grid">
  <div class="card"><div class="lab">V2 ECONOMIC ENSEMBLE</div><div id="v2Rate" class="big cyan">–</div><div id="v2Meta" class="mini">Esperando laboratorio V2</div><span id="v2Status" class="badge">WAITING</span></div>
  <div class="card"><div class="lab">V2 SHADOW / DRAWDOWN</div><div id="v2Pnl" class="big">–</div><div id="v2Risk" class="mini">Sin datos</div></div>
- <div class="card"><div class="lab">POLÍTICA DE SESIÓN</div><div id="sessionPolicy" class="big vio">–</div><div id="policyMeta" class="mini">Se congela hasta reiniciar la sesión</div></div>
+ <div class="card"><div class="lab">POLÍTICA DE SESIÓN</div><div id="sessionPolicy" class="big vio">–</div><div id="policyMeta" class="mini">TOPO sigue aprendiendo en paralelo</div></div>
 </div>
 <div class="grid">
  <div class="card"><div class="lab">+20 SESSION LAB</div><div id="sessionLabTarget" class="big cyan">–</div><div id="sessionLabMeta" class="mini">Bootstrap forward pendiente</div></div>
@@ -47,11 +47,6 @@ button:disabled{opacity:.55;cursor:not-allowed}.formgrid{display:grid;grid-templ
  <div class="card"><div class="lab">V4 BATCH-5 LAB</div><div id="v4Policy" class="big cyan">COLLECTING</div><div id="v4Meta" class="mini">4 etapas de +$5 · bloques de 5</div></div>
  <div class="card"><div class="lab">SESIONES V4</div><div id="v4Sessions" class="big vio">0</div><div id="v4Result" class="mini">0 metas · 0 stops</div></div>
  <div class="card"><div class="lab">V4 SESIÓN ABIERTA</div><div id="v4Open" class="big">+$0.00</div><div id="v4OpenMeta" class="mini">Etapa 1/4 · 0/5 compras</div></div>
-</div>
-<div class="grid">
- <div class="card"><div class="lab">VALIDATION GATE</div><div id="validationStatus" class="big yellow">COLLECTING</div><div id="validationLockMeta" class="mini">Congelando estrategia…</div></div>
- <div class="card"><div class="lab">SESIONES PROSPECTIVAS</div><div id="validationSessions" class="big cyan">0 / 50</div><div id="validationRate" class="mini">0 metas · 0 stops · Wilson –</div></div>
- <div class="card"><div class="lab">P&L VALIDACIÓN</div><div id="validationPnl" class="big">+$0.00</div><div id="validationBlocks" class="mini">Bloques temporales pendientes</div></div>
 </div>
 <div class="card signalbox">
  <div class="lab">NEXT DIGIT AVOID-MATCH SCANNER · 0–9</div>
@@ -171,62 +166,13 @@ async function load(){
  }catch(e){$('decision').textContent='MEMORY WAITING'}
 }
 
-let derivSocket=null,derivDemoAccount=null,publicSocket=null,liveModel=null,liveEnsemble=null,latestLiveModel=null,latestLiveEnsemble=null,validationEnsemble=null,validationLock=null,liveSeq=[],livePip=4,liveBarrier=null,liveBarrierProb=null,liveRuleId='neural_argmin',autoDemo=false,pendingTrade=false,activeContractId=null,tradeReq=5000,lastProposalReq=null,lastSignalEpoch=0;
+let derivSocket=null,derivDemoAccount=null,publicSocket=null,liveModel=null,liveEnsemble=null,latestLiveModel=null,latestLiveEnsemble=null,liveSeq=[],livePip=4,liveBarrier=null,liveBarrierProb=null,liveRuleId='neural_argmin',autoDemo=false,pendingTrade=false,activeContractId=null,tradeReq=5000,lastProposalReq=null,lastSignalEpoch=0;
 let latestPublicTickEpoch=0,latestPublicTickDigit=null,latestPublicTickQuote=null;
-const VALIDATION_STORAGE='topo_airomen_validation_v1';
-let sessionTradeCount=0,sessionEquityPeak=0,sessionMaxDrawdown=0,validationRecorded=false;
 let researchPolicy={source:'v1',rule:'neural_argmin',mode:'RESEARCH_DEMO'},sessionPolicy={source:'v1',rule:'neural_argmin',mode:'RESEARCH_DEMO'},currentBreakEven=.9174311926605504;
 let activeMoneyPolicy={promoted:false,compound_fraction:1,pause_after_match:0,batch_size:5,stage_size:5};
 const SESSION_TARGET=20;
 let sessionPnl=0,sessionWins=0,sessionLosses=0,currentStake=1,sessionStopped=false,lastSettledContractId=null;
 let sessionBatchTrades=0,sessionBatchWins=0,sessionStage=1,sessionPauseLeft=0;
-function validationHistory(){
- try{return JSON.parse(localStorage.getItem(VALIDATION_STORAGE)||'[]')}catch(_){return []}
-}
-function saveValidationHistory(a){
- try{localStorage.setItem(VALIDATION_STORAGE,JSON.stringify(a.slice(-500)))}catch(_){}
-}
-function wilsonLower(w,n,z=1.96){
- if(!n)return 0;
- const p=w/n,q=1+z*z/n;
- return Math.max(0,(p+z*z/(2*n)-z*Math.sqrt((p*(1-p)+z*z/(4*n))/n))/q);
-}
-function validationSignature(){
- if(!validationLock)return null;
- return [validationLock.ensemble_id,validationLock.rule,Number(validationLock.target||20).toFixed(2),Number(validationLock.stop_loss||5).toFixed(2)].join('|');
-}
-function recordValidationSession(outcome){
- if(validationRecorded||!validationLock)return;
- const sig=validationSignature();if(!sig)return;
- const a=validationHistory();
- a.push({
-   ts:Date.now(),signature:sig,ensemble_id:validationLock.ensemble_id,rule:validationLock.rule,
-   outcome,pnl:Number(sessionPnl),trades:sessionTradeCount,wins:sessionWins,losses:sessionLosses,
-   max_drawdown:Number(sessionMaxDrawdown),target:Number(validationLock.target||20),stop_loss:Number(validationLock.stop_loss||5)
- });
- saveValidationHistory(a);validationRecorded=true;renderValidationGate();
-}
-function renderValidationGate(){
- const sig=validationSignature(),all=validationHistory(),rows=sig?all.filter(x=>x.signature===sig):[];
- const n=rows.length,w=rows.filter(x=>x.outcome==='TARGET').length,stops=rows.filter(x=>x.outcome==='STOP').length;
- const rate=n?w/n:0,lower=wilsonLower(w,n),pnl=rows.reduce((z,x)=>z+Number(x.pnl||0),0);
- const min=Number(validationLock?.minimum_sessions||50),be=Number(validationLock?.session_break_even_rate||.20);
- const blocks=[[],[],[]];
- rows.forEach((x,i)=>blocks[Math.min(2,Math.floor(i*3/Math.max(1,n)))].push(x));
- const bp=blocks.map(b=>b.reduce((z,x)=>z+Number(x.pnl||0),0));
- const blockStable=n>=min&&blocks.every(b=>b.length>0)&&bp.every(x=>x>0);
- let status='COLLECTING';
- if(n>=min)status=(lower>be&&pnl>0&&blockStable)?'VALIDATED':'NOT VALIDATED';
- else if(n>=20)status='PROVISIONAL';
- $('validationStatus').textContent=status;
- $('validationStatus').className='big '+(status==='VALIDATED'?'green':status==='NOT VALIDATED'?'red':'yellow');
- $('validationSessions').textContent=n+' / '+min;
- $('validationRate').textContent=w+' metas · '+stops+' stops · éxito '+pct(rate)+' · Wilson '+pct(lower)+' > '+pct(be)+' requerido';
- $('validationPnl').textContent=(pnl>=0?'+':'')+'$'+pnl.toFixed(2);
- $('validationPnl').className='big '+(pnl>=0?'green':'red');
- $('validationBlocks').textContent=n?('bloques P&L '+bp.map(x=>(x>=0?'+':'')+x.toFixed(2)).join(' · ')):'Bloques temporales pendientes';
- $('validationLockMeta').textContent=validationLock?('LOCK '+validationLock.ensemble_id+' · '+validationLock.rule+' · desde ahora, sin backfill'):'Esperando lock';
-}
 function trace(msg,good=false){
  const el=$('tradeTrace'); if(!el)return;
  el.textContent='TRACE: '+msg; el.style.color=good?'#6affb6':'#8ca4c8';
@@ -244,18 +190,12 @@ function renderProfitSession(){
 }
 function resetProfitSession(){
  sessionPnl=0;sessionWins=0;sessionLosses=0;sessionStopped=false;
- sessionTradeCount=0;sessionEquityPeak=0;sessionMaxDrawdown=0;validationRecorded=false;
- if(validationLock&&$('sessionStopLoss')){
-   $('sessionStopLoss').value=Number(validationLock.stop_loss||5).toFixed(2);
-   $('sessionStopLoss').disabled=true;
- }
  currentStake=baseStake();lastSettledContractId=null;
- sessionPolicy={source:'validation',rule:(validationLock?.rule||'agree2_margin002_tickclose'),mode:'VALIDATION_DEMO',candidate_id:(validationLock?.ensemble_id||latestLiveEnsemble?.ensemble_id||'–')};
+ sessionPolicy={source:'v3',rule:'avoid_match_min_probability',mode:'RESEARCH_DEMO',candidate_id:(latestLiveEnsemble?.ensemble_id||researchPolicy.candidate_id||'–')};
  activeMoneyPolicy=researchPolicy.money_policy?{...researchPolicy.money_policy}:{promoted:false,compound_fraction:1,pause_after_match:0,batch_size:5,stage_size:5};
  sessionBatchTrades=0;sessionBatchWins=0;sessionStage=1;sessionPauseLeft=0;
  if(latestLiveModel)liveModel=latestLiveModel;
- if(validationEnsemble)liveEnsemble=validationEnsemble;
- else if(latestLiveEnsemble)liveEnsemble=latestLiveEnsemble;
+ if(latestLiveEnsemble)liveEnsemble=latestLiveEnsemble;
  liveRuleId='avoid_match_min_probability';
  $('sessionPolicy').textContent='V3 · AVOID MATCH';
  $('policyMeta').textContent='RESEARCH_DEMO · ensemble '+(sessionPolicy.candidate_id||'–')+' · '+(activeMoneyPolicy.promoted?('V4 '+activeMoneyPolicy.policy+' congelada'):'money policy actual · V4 aún en investigación');
@@ -264,9 +204,6 @@ function resetProfitSession(){
 }
 function applyProfitLadder(profit){
  sessionPnl+=profit;
- sessionTradeCount++;
- sessionEquityPeak=Math.max(sessionEquityPeak,sessionPnl);
- sessionMaxDrawdown=Math.max(sessionMaxDrawdown,sessionEquityPeak-sessionPnl);
  if(profit>=0){
    sessionWins++;
    const frac=activeMoneyPolicy.promoted?Number(activeMoneyPolicy.compound_fraction??0):1;
@@ -293,15 +230,13 @@ function applyProfitLadder(profit){
  }
  renderProfitSession();
  if(sessionPnl>=SESSION_TARGET){
-   recordValidationSession('TARGET');
    sessionStopped=true;autoDemo=false;syncAutoDemoUI();
    $('autoDemoState').textContent='META ALCANZADA: +$'+sessionPnl.toFixed(2)+' netos · AUTO-DEMO detenido.';
-   trace('OBJETIVO +$20 NETOS ALCANZADO · sesión registrada en VALIDATION GATE',true);
+   trace('OBJETIVO +$20 NETOS ALCANZADO · sesión detenida',true);
  }else if(sessionPnl<=-sessionStopLoss()){
-   recordValidationSession('STOP');
    sessionStopped=true;autoDemo=false;syncAutoDemoUI();
    $('autoDemoState').textContent='STOP-LOSS DE SESIÓN alcanzado: $'+sessionPnl.toFixed(2)+' · sesión detenida.';
-   trace('STOP-LOSS -$'+sessionStopLoss().toFixed(2)+' · sesión registrada en VALIDATION GATE');
+   trace('STOP-LOSS -$'+sessionStopLoss().toFixed(2)+' ALCANZADO · no perseguir pérdidas');
  }
 }
 function syncAutoDemoUI(){
@@ -620,20 +555,14 @@ function maybeAutoBuy(signalOk,tickEpoch=Date.now()){
 async function loadLiveModel(){
  try{
   const base='https://raw.githubusercontent.com/quispillocharly-gif/Ia-bot-2.0/main/topo-airomen/memory/';
-  const [a,b,c,d]=await Promise.all([
+  const [a,b]=await Promise.all([
    fetch(base+'differ_live_model.json?t='+Date.now(),{cache:'no-store'}),
-   fetch(base+'differ_live_ensemble.json?t='+Date.now(),{cache:'no-store'}),
-   fetch(base+'differ_validation_ensemble.json?t='+Date.now(),{cache:'no-store'}),
-   fetch(base+'differ_validation_lock.json?t='+Date.now(),{cache:'no-store'})
+   fetch(base+'differ_live_ensemble.json?t='+Date.now(),{cache:'no-store'})
   ]);
   if(a.ok)latestLiveModel=await a.json();
   if(b.ok)latestLiveEnsemble=await b.json();
-  if(c.ok)validationEnsemble=await c.json();
-  if(d.ok)validationLock=await d.json();
   if(!liveModel&&latestLiveModel)liveModel=latestLiveModel;
-  if(validationEnsemble)liveEnsemble=validationEnsemble;
-  else if(!liveEnsemble&&latestLiveEnsemble)liveEnsemble=latestLiveEnsemble;
-  renderValidationGate();
+  if(!liveEnsemble&&latestLiveEnsemble)liveEnsemble=latestLiveEnsemble;
   renderLiveDecision();
  }catch(_){}
 }
@@ -672,7 +601,7 @@ $('sessionStopLoss').addEventListener('change',()=>{renderProfitSession()});
 $('derivConnect').onclick=connectDerivDemo;
 
 async function bootstrap(){
- await load();await loadLiveModel();renderValidationGate();resetProfitSession();startPublicDiffer();
+ await load();await loadLiveModel();resetProfitSession();startPublicDiffer();
  setInterval(()=>{load();loadLiveModel()},30000);
 }
 bootstrap();
