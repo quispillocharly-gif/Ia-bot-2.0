@@ -13,6 +13,7 @@ OUT=M/"differ_strategy_search_latest.json"
 
 MAX_EXAMPLES=5000
 MIN_HISTORY=220
+CAMPAIGN_WINS=21
 MIN_SIGNAL_RATE=.30
 MAX_IDLE_TICKS=18
 CADENCE_MODES=['ctx3','ctx4','ctx3_nr','ctx4_nr','ctx5_nr']
@@ -98,6 +99,7 @@ def metrics(outcomes,opportunities):
     s5,p5=survival(5)
     s10,p10=survival(10)
     s20,p20=survival(20)
+    s21,p21=survival(CAMPAIGN_WINS)
     s30,p30=survival(30)
     s50,p50=survival(50)
     pm1=None
@@ -117,6 +119,7 @@ def metrics(outcomes,opportunities):
         "survival_5":s5,
         "survival_10":s10,
         "survival_20":s20,
+        "survival_21":s21,
         "survival_30":s30,
         "survival_50":s50,
         "post_match_survival_5":post_match_survival(5),
@@ -126,6 +129,7 @@ def metrics(outcomes,opportunities):
         "perfect_windows_5":p5,
         "perfect_windows_10":p10,
         "perfect_windows_20":p20,
+        "perfect_windows_21":p21,
         "perfect_windows_30":p30,
         "perfect_windows_50":p50,
         "perfect_windows_100":perfect_windows(outcomes,100),
@@ -158,12 +162,15 @@ def strategy_grid():
                     "min_consensus":cons
                 })
     expanded=[]
+    trigger_modes=["any","uniform","no_repeat","gap3","gap5","balanced_gap"]
     for cfg in out:
         for mode in CADENCE_MODES:
-            z=dict(cfg)
-            z["cadence_mode"]=mode
-            z["id"]=cfg["id"]+"_"+mode
-            expanded.append(z)
+            for trigger in trigger_modes:
+                z=dict(cfg)
+                z["cadence_mode"]=mode
+                z["trigger_mode"]=trigger
+                z["id"]=cfg["id"]+"_"+mode+"_trg-"+trigger
+                expanded.append(z)
     return expanded
 
 def choose(cfg,ex,blocked=None):
@@ -222,10 +229,25 @@ def choose(cfg,ex,blocked=None):
 
     return None
 
+def campaign_trigger(ex,mode):
+    if mode=="any":return True
+    rep=float(ex.get("repeat20",0.0))
+    mx=float(ex.get("maxshare20",.1))
+    gap=int(ex.get("last_gap",1))
+    if mode=="uniform":return rep<=.10 and mx<=.20
+    if mode=="no_repeat":return rep<=.05
+    if mode=="gap3":return gap>=3
+    if mode=="gap5":return gap>=5
+    if mode=="balanced_gap":return rep<=.10 and mx<=.20 and gap>=3
+    return True
+
 def eval_strategy(cfg,examples):
     out=[]
     last_barrier=None
     ticks_waited=0
+    campaign_active=False
+    campaign_left=0
+    trigger_mode=cfg.get("trigger_mode","any")
     emitted=0
     mode=cfg.get("cadence_mode","ctx3_nr")
     prev_wait=0
@@ -239,12 +261,23 @@ def eval_strategy(cfg,examples):
         max_idle=max(max_idle,idle)
         if ticks_waited<current_wait:
             continue
-        d=choose(cfg,ex,last_barrier)
+        if not campaign_active:
+            if not campaign_trigger(ex,trigger_mode):
+                continue
+            campaign_active=True
+            campaign_left=CAMPAIGN_WINS
+
+        d=choose(cfg,ex,None)
         if d is None:
             continue
-        out.append(int(int(ex["target"])!=d))
+        outcome=int(int(ex["target"])!=d)
+        out.append(outcome)
         emitted+=1
         last_barrier=d
+        campaign_left-=1
+        if outcome==0 or campaign_left<=0:
+            campaign_active=False
+            campaign_left=0
         chain.append(current_wait)
         prev_wait=current_wait
         current_wait=cadence_wait(mode,ex,emitted,last_barrier,prev_wait)
@@ -253,7 +286,9 @@ def eval_strategy(cfg,examples):
     m=metrics(out,len(examples))
     m["cadence_mode"]=mode
     m["cadence_preview"]=chain[:30]
-    m["no_repeat_digit"]=True
+    m["no_repeat_digit"]=False
+    m["campaign_wins_target"]=CAMPAIGN_WINS
+    m["trigger_mode"]=trigger_mode
     m["signals_emitted"]=emitted
     m["max_idle_ticks"]=int(max_idle)
     m["frequency_ok"]=bool((m["signal_rate"] or 0)>=MIN_SIGNAL_RATE and max_idle<=MAX_IDLE_TICKS)
@@ -288,6 +323,17 @@ def main():
         full=np.full(10,.10,dtype=float)
         for j,c in enumerate(classes):full[c]=float(pred[k,j])
         hist=digits[:i].tolist()
+        tail20=[int(x) for x in hist[-20:]]
+        counts20=np.bincount(np.asarray(tail20,dtype=np.int16),minlength=10) if tail20 else np.zeros(10,dtype=int)
+        repeat20=(sum(1 for q in range(1,len(tail20)) if tail20[q]==tail20[q-1])/(len(tail20)-1)) if len(tail20)>1 else 0.0
+        maxshare20=(int(counts20.max())/len(tail20)) if tail20 else .1
+        last=int(hist[-1]) if hist else -1
+        last_gap=1
+        if last>=0:
+            for back in range(2,min(len(hist),60)+1):
+                if int(hist[-back])==last:
+                    last_gap=back-1;break
+            else:last_gap=min(len(hist),60)
         examples.append({
             "epoch":int(epochs[i]),"target":int(digits[i]),"neural":full,
             "tail":[int(x) for x in hist[-6:]],
@@ -295,6 +341,9 @@ def main():
             "t1":trans_probs(hist,1,1000),
             "t2":trans_probs(hist,2,1200),
             "t3":trans_probs(hist,3,1500),
+            "repeat20":repeat20,
+            "maxshare20":maxshare20,
+            "last_gap":last_gap
         })
 
     n=len(examples); a=int(n*.50); b=int(n*.75)
@@ -305,24 +354,25 @@ def main():
     for cfg in grid:
         m,_=eval_strategy(cfg,discovery)
         if m["signals"]<50 or not m.get("frequency_ok"):continue
-        ranked.append((m["survival_10"] or 0,m["survival_20"] or 0,m["longest_anti_match_streak"],m["wilson_lower"],m["hit_rate"] or 0,m["signal_rate"] or 0,m["signals"],cfg,m))
-    ranked.sort(reverse=True,key=lambda x:(x[0],x[1],x[2],x[3],x[4],x[5],x[6]))
-    top=[x[7] for x in ranked[:60]]
+        ranked.append((m["survival_21"] or 0,m["perfect_windows_21"],m["survival_10"] or 0,m["longest_anti_match_streak"],m["wilson_lower"],m["hit_rate"] or 0,m["signal_rate"] or 0,m["signals"],cfg,m))
+    ranked.sort(reverse=True,key=lambda x:(x[0],x[1],x[2],x[3],x[4],x[5],x[6],x[7]))
+    top=[x[8] for x in ranked[:90]]
 
     validated=[]
     for cfg in top:
         md,_=eval_strategy(cfg,discovery)
         mv,_=eval_strategy(cfg,validation)
         if mv["signals"]<40 or not mv.get("frequency_ok"):continue
+        stable_s21=min(md["survival_21"] or 0,mv["survival_21"] or 0)
+        stable_p21=min(md["perfect_windows_21"],mv["perfect_windows_21"])
         stable_s10=min(md["survival_10"] or 0,mv["survival_10"] or 0)
-        stable_s20=min(md["survival_20"] or 0,mv["survival_20"] or 0)
         stable_streak=min(md["longest_anti_match_streak"],mv["longest_anti_match_streak"])
-        validated.append((stable_s10,stable_s20,stable_streak,mv["wilson_lower"],mv["hit_rate"] or 0,mv["signal_rate"] or 0,mv["signals"],cfg,md,mv))
-    validated.sort(reverse=True,key=lambda x:(x[0],x[1],x[2],x[3],x[4],x[5],x[6]))
-    finalists=validated[:24]
+        validated.append((stable_s21,stable_p21,stable_s10,stable_streak,mv["wilson_lower"],mv["hit_rate"] or 0,mv["signal_rate"] or 0,mv["signals"],cfg,md,mv))
+    validated.sort(reverse=True,key=lambda x:(x[0],x[1],x[2],x[3],x[4],x[5],x[6],x[7]))
+    finalists=validated[:30]
 
     results=[]
-    for _,_,_,_,_,_,_,cfg,md,mv in finalists:
+    for _,_,_,_,_,_,_,_,cfg,md,mv in finalists:
         mh,oh=eval_strategy(cfg,holdout)
         perfect=bool(
             mv["signals"]>=50 and mh["signals"]>=50 and
@@ -336,10 +386,10 @@ def main():
         })
 
     results.sort(key=lambda x:(
-        x["zero_match_validation_and_holdout"],
-        min(x["validation"]["survival_10"] or 0,x["holdout"]["survival_10"] or 0),
-        min(x["validation"]["survival_20"] or 0,x["holdout"]["survival_20"] or 0),
+        min(x["validation"]["survival_21"] or 0,x["holdout"]["survival_21"] or 0),
+        min(x["validation"]["perfect_windows_21"],x["holdout"]["perfect_windows_21"]),
         min(x["validation"]["longest_anti_match_streak"],x["holdout"]["longest_anti_match_streak"]),
+        x["zero_match_validation_and_holdout"],
         x["holdout"]["wilson_lower"],
         x["holdout"]["hit_rate"] or 0
     ),reverse=True)
@@ -347,7 +397,7 @@ def main():
     perfect=[x["id"] for x in results if x["zero_match_validation_and_holdout"]]
     leader=results[0] if results else None
     out={
-        "version":"1.0-strategy-search",
+        "version":"3.0-21-win-campaign-search",
         "timestamp":int(time.time()),
         "model_id":st.get("model_id"),
         "start_epoch":start_epoch,
@@ -358,8 +408,8 @@ def main():
         "leader":leader,
         "perfect_candidates":perfect,
         "status":"PERFECT_FORWARD_CANDIDATE" if perfect else "SEARCHING",
-        "target":"Maximize survival probability for 5/10/20/30 consecutive DIFFER trades without MATCH across chronological validation and holdout, while keeping signal_rate >= 30% and max idle <= 18 ticks.",
-        "note":"ZERO-MATCH SEEK also measures whether starting immediately after a shadow MATCH improves 5/10/20-trade survival; this tests session synchronization instead of assuming it helps."
+        "target":"Find a start trigger + DIFFER strategy that repeatedly survives at least 21 consecutive trades without MATCH, the streak required to turn $1 into more than +$5 net at a 1.09 payout.",
+        "note":"The lab searches entry synchronization plus digit selection. It requires repeated perfect 21-trade windows across chronological validation/holdout; a historical 21+ streak is evidence, not a guarantee of the next session."
     }
     OUT.write_text(json.dumps(out,indent=2)); print(json.dumps(out,indent=2))
 
