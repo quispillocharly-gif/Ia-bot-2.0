@@ -1,6 +1,12 @@
 name: TOPO AIROMEN - DIFFER Forward Lab
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "topo-airomen/differ_forward.py"
+      - ".github/workflows/topo-airomen-forward.yml"
+      - "topo-airomen/requirements-ai.txt"
   workflow_run:
     workflows: ["TOPO AIROMEN - DIFFER Neural Research"]
     types: [completed]
