@@ -36,7 +36,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add topo-airomen/memory/differ_train_latest.json topo-airomen/memory/differ_candidate.json topo-airomen/memory/differ_candidate.joblib
           git diff --cached --quiet || git commit -m "TOPO AIROMEN neural research"
-          git restore topo-airomen/ticks.json topo-airomen/audit.json
+          rm -f topo-airomen/ticks.json topo-airomen/audit.json
           for attempt in 1 2 3; do
             git pull --rebase origin main
             if git push; then break; fi
