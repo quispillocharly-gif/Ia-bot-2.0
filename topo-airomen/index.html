@@ -54,7 +54,7 @@ button:disabled{opacity:.45;cursor:not-allowed}
 </div>
 
 <div class="card signal">
- <div class="lab">ANTI-MATCH CADENCE 1→2→3 · NO REPITE DÍGITO · STREAK SHIELD</div>
+ <div class="lab">ANTI-MATCH CADENA DINÁMICA · ESPERA VARIABLE 1–3 · NO REPITE DÍGITO</div>
  <div id="bestDigit" class="digit">DIFFER –</div>
  <div id="signalMeta" class="mini">Esperando historial R_75…</div>
  <div id="ranking" class="chips"></div>
@@ -103,8 +103,8 @@ button:disabled{opacity:.45;cursor:not-allowed}
 <script>
 'use strict';
 
-const BUILD='CLEAN-1.4-CADENCE-123';
-const ENTRY_CADENCE=[1,2,3];
+const BUILD='CLEAN-1.5-DYNAMIC-CADENCE';
+const CADENCE_MIN=1,CADENCE_MAX=3;
 const SYMBOL='R_75';
 const TARGET=10;
 const HARD_MAX=6;
@@ -131,7 +131,7 @@ let sessionPnl=0,sessionWins=0,sessionMatches=0,currentStake=1;
 let antiMatchStreak=0,bestAntiMatchStreak=0;
 let currentDecision=null,stableDigit=null,stableTicks=0,lastStabilityEpoch=0;
 let recoveryTicks=0;
-let cadenceIndex=0,ticksIntoCadence=0,lastBoughtDigit=null;
+let cadenceStep=0,ticksIntoCadence=0,currentCadenceWait=1,lastCadenceWait=0,lastBoughtDigit=null;
 
 let execHistory=[];
 try{
@@ -169,6 +169,17 @@ function stopLoss(){
   return Math.max(1,Number($('stopLoss').value)||5);
 }
 
+function deriveCadenceWait(step,blocked,prevWait){
+  const tail=seq.slice(-6);
+  let h=17+(Number(step)||0)*31+(blocked==null?0:Number(blocked)*13);
+  for(let i=0;i<tail.length;i++)h=(h*33+Number(tail[i])*(i+3)+7)%9973;
+  let wait=CADENCE_MIN+(h%(CADENCE_MAX-CADENCE_MIN+1));
+  if(prevWait&&wait===prevWait){
+    wait=CADENCE_MIN+((wait-CADENCE_MIN+1)%(CADENCE_MAX-CADENCE_MIN+1));
+  }
+  return wait;
+}
+
 function renderSession(){
   $('sessionPnl').textContent=(sessionPnl>=0?'+':'')+'$'+sessionPnl.toFixed(2);
   $('sessionPnl').className='big '+(sessionPnl>=0?'green':'red');
@@ -182,7 +193,7 @@ function resetSession(){
   antiMatchStreak=0;
   currentStake=baseStake();pending=false;pendingOrder=null;
   stableDigit=null;stableTicks=0;recoveryTicks=0;
-  cadenceIndex=0;ticksIntoCadence=0;lastBoughtDigit=null;
+  cadenceStep=0;ticksIntoCadence=0;lastCadenceWait=0;currentCadenceWait=deriveCadenceWait(0,null,0);lastBoughtDigit=null;
   renderSession();
   $('contractView').textContent='–';
   $('contractView').className='big';
@@ -211,7 +222,9 @@ function applyResult(profit,snapshot){
 
   if(snapshot){
     lastBoughtDigit=Number(snapshot.barrier);
-    cadenceIndex=(cadenceIndex+1)%ENTRY_CADENCE.length;
+    cadenceStep++;
+    lastCadenceWait=currentCadenceWait;
+    currentCadenceWait=deriveCadenceWait(cadenceStep,lastBoughtDigit,lastCadenceWait);
     ticksIntoCadence=0;
     execHistory.push({
       win:profit>=0?1:0,
@@ -225,7 +238,7 @@ function applyResult(profit,snapshot){
       last2:Number(snapshot.last2??-1),
       last3:Number(snapshot.last3??-1),
       cadenceWait:Number(snapshot.cadenceWait||0),
-      cadenceIndex:Number(snapshot.cadenceIndex??0),
+      cadenceStep:Number(snapshot.cadenceStep??0),
       previousBarrier:Number(snapshot.previousBarrier??-1),
       t:Date.now()
     });
@@ -558,7 +571,7 @@ function analyze(){
     best,rows,gap,mr,ok,stableNeed,checks,
     thresholds:{maxRisk,maxNeural,maxNeuralRank,maxStructHot,maxHot,minCold,minGap,maxContext,maxStructure},
     structureRisk,streakPhase,antiMatchStreak,bestAntiMatchStreak,
-    cadenceWait:ENTRY_CADENCE[cadenceIndex],cadenceIndex,ticksIntoCadence,lastBoughtDigit
+    cadenceWait:currentCadenceWait,cadenceStep,ticksIntoCadence,lastBoughtDigit
   };
 }
 function renderDecision(){
@@ -581,7 +594,7 @@ function renderDecision(){
     ' · gap '+pct(d.gap)+
     ' · MATCH real '+(d.mr==null?'–':pct(d.mr))+
     ' · racha '+antiMatchStreak+' · '+d.streakPhase+
-    ' · cadencia '+(d.cadenceIndex+1)+'/3 espera '+d.ticksIntoCadence+'/'+d.cadenceWait+
+    ' · cadena dinámica paso '+d.cadenceStep+' · espera '+d.ticksIntoCadence+'/'+d.cadenceWait+
     (d.lastBoughtDigit==null?'':' · bloqueado D'+d.lastBoughtDigit)+
     ' · estabilidad '+stableTicks+'/'+d.stableNeed+
     (failed?' · falta '+failed:'');
@@ -638,8 +651,8 @@ function requestProposal(decision){
       last1:seq[seq.length-1],
       last2:seq[seq.length-2],
       last3:seq[seq.length-3],
-      cadenceWait:ENTRY_CADENCE[cadenceIndex],
-      cadenceIndex,
+      cadenceWait:currentCadenceWait,
+      cadenceStep,
       previousBarrier:lastBoughtDigit,
       epoch:lastEpoch
     }
@@ -885,7 +898,7 @@ function handleMarket(m){
       return;
     }
 
-    const cadenceNeed=ENTRY_CADENCE[cadenceIndex];
+    const cadenceNeed=currentCadenceWait;
     if(auto&&!sessionStopped&&!pending&&!activeContract&&ticksIntoCadence<cadenceNeed){
       log('CADENCIA '+cadenceNeed+' · esperando '+ticksIntoCadence+'/'+cadenceNeed+' ticks');
       return;
