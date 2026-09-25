@@ -9,6 +9,7 @@ OUT=M/"v6_director_latest.json"
 REG=M/"v6_registry.json"
 GRAVE=M/"v6_graveyard.json"
 BASE=.10
+PAYOUT_MAX_AGE=7200
 
 def load(path,default=None):
     try:return json.loads(path.read_text())
@@ -85,8 +86,13 @@ def main():
         confirmed_objs.append(adaptive)
 
     break_even=payout.get("max_break_even") if payout.get("status")=="OK" else None
+    payout_ts=payout.get("timestamp")
+    payout_age=max(0,int(time.time())-int(payout_ts)) if payout_ts is not None else None
+    payout_fresh=bool(break_even is not None and payout_age is not None and payout_age<=PAYOUT_MAX_AGE)
     if break_even is None:
         economic_status="PAYOUT_UNAVAILABLE"
+    elif not payout_fresh:
+        economic_status="PAYOUT_STALE"
     elif not confirmed_objs:
         economic_status="PAYOUT_READY_FORWARD_NOT_CONFIRMED"
     elif any(float(x.get("wilson_lower",0) or 0)>float(break_even) for x in confirmed_objs):
@@ -121,6 +127,8 @@ def main():
             priorities.append("V7 adaptive shadow strategy did not confirm economic edge; use its regime and calibration diagnostics only.")
     if break_even is None:
         priorities.append("Payout probe is unavailable; do not claim profitability.")
+    elif not payout_fresh:
+        priorities.append("Payout snapshot is stale; block economic confirmation until a fresh proposal snapshot is available.")
     elif not confirmed_objs:
         priorities.append(f"Current conservative MATCH break-even is {break_even:.4f}; wait for forward confirmation before economic evaluation.")
     elif economic_status!="ECONOMIC_EDGE_CANDIDATE":
@@ -148,7 +156,8 @@ def main():
         "version":"6.0-autonomous-research-director","timestamp":int(time.time()),
         "decision":decision,"forward_confirmed_systems":forward_confirmed,
         "economic_status":economic_status,"payout_status":payout.get("status","MISSING"),
-        "break_even_rate":break_even,"drift_status":drift,
+        "break_even_rate":break_even,"payout_age_seconds":payout_age,"payout_fresh":payout_fresh,
+        "payout_max_age_seconds":PAYOUT_MAX_AGE,"drift_status":drift,
         "historical_to_future_gap":gap,
         "multiple_testing":{"v4":{"tests":tests_v4,"adjusted_p":v4_adj},"v5":{"tests":tests_v5,"adjusted_p":v5_adj}},
         "forward_evidence":{"v4_1_p":v41_p,"v5_2_p":v51_p,"v6_1_p":ens_p,

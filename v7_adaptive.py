@@ -14,6 +14,7 @@ STATE=M/"v7_adaptive_state.json"
 OUT=M/"v7_adaptive_latest.json"
 PAYOUT=M/"payout_snapshot.json"
 BASE=.10
+PAYOUT_MAX_AGE=7200
 
 def wilson(w,n,z=1.96):
     if not n:return 0.0
@@ -90,17 +91,21 @@ def calibration_key(conf):
 
 def payout_map():
     try:p=json.loads(PAYOUT.read_text())
-    except Exception:return {},None
+    except Exception:return {},None,None,False
     rows={}
     for x in p.get("per_digit",[]):
         if x.get("ask_price") is not None and x.get("payout") is not None:
             rows[int(x["digit"])]=(float(x["ask_price"]),float(x["payout"]))
     be=p.get("max_break_even") if p.get("status")=="OK" else None
-    return rows,float(be) if be is not None else None
+    ts=p.get("timestamp")
+    age=max(0,int(time.time())-int(ts)) if ts is not None else None
+    fresh=bool(age is not None and age<=PAYOUT_MAX_AGE and p.get("status")=="OK" and len(rows)==10)
+    return rows,float(be) if be is not None else None,age,fresh
 
-def status_for(st,break_even):
+def status_for(st,break_even,payout_fresh=True):
     n=int(st.get("n",0)); w=int(st.get("w",0))
     if n<1000:return "COLLECTING"
+    if not payout_fresh:return "PAYOUT_STALE"
     threshold=break_even if break_even is not None else BASE
     recent=st.get("recent_outcomes",[])
     pval=float(st.get("placebo_economic_p",1.0))
@@ -118,7 +123,7 @@ def freeze_candidate(ticks):
         "history":[int(x["digit"]) for x in ticks[-1500:]],"runs":0,
         "opportunities":0,"n":0,"w":0,"skipped_confidence":0,"skipped_agreement":0,
         "shadow_pnl":0.0,"shadow_staked":0.0,"confidence_sum":0.0,"agreement_sum":0.0,
-        "brier_sum":0.0,"calibration_n":0,"calibration":{},"regimes":{},
+        "brier_sum":0.0,"multiclass_brier_sum":0.0,"calibration_n":0,"calibration":{},"regimes":{},
         "recent_outcomes":[]
     }
     STATE.write_text(json.dumps(st,indent=2)); return st
@@ -143,12 +148,12 @@ def monte_carlo(st,break_even):
 def main():
     ticks=sorted(json.loads((R/"ticks.json").read_text())["ticks"],key=lambda x:int(x["epoch"]))
     if not ticks:raise RuntimeError("No ticks")
-    pmap,break_even=payout_map()
+    pmap,break_even,payout_age,payout_fresh=payout_map()
     candmeta=json.loads(CANDMETA.read_text()) if CANDMETA.exists() else None
 
     if STATE.exists() and FROZEN.exists() and FMETA.exists():
         st=json.loads(STATE.read_text())
-        if status_for(st,break_even)=="NOT_CONFIRMED" and candmeta and candmeta.get("model_id")!=st.get("model_id"):
+        if status_for(st,break_even,payout_fresh)=="NOT_CONFIRMED" and candmeta and candmeta.get("model_id")!=st.get("model_id"):
             st=freeze_candidate(ticks)
     else:
         st=freeze_candidate(ticks)
@@ -171,6 +176,10 @@ def main():
 
             st["calibration_n"]+=1
             st["brier_sum"]+=float((conf-hit)**2)
+            full=np.zeros(10,dtype=float)
+            for cls,pv in zip(clf.classes_,proba): full[int(cls)]=float(pv)
+            target=np.zeros(10,dtype=float); target[d]=1.0
+            st["multiclass_brier_sum"]=float(st.get("multiclass_brier_sum",0.0))+float(np.mean((full-target)**2))
             key=calibration_key(conf)
             cb=st["calibration"].setdefault(key,{"n":0,"w":0,"conf_sum":0.0})
             cb["n"]+=1; cb["w"]+=hit; cb["conf_sum"]+=conf
@@ -220,6 +229,7 @@ def main():
         cal_rows.append({"bin":key,"n":bn,"wins":bw,"hit_rate":br,"avg_confidence":avg})
     ece=ece_num/ece_den if ece_den else None
     brier=st["brier_sum"]/st["calibration_n"] if st["calibration_n"] else None
+    brier_multi=float(st.get("multiclass_brier_sum",0.0))/st["calibration_n"] if st["calibration_n"] else None
 
     current_reg,current_features=regime(hist)
     regime_rows=[]
@@ -233,7 +243,7 @@ def main():
     pnl=float(st["shadow_pnl"]); staked=float(st["shadow_staked"])
     ev_per_signal=pnl/n if n else None
     roi=pnl/staked if staked else None
-    status=status_for(st,break_even)
+    status=status_for(st,break_even,payout_fresh)
     out={
         "version":"7.0-adaptive-shadow-lab","timestamp":int(time.time()),
         "model_id":st["model_id"],"search_version":meta.get("search_version"),
@@ -245,14 +255,16 @@ def main():
         "skipped_confidence":int(st["skipped_confidence"]),"skipped_agreement":int(st["skipped_agreement"]),
         "mean_confidence":st["confidence_sum"]/n if n else None,
         "mean_expert_agreement":st["agreement_sum"]/n if n else None,
-        "calibration":{"ece":ece,"brier_binary":brier,"bins":cal_rows,"samples":int(st["calibration_n"])},
+        "calibration":{"ece":ece,"brier_binary":brier,"brier_multiclass":brier_multi,
+                       "bins":cal_rows,"samples":int(st["calibration_n"])},
         "placebo":{"random_10pct_p":placebo_random,"economic_break_even_p":placebo_econ,
                    "bootstrap_95_rate":boot_ci,"recent_samples":len(recent)},
         "economic":{"break_even_rate":break_even,"shadow_pnl":pnl,"shadow_staked":staked,
                     "shadow_roi":roi,"ev_per_signal":ev_per_signal,
-                    "payout_snapshot_available":bool(pmap)},
+                    "payout_snapshot_available":bool(pmap),"payout_snapshot_age_seconds":payout_age,
+                    "payout_snapshot_fresh":payout_fresh,"payout_max_age_seconds":PAYOUT_MAX_AGE},
         "status":status,"start_epoch":st["start_epoch"],
-        "note":"Forward-only shadow laboratory. Regime-aware agreement, calibration, placebo tests and economic EV are measured without placing trades."
+        "note":"Forward-only shadow laboratory. Regime-aware agreement, binary and proper multiclass calibration diagnostics, placebo tests, payout freshness and economic EV are measured without placing trades."
     }
     OUT.write_text(json.dumps(out,indent=2)); print(json.dumps(out,indent=2))
 
