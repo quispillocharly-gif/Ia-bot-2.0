@@ -32,6 +32,11 @@ button:disabled{opacity:.55;cursor:not-allowed}.formgrid{display:grid;grid-templ
  <div class="card"><div class="lab">V2 SHADOW / DRAWDOWN</div><div id="v2Pnl" class="big">–</div><div id="v2Risk" class="mini">Sin datos</div></div>
  <div class="card"><div class="lab">POLÍTICA DE SESIÓN</div><div id="sessionPolicy" class="big vio">–</div><div id="policyMeta" class="mini">Se congela hasta reiniciar la sesión</div></div>
 </div>
+<div class="grid">
+ <div class="card"><div class="lab">+20 SESSION LAB</div><div id="sessionLabTarget" class="big cyan">–</div><div id="sessionLabMeta" class="mini">Bootstrap forward pendiente</div></div>
+ <div class="card"><div class="lab">RIESGO +20 / -5</div><div id="sessionLabStop" class="big yellow">–</div><div id="sessionLabRisk" class="mini">Sin estimación</div></div>
+ <div class="card"><div class="lab">V2 SESIONES REALES</div><div id="v2RealSessions" class="big vio">0</div><div id="v2RealMeta" class="mini">Prospectivas · sin reutilizar histórico</div></div>
+</div>
 <div class="card">
  <div class="lab">DERIV DEMO / DBOT BRIDGE</div>
  <div class="formgrid">
@@ -85,14 +90,15 @@ function badge(el,s){el.textContent=s;el.style.color=/CANDIDATE|CONFIRMED/.test(
 async function load(){
  try{
   const base='https://raw.githubusercontent.com/quispillocharly-gif/Ia-bot-2.0/main/topo-airomen/memory/';
-  const [a,b,c,d,e]=await Promise.all([
+  const [a,b,c,d,e,g]=await Promise.all([
    fetch(base+'differ_director_latest.json?t='+Date.now(),{cache:'no-store'}),
    fetch(base+'differ_forward_latest.json?t='+Date.now(),{cache:'no-store'}),
    fetch(base+'differ_train_latest.json?t='+Date.now(),{cache:'no-store'}),
    fetch(base+'differ_payout_snapshot.json?t='+Date.now(),{cache:'no-store'}),
-   fetch(base+'differ_v2_latest.json?t='+Date.now(),{cache:'no-store'})
+   fetch(base+'differ_v2_latest.json?t='+Date.now(),{cache:'no-store'}),
+   fetch(base+'differ_session_eval_latest.json?t='+Date.now(),{cache:'no-store'})
   ]);
-  const director=a.ok?await a.json():{},f=b.ok?await b.json():{},t=c.ok?await c.json():{},p=d.ok?await d.json():{},v2=e.ok?await e.json():{},L=f.leader||{},L2=v2.leader||{};
+  const director=a.ok?await a.json():{},f=b.ok?await b.json():{},t=c.ok?await c.json():{},p=d.ok?await d.json():{},v2=e.ok?await e.json():{},sess=g.ok?await g.json():{},L=f.leader||{},L2=v2.leader||{};
   currentBreakEven=Number(p.max_break_even??director.break_even_rate??.9174311926605504);
   researchPolicy=director.live_policy||{source:'v1',rule:L.id||'neural_argmin',mode:'RESEARCH_DEMO',candidate_id:f.model_id};
   $('decision').textContent=(director.decision||'WAITING').replaceAll('_',' ');
@@ -114,6 +120,14 @@ async function load(){
   $('v2Pnl').textContent=L2.shadow_pnl==null?'–':(L2.shadow_pnl>=0?'+':'')+L2.shadow_pnl.toFixed(2);
   $('v2Pnl').className='big '+((L2.shadow_pnl??0)>=0?'green':'red');
   $('v2Risk').textContent='max DD '+((L2.max_drawdown_flat_stake??0).toFixed(2))+' · adj-p '+((L2.bonferroni_p??1).toFixed(4));
+  const SB=sess.best||{};
+  $('sessionLabTarget').textContent=SB.target_rate==null?'–':pct(SB.target_rate);
+  $('sessionLabMeta').textContent=(SB.source||'–')+' · '+(SB.id||'–')+' · '+(SB.signals||0)+' señales · mediana '+(SB.median_trades_to_target??'–')+' trades';
+  $('sessionLabStop').textContent=SB.stop_rate==null?'–':pct(SB.stop_rate);
+  $('sessionLabRisk').textContent='media final '+(SB.mean_final_pnl==null?'–':SB.mean_final_pnl.toFixed(2))+' · '+(sess.simulations||SB.simulations||'–')+' simulaciones';
+  const PS=L2.prospective_sessions||{};
+  $('v2RealSessions').textContent=(PS.completed??0)+' cerradas';
+  $('v2RealMeta').textContent=(PS.targets??0)+' meta · '+(PS.stops??0)+' stop · open '+((PS.open_pnl??0)>=0?'+':'')+(PS.open_pnl??0).toFixed(2);
  }catch(e){$('decision').textContent='MEMORY WAITING'}
 }
 
