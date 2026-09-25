@@ -303,6 +303,8 @@ async function load(){
 
 let derivSocket=null,derivDemoAccount=null,publicSocket=null,liveModel=null,liveEnsemble=null,latestLiveModel=null,latestLiveEnsemble=null,liveSeq=[],livePip=4,liveBarrier=null,liveBarrierProb=null,liveRuleId='neural_argmin',autoDemo=false,pendingTrade=false,activeContractId=null,tradeReq=5000,lastProposalReq=null,lastSignalEpoch=0;
 let publicReconnectTimer=null,publicWatchdogTimer=null,lastPublicMessageAt=0,lastPublicConnectAt=0;
+let demoMarketActive=false,lastDemoMarketMessageAt=0;
+const DEMO_MARKET_REQ=9101;
 let latestPublicTickEpoch=0,latestPublicTickDigit=null,latestPublicTickQuote=null,ticksWithoutSignal=0;
 let lastAvoidDecision=null,pendingLearnSnapshot=null;
 let pendingBuyBarrier=null,activeTradeBarrier=null;
@@ -607,6 +609,62 @@ function apiError(j,fallback){
  return (j&&j.error&&(j.error.message||j.error.code))||
         (j&&j.errors&&j.errors[0]&&(j.errors[0].message||j.errors[0].code))||fallback;
 }
+function processR75MarketMessage(m,source){
+ if(m.history?.prices){
+   livePip=Number(m.pip_size??livePip??4);
+   liveSeq=m.history.prices.map(q=>Number(Number(q).toFixed(livePip).slice(-1)));
+   if(liveSeq.length>1500)liveSeq=liveSeq.slice(-1500);
+   if(source==='demo'){
+     demoMarketActive=true;
+     lastDemoMarketMessageAt=Date.now();
+     $('liveReason').textContent='R_75 DEMO conectado · historial listo · esperando tick...';
+   }else{
+     lastPublicMessageAt=Date.now();
+     $('liveReason').textContent='R_75 PUBLIC conectado · historial listo · esperando tick...';
+   }
+   renderLiveDecision();
+   return true;
+ }
+ if(m.tick){
+   if(source==='public'&&demoMarketActive)return true;
+   if(source==='demo'){
+     demoMarketActive=true;
+     lastDemoMarketMessageAt=Date.now();
+   }else lastPublicMessageAt=Date.now();
+
+   livePip=Number(m.tick.pip_size??livePip??4);
+   const q=Number(m.tick.quote).toFixed(livePip),d=Number(q.slice(-1));
+   const epoch=Number(m.tick.epoch??Date.now());
+   if(epoch===latestPublicTickEpoch&&d===latestPublicTickDigit)return true;
+
+   latestPublicTickEpoch=epoch;
+   latestPublicTickDigit=d;
+   latestPublicTickQuote=q;
+   learnFromObservedDigit(d);
+   liveSeq.push(d);if(liveSeq.length>1500)liveSeq.shift();
+   $('liveTick').textContent=q+' · '+d;
+   $('liveReason').textContent=(source==='demo'?'DEMO':'PUBLIC')+' R_75 · tick '+d+' · recalculando DIFFER';
+   trace('TICK '+latestPublicTickEpoch+' · '+source.toUpperCase()+' · recalculando DIFFER');
+   tryNextTickTrade();
+   return true;
+ }
+ return false;
+}
+function subscribeDemoMarket(){
+ if(!derivSocket||derivSocket.readyState!==WebSocket.OPEN)return false;
+ try{
+   derivSocket.send(JSON.stringify({
+     ticks_history:'R_75',
+     count:1000,
+     end:'latest',
+     style:'ticks',
+     subscribe:1,
+     req_id:DEMO_MARKET_REQ
+   }));
+   $('liveReason').textContent='Conectando R_75 por la cuenta DEMO...';
+   return true;
+ }catch(_){return false}
+}
 async function connectDerivDemo(){
  const appId=$('derivAppId').value.trim(),pat=$('derivPat').value.trim(),btn=$('derivConnect');
  if(!appId||!pat){derivMsg('FALTA APP ID O PAT');return}
@@ -637,14 +695,21 @@ async function connectDerivDemo(){
   derivSocket.onopen=()=>{
    btn.textContent='RECONECTAR DEMO';btn.disabled=false;
    derivMsg('CONECTADO A DERIV DEMO · PREPARANDO AUTO-DEMO',true);
-   trace('DEMO CONECTADA · activando AUTO-DEMO',true);
+   trace('DEMO CONECTADA · activando R_75 + AUTO-DEMO',true);
+   demoMarketActive=false;
+   lastDemoMarketMessageAt=Date.now();
+   const oldPublic=publicSocket;publicSocket=null;
+   try{oldPublic?.close()}catch(_){}
+   if(publicReconnectTimer){clearTimeout(publicReconnectTimer);publicReconnectTimer=null}
+   subscribeDemoMarket();
    setTimeout(()=>setAutoDemo(true),150);
 };
-  derivSocket.onclose=()=>{autoDemo=false;syncAutoDemoUI();derivMsg('CONEXIÓN DEMO CERRADA');btn.disabled=false};
+  derivSocket.onclose=()=>{demoMarketActive=false;autoDemo=false;syncAutoDemoUI();derivMsg('CONEXIÓN DEMO CERRADA');btn.disabled=false;startPublicDiffer()};
   derivSocket.onerror=()=>{derivMsg('ERROR EN WEBSOCKET DEMO');btn.disabled=false};
   derivSocket.onmessage=e=>{
    try{
     const m=JSON.parse(e.data);
+    if(processR75MarketMessage(m,'demo'))return;
     if(m.error||m.errors){
       const err=apiError(m,'respuesta de error');
       pendingTrade=false; lastProposalReq=null;
@@ -1167,6 +1232,7 @@ async function loadLiveModel(){
  }catch(_){}
 }
 function schedulePublicReconnect(reason){
+ if(demoMarketActive||derivSocket?.readyState===WebSocket.OPEN)return;
  if(publicReconnectTimer)return;
  $('liveReason').textContent='STREAM R_75 '+reason+' · reconectando...';
  publicReconnectTimer=setTimeout(()=>{
@@ -1193,9 +1259,13 @@ function startPublicDiffer(){
 
  ws.onopen=()=>{
    if(publicSocket!==ws)return;
+   if(demoMarketActive||derivSocket?.readyState===WebSocket.OPEN){
+     try{ws.close()}catch(_){}
+     return;
+   }
    lastPublicMessageAt=Date.now();
-   $('liveReason').textContent='R_75 conectado · cargando 1000 ticks...';
-   try{ws.send(JSON.stringify({ticks_history:'R_75',count:1000,end:'latest',style:'ticks',req_id:100}))}
+   $('liveReason').textContent='R_75 PUBLIC · cargando historial + stream...';
+   try{ws.send(JSON.stringify({ticks_history:'R_75',count:1000,end:'latest',style:'ticks',subscribe:1,req_id:100}))}
    catch(_){schedulePublicReconnect('ERROR HISTORY')}
  };
 
@@ -1204,35 +1274,18 @@ function startPublicDiffer(){
   lastPublicMessageAt=Date.now();
   try{
    const m=JSON.parse(e.data);
-   if(m.error){
-     $('liveReason').textContent='R_75 error: '+(m.error.message||m.error.code||'desconocido');
+   if(m.error||m.errors){
+     const err=apiError(m,'error de stream');
+     $('liveReason').textContent='R_75 PUBLIC: '+err;
      schedulePublicReconnect('ERROR');
      return;
    }
-   if(m.history?.prices){
-    livePip=Number(m.pip_size??4);
-    liveSeq=m.history.prices.map(q=>Number(Number(q).toFixed(livePip).slice(-1)));
-    renderLiveDecision();
-    $('liveReason').textContent='Historial R_75 listo · esperando tick en vivo...';
-    try{ws.send(JSON.stringify({ticks:'R_75',subscribe:1,req_id:101}))}
-    catch(_){schedulePublicReconnect('ERROR SUBSCRIBE')}
-   }else if(m.tick){
-    livePip=Number(m.tick.pip_size??livePip);
-    const q=Number(m.tick.quote).toFixed(livePip),d=Number(q.slice(-1));
-    latestPublicTickEpoch=Number(m.tick.epoch??Date.now());
-    latestPublicTickDigit=d;latestPublicTickQuote=q;
-    learnFromObservedDigit(d);
-    liveSeq.push(d);if(liveSeq.length>1500)liveSeq.shift();
-    $('liveTick').textContent=q+' · '+d;
-    trace('TICK '+latestPublicTickEpoch+' CERRADO · recalculando DIFFER para el siguiente');
-    tryNextTickTrade();
-   }
-  }catch(err){
-    $('liveReason').textContent='STREAM R_75: respuesta no valida · reconectando...';
-    schedulePublicReconnect('RESPUESTA INVALIDA');
+   processR75MarketMessage(m,'public');
+  }catch(_){
+   $('liveReason').textContent='R_75 PUBLIC: respuesta no valida';
+   schedulePublicReconnect('RESPUESTA INVALIDA');
   }
  };
-
  ws.onerror=()=>{
    if(publicSocket!==ws)return;
    $('liveReason').textContent='STREAM R_75 con error · reconectando...';
@@ -1248,10 +1301,18 @@ function ensurePublicWatchdog(){
  if(publicWatchdogTimer)return;
  publicWatchdogTimer=setInterval(()=>{
    const now=Date.now();
+   if(derivSocket&&derivSocket.readyState===WebSocket.OPEN){
+     if(!lastDemoMarketMessageAt || now-lastDemoMarketMessageAt>12000){
+       demoMarketActive=false;
+       trace('WATCHDOG R_75 DEMO · re-suscribiendo');
+       subscribeDemoMarket();
+     }
+     return;
+   }
    const stale=!lastPublicMessageAt || now-lastPublicMessageAt>12000;
    const connecting=publicSocket&&publicSocket.readyState===WebSocket.CONNECTING&&now-lastPublicConnectAt<12000;
    if(!connecting && (!publicSocket || publicSocket.readyState!==WebSocket.OPEN || stale)){
-     trace('WATCHDOG R_75 · reiniciando stream');
+     trace('WATCHDOG R_75 PUBLIC · reiniciando');
      startPublicDiffer();
    }
  },5000);
