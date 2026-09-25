@@ -58,7 +58,7 @@ async function load(){
   const director=a.ok?await a.json():{},f=b.ok?await b.json():{},t=c.ok?await c.json():{},p=d.ok?await d.json():{},L=f.leader||{};
   $('decision').textContent=(director.decision||'WAITING').replaceAll('_',' ');
   badge($('directorStatus'),director.decision||'WAITING');
-  $('directorMeta').textContent='forward '+(director.forward_status||'–')+' · candidate '+(director.candidate_model_id||'–');
+  $('directorMeta').textContent='forward '+(director.forward_status||'–')+' · candidate '+(director.candidate_model_id||'–')+' · graveyard '+(f.graveyard_size??0);
   $('breakEven').textContent=pct(p.max_break_even);$('payoutMeta').textContent=(p.status||'MISSING')+' · '+(p.valid_digits||0)+'/10 digits';
   const C=t.candidate||{};$('model').textContent=C.model_id||'–';$('trainMeta').textContent=C.model_id?'W'+C.window+' · '+(C.hidden||[]).join('×')+' · test '+pct(C.test?.hit_rate):'Esperando entrenamiento';
   $('rate').textContent=pct(L.hit_rate);badge($('forwardStatus'),L.status||f.status||'WAITING');
