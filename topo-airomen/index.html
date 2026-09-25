@@ -54,7 +54,7 @@ button:disabled{opacity:.45;cursor:not-allowed}
 </div>
 
 <div class="card signal">
- <div class="lab">FORWARD STREAK CORE · HYBRID K2 · CADENA DINÁMICA 1–3 · NO REPITE DÍGITO</div>
+ <div class="lab">ZERO-MATCH LIVE · MATCH AI CONTRARIAN + DIFFER · NO REPITE DÍGITO</div>
  <div id="bestDigit" class="digit">DIFFER –</div>
  <div id="signalMeta" class="mini">Esperando historial R_75…</div>
  <div id="ranking" class="chips"></div>
@@ -103,7 +103,7 @@ button:disabled{opacity:.45;cursor:not-allowed}
 <script>
 'use strict';
 
-const BUILD='CLEAN-2.0-FORWARD-STREAK';
+const BUILD='CLEAN-2.1-MATCH-CONTRARIAN';
 const CADENCE_MIN=1,CADENCE_MAX=3;
 const SYMBOL='R_75';
 const TARGET=10;
@@ -411,27 +411,58 @@ function actualMatchRate(n=50){
   return z.reduce((a,x)=>a+(Number(x.win)===0?1:0),0)/z.length;
 }
 
+function matchHot(a,n){
+  const z=a.slice(-n),c=Array(10).fill(0);
+  z.forEach(x=>c[x]++);
+  return c.indexOf(Math.max(...c));
+}
+function matchCold(a,n){
+  const z=a.slice(-n),c=Array(10).fill(0);
+  z.forEach(x=>c[x]++);
+  return c.indexOf(Math.min(...c));
+}
+function matchGap(a){
+  const g=[];
+  for(let d=0;d<10;d++){
+    const i=a.lastIndexOf(d);
+    g[d]=i<0?a.length+1:a.length-1-i;
+  }
+  return g.indexOf(Math.max(...g));
+}
+function matchTrans(a,o){
+  if(a.length<o+2)return matchHot(a,80);
+  const ctx=a.slice(-o).join(','),c=Array(10).fill(0);
+  for(let i=o;i<a.length;i++){
+    if(a.slice(i-o,i).join(',')===ctx)c[a[i]]++;
+  }
+  return c.reduce((x,y)=>x+y,0)?c.indexOf(Math.max(...c)):matchHot(a,80);
+}
+function matchBrain(){
+  const preds=[
+    matchHot(seq,10),matchHot(seq,20),matchHot(seq,40),matchHot(seq,80),
+    matchHot(seq,120),matchHot(seq,200),matchCold(seq,20),matchCold(seq,80),
+    matchGap(seq),matchTrans(seq,1),matchTrans(seq,2),matchTrans(seq,3)
+  ];
+  const votes=Array(10).fill(0);
+  preds.forEach(d=>votes[d]++);
+  const best=votes.indexOf(Math.max(...votes));
+  return {digit:best,votes:votes[best],all:votes,preds};
+}
+
 function analyze(){
   if(seq.length<220 || !model)return null;
 
-  // Exact core validated in forward lab:
-  // hybrid_k2_s0.105_h1_ctx3_nr
   const recent=distRecent(80);
   const t1=transitionVector(1,1000);
   const t2=transitionVector(2,1200);
   const t3=transitionVector(3,1500);
   const neural=neuralVector();
+  const mb=matchBrain();
 
   const digits=[0,1,2,3,4,5,6,7,8,9];
   const allowed=(lastBoughtDigit==null)
     ?digits
     :digits.filter(d=>Number(d)!==Number(lastBoughtDigit));
-
-  const neuralOrder=[...allowed].sort((x,y)=>neural[x]-neural[y]||x-y);
-  const top2=neuralOrder.slice(0,2);
-  const t2Hot=[...digits].sort((x,y)=>t2[y]-t2[x]).slice(0,2);
-  const t3Hot=[...digits].sort((x,y)=>t3[y]-t3[x]).slice(0,2);
-  const hotSet=new Set([...t2Hot,...t3Hot]);
 
   const rows=digits.map(d=>{
     const score=
@@ -446,34 +477,41 @@ function analyze(){
       combined:score,
       neural:Number(neural[d]||.1),
       calibratedNeural:Number(neural[d]||.1),
-      neuralRank:neuralOrder.includes(d)?neuralOrder.indexOf(d)+1:99,
-      structHot:hotSet.has(d)?1:0,
       t1:Number(t1[d]||.1),
       t2:Number(t2[d]||.1),
       t3:Number(t3[d]||.1),
-      recent:Number(recent[d]||.1)
+      recent:Number(recent[d]||.1),
+      matchVotes:Number(mb.all[d]||0)
     };
   });
 
-  const candidates=top2.map(d=>rows[d]).sort((x,y)=>x.score-y.score||x.neural-y.neural||x.digit-y.digit);
-  const best=candidates[0];
-  const second=candidates[1]||best;
+  const differOrder=[...allowed].sort((x,y)=>rows[x].score-rows[y].score||rows[x].neural-rows[y].neural||x-y);
+  const rankLimit=idleTradeTicks>=8?3:2;
+  const safeSet=new Set(differOrder.slice(0,rankLimit));
+  const predicted=Number(mb.digit);
+  const best=rows[predicted];
 
-  const ok=!!best &&
-    best.score<=.105 &&
-    best.structHot<=1 &&
-    (lastBoughtDigit==null||Number(best.digit)!==Number(lastBoughtDigit));
+  const noRepeat=lastBoughtDigit==null||predicted!==Number(lastBoughtDigit);
+  const dualAgreement=noRepeat&&safeSet.has(predicted);
+  const enoughMatchVotes=mb.votes>=2;
+  const hardRisk=best.score<=.105 && best.neural<=.115;
+  const ok=dualAgreement&&enoughMatchVotes&&hardRisk;
 
-  const gap=Math.max(0,Number(second?.score||best.score)-Number(best.score));
-  const mr=actualMatchRate(50);
+  const sorted=[...rows].sort((x,y)=>x.score-y.score||x.neural-y.neural);
+  const second=sorted.find(x=>x.digit!==predicted)||best;
+  const gap=Math.max(0,Number(second.score)-Number(best.score));
 
   return {
     best,
-    rows:[...rows].sort((x,y)=>x.score-y.score||x.neural-y.neural),
+    rows:sorted,
     ok,
     gap,
-    mr,
-    strategyId:'hybrid_k2_s0.105_h1_ctx3_nr',
+    mr:actualMatchRate(50),
+    strategyId:'MATCH-AI CONTRARIAN + DIFFER TOP-'+rankLimit,
+    matchPredicted:predicted,
+    matchVotes:mb.votes,
+    differRank:differOrder.indexOf(predicted)+1,
+    rankLimit,
     remainingToTarget:Math.max(0,TARGET-sessionPnl),
     cadenceWait:currentCadenceWait,
     cadenceStep,
@@ -487,29 +525,31 @@ function renderDecision(){
   currentDecision=d;
   if(!d){
     $('bestDigit').textContent='DIFFER –';
-    $('signalMeta').textContent='Cargando modelo/contexto…';
+    $('signalMeta').textContent='Cargando contexto…';
     return null;
   }
 
   $('bestDigit').textContent='DIFFER '+d.best.digit;
   $('riskView').textContent=pct(d.best.score);
   $('riskMeta').textContent=
-    'FORWARD STREAK · neural #'+d.best.neuralRank+
-    ' '+pct(d.best.neural)+
-    ' · hybrid '+pct(d.best.score)+
-    ' · hot '+d.best.structHot;
+    'MATCH AI predice D'+d.matchPredicted+
+    ' · votos '+d.matchVotes+'/12'+
+    ' · DIFFER rank #'+d.differRank+
+    ' · riesgo '+pct(d.best.score);
 
   $('signalMeta').textContent=
     (d.ok?'LISTO':'ESPERAR')+
-    ' · '+d.strategyId+
+    ' · CONTRARIAN'+
     ' · racha '+antiMatchStreak+
     ' · faltan $'+d.remainingToTarget.toFixed(2)+
+    ' · top-'+d.rankLimit+
+    ' · idle '+d.idleTradeTicks+
     ' · cadena '+d.cadenceStep+
     ' espera '+d.ticksIntoCadence+'/'+d.cadenceWait+
     (d.lastBoughtDigit==null?'':' · bloqueado D'+d.lastBoughtDigit);
 
-  $('ranking').innerHTML=d.rows.map((x,i)=>
-    '<span class="chip '+(x.digit===d.best.digit?'best':'')+'">D'+x.digit+' '+pct(x.score)+' N#'+x.neuralRank+'</span>'
+  $('ranking').innerHTML=d.rows.map(x=>
+    '<span class="chip '+(x.digit===d.best.digit?'best':'')+'">D'+x.digit+' '+pct(x.score)+' · MV'+x.matchVotes+'</span>'
   ).join('');
   return d;
 }
@@ -543,10 +583,10 @@ function sendTrade(payload){
 function requestProposal(decision){
   if(!canTrade()||pending||activeContract||!decision?.ok)return false;
 
-  // Revalidación inmediata con la MISMA estrategia forward.
+  // Revalidación inmediata: MATCH AI y DIFFER deben seguir coincidiendo.
   const confirm=analyze();
   if(!confirm?.ok || Number(confirm.best.digit)!==Number(decision.best.digit)){
-    log('CANCEL BUY · señal forward cambió');
+    log('CANCEL BUY · consenso MATCH→DIFFER cambió');
     return false;
   }
 
@@ -565,10 +605,10 @@ function requestProposal(decision){
       combined:decision.best.combined,
       neural:decision.best.neural,
       calibratedNeural:decision.best.calibratedNeural,
-      neuralRank:decision.best.neuralRank,
+      neuralRank:Number(decision.differRank||0),
       cold:0,
-      hot:Number(decision.best.structHot||0),
-      structHot:Number(decision.best.structHot||0),
+      hot:0,
+      structHot:0,
       last1:seq[seq.length-1],
       last2:seq[seq.length-2],
       last3:seq[seq.length-3],
@@ -576,7 +616,8 @@ function requestProposal(decision){
       cadenceStep,
       cadenceTail:seq.slice(-6),
       previousBarrier:lastBoughtDigit,
-      noFreezePhase:decision.noFreezePhase,
+      matchVotes:Number(decision.matchVotes||0),
+      differRank:Number(decision.differRank||0),
       epoch:lastEpoch
     }
   };
