@@ -103,7 +103,7 @@ button:disabled{opacity:.45;cursor:not-allowed}
 <script>
 'use strict';
 
-const BUILD='CLEAN-1.8-FINAL-LEG-SHIELD';
+const BUILD='CLEAN-1.9-MULTI-CONSENSUS';
 const CADENCE_MIN=1,CADENCE_MAX=3;
 const SYMBOL='R_75';
 const TARGET=10;
@@ -428,7 +428,11 @@ function analyze(){
   const neuralOrder=[...digits].sort((a,b)=>calNeural[a]-calNeural[b]);
   const allSources=[t1,t2,t3,recent,off,calNeural,exec,context];
   const coldSets=allSources.map(v=>[...digits].sort((a,b)=>v[a]-v[b]).slice(0,2));
+  const bottom3Sets=allSources.map(v=>[...digits].sort((a,b)=>v[a]-v[b]).slice(0,3));
   const hotSets=allSources.map(v=>[...digits].sort((a,b)=>v[b]-v[a]).slice(0,2));
+  const coreSources=[calNeural,t2,t3,off];
+  const coreBottom2=coreSources.map(v=>[...digits].sort((a,b)=>v[a]-v[b]).slice(0,2));
+  const coreHot2=coreSources.map(v=>[...digits].sort((a,b)=>v[b]-v[a]).slice(0,2));
   const t2Hot=[...digits].sort((a,b)=>t2[b]-t2[a]).slice(0,2);
   const t3Hot=[...digits].sort((a,b)=>t3[b]-t3[a]).slice(0,2);
   const offHot=[...digits].sort((a,b)=>off[b]-off[a]).slice(0,2);
@@ -436,7 +440,10 @@ function analyze(){
   const rows=[];
   for(const d of digits){
     const cold=coldSets.reduce((n,a)=>n+(a.includes(d)?1:0),0);
+    const consensus3=bottom3Sets.reduce((n,a)=>n+(a.includes(d)?1:0),0);
     const hot=hotSets.reduce((n,a)=>n+(a.includes(d)?1:0),0);
+    const coreCold=coreBottom2.reduce((n,a)=>n+(a.includes(d)?1:0),0);
+    const coreHot=coreHot2.reduce((n,a)=>n+(a.includes(d)?1:0),0);
     const structHot=
       (t2Hot.includes(d)?1:0)+
       (t3Hot.includes(d)?1:0)+
@@ -468,7 +475,7 @@ function analyze(){
       digit:d,combined,
       neural:neural[d],calibratedNeural:calNeural[d],
       neuralRank:neuralOrder.indexOf(d)+1,
-      cold,hot,structHot,unc,
+      cold,consensus3,hot,coreCold,coreHot,structHot,unc,
       t1:t1[d],t2:t2[d],t3:t3[d],off:off[d],context:context[d]
     });
   }
@@ -602,6 +609,17 @@ function analyze(){
     maxStructure=Math.min(maxStructure,.104);
   }
 
+  let minConsensus3=5,minCoreCold=2,maxCoreHot=0;
+  if(idleTradeTicks>=14 && !finalLeg && !targetRecoveryShield){
+    minConsensus3=4;
+    minCoreCold=1;
+  }
+  if(finalLeg||targetRecoveryShield||consecutiveMatches>=1){
+    minConsensus3=6;
+    minCoreCold=3;
+    maxCoreHot=0;
+  }
+
   const structureRisk=Math.max(best.t2,best.t3,best.off);
   const veryStrong=
     best.combined<=.097 &&
@@ -625,6 +643,9 @@ function analyze(){
     risk:best.combined<=maxRisk,
     neural:best.calibratedNeural<=maxNeural,
     neuralRank:best.neuralRank<=maxNeuralRank,
+    consensus:best.consensus3>=minConsensus3,
+    coreCold:best.coreCold>=minCoreCold,
+    coreHot:best.coreHot<=maxCoreHot,
     structuralHeat:best.structHot<=maxStructHot,
     hot:best.hot<=maxHot,
     cold:best.cold>=minCold,
@@ -644,6 +665,9 @@ function analyze(){
     (lastBoughtDigit==null||Number(best.digit)!==Number(lastBoughtDigit)) &&
     best.combined<=.108 &&
     best.calibratedNeural<=.096 &&
+    best.consensus3>=4 &&
+    best.coreCold>=1 &&
+    best.coreHot===0 &&
     best.structHot===0 &&
     best.context<=.108 &&
     structureRisk<=.116;
@@ -652,7 +676,7 @@ function analyze(){
 
   return {
     best,rows,gap,mr,ok,stableNeed,checks,
-    thresholds:{maxRisk,maxNeural,maxNeuralRank,maxStructHot,maxHot,minCold,minGap,maxContext,maxStructure},
+    thresholds:{maxRisk,maxNeural,maxNeuralRank,maxStructHot,maxHot,minCold,minGap,maxContext,maxStructure,minConsensus3,minCoreCold,maxCoreHot},
     structureRisk,streakPhase,freezePhase,finalLegPhase,remainingToTarget,consecutiveMatches,targetRecoveryShield,idleTradeTicks,safeFallback,antiMatchStreak,bestAntiMatchStreak,
     cadenceWait:currentCadenceWait,cadenceStep,ticksIntoCadence,lastBoughtDigit
   };
@@ -668,7 +692,7 @@ function renderDecision(){
 
   $('bestDigit').textContent='DIFFER '+d.best.digit;
   $('riskView').textContent=pct(d.best.combined);
-  $('riskMeta').textContent='neural #'+d.best.neuralRank+' '+pct(d.best.calibratedNeural)+' · structHot '+d.best.structHot+' · ctx '+pct(d.best.context);
+  $('riskMeta').textContent='neural #'+d.best.neuralRank+' '+pct(d.best.calibratedNeural)+' · consenso '+d.best.consensus3+'/8 · core '+d.best.coreCold+'/4 · hot '+d.best.coreHot;
   const failed=d.checks?Object.entries(d.checks).filter(([,v])=>!v).map(([k])=>k).join(','):'';
   $('signalMeta').textContent=
     (d.ok?'ULTRA-LOW LISTO':'ESPERAR')+
@@ -720,6 +744,21 @@ function sendTrade(payload){
 
 function requestProposal(decision){
   if(!canTrade()||pending||activeContract||!decision?.ok)return false;
+
+  // REVALIDACIÓN FINAL: el candidato debe seguir siendo el mismo #1
+  // y conservar consenso fuerte justo antes de pedir la propuesta.
+  const confirm=analyze();
+  if(!confirm?.ok || Number(confirm.best.digit)!==Number(decision.best.digit)){
+    log('CANCEL BUY · candidato cambió en revalidación');
+    return false;
+  }
+  const needConsensus=(confirm.finalLegPhase!=='OFF'||confirm.targetRecoveryShield||confirm.consecutiveMatches>=1)?6:4;
+  if(Number(confirm.best.consensus3||0)<needConsensus || Number(confirm.best.coreHot||0)>0){
+    log('CANCEL BUY · consenso final insuficiente D'+confirm.best.digit+' '+confirm.best.consensus3+'/8 · coreHot '+confirm.best.coreHot);
+    return false;
+  }
+
+  decision=confirm;
   pending=true;
   idleTradeTicks=0;
   const barrier=decision.best.digit;
