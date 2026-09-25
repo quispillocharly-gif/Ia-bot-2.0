@@ -43,6 +43,11 @@ button:disabled{opacity:.55;cursor:not-allowed}.formgrid{display:grid;grid-templ
  <div class="card"><div class="lab">OPORTUNIDADES / 1000 TICKS</div><div id="v3Throughput" class="big vio">–</div><div id="v3Avoided" class="mini">MATCH evitados / 1000: –</div></div>
  <div class="card"><div class="lab">V3 SHADOW ECONOMY</div><div id="v3Pnl" class="big">–</div><div id="v3Risk" class="mini">Sin datos</div></div>
 </div>
+<div class="grid">
+ <div class="card"><div class="lab">V4 BATCH-5 LAB</div><div id="v4Policy" class="big cyan">COLLECTING</div><div id="v4Meta" class="mini">4 etapas de +$5 · bloques de 5</div></div>
+ <div class="card"><div class="lab">SESIONES V4</div><div id="v4Sessions" class="big vio">0</div><div id="v4Result" class="mini">0 metas · 0 stops</div></div>
+ <div class="card"><div class="lab">V4 SESIÓN ABIERTA</div><div id="v4Open" class="big">+$0.00</div><div id="v4OpenMeta" class="mini">Etapa 1/4 · 0/5 compras</div></div>
+</div>
 <div class="card signalbox">
  <div class="lab">NEXT DIGIT AVOID-MATCH SCANNER · 0–9</div>
  <div id="avoidBest" class="signalDigit">DIFFER –</div>
@@ -102,16 +107,18 @@ function badge(el,s){el.textContent=s;el.style.color=/CANDIDATE|CONFIRMED/.test(
 async function load(){
  try{
   const base='https://raw.githubusercontent.com/quispillocharly-gif/Ia-bot-2.0/main/topo-airomen/memory/';
-  const [a,b,c,d,e,g,h]=await Promise.all([
+  const [a,b,c,d,e,g,h,i]=await Promise.all([
    fetch(base+'differ_director_latest.json?t='+Date.now(),{cache:'no-store'}),
    fetch(base+'differ_forward_latest.json?t='+Date.now(),{cache:'no-store'}),
    fetch(base+'differ_train_latest.json?t='+Date.now(),{cache:'no-store'}),
    fetch(base+'differ_payout_snapshot.json?t='+Date.now(),{cache:'no-store'}),
    fetch(base+'differ_v2_latest.json?t='+Date.now(),{cache:'no-store'}),
    fetch(base+'differ_session_eval_latest.json?t='+Date.now(),{cache:'no-store'}),
-   fetch(base+'differ_v3_latest.json?t='+Date.now(),{cache:'no-store'})
+   fetch(base+'differ_v3_latest.json?t='+Date.now(),{cache:'no-store'}),
+   fetch(base+'differ_v4_batch5_latest.json?t='+Date.now(),{cache:'no-store'})
   ]);
-  const director=a.ok?await a.json():{},f=b.ok?await b.json():{},t=c.ok?await c.json():{},p=d.ok?await d.json():{},v2=e.ok?await e.json():{},sess=g.ok?await g.json():{},v3=h.ok?await h.json():{},L=f.leader||{},L2=v2.leader||{},L3=v3.leader||{};
+  const director=a.ok?await a.json():{},f=b.ok?await b.json():{},t=c.ok?await c.json():{},p=d.ok?await d.json():{},v2=e.ok?await e.json():{},sess=g.ok?await g.json():{},v3=h.ok?await h.json():{},v4=i.ok?await i.json():{},L=f.leader||{},L2=v2.leader||{},L3=v3.leader||{};
+  const B4=v4.leader||[...(v4.policies||[])].sort((x,y)=>(y.sessions_completed||0)-(x.sessions_completed||0)||((y.open_session?.pnl??-999)-(x.open_session?.pnl??-999)))[0]||{};
   currentBreakEven=Number(p.max_break_even??director.break_even_rate??.9174311926605504);
   researchPolicy=director.live_policy||{source:'v1',rule:L.id||'neural_argmin',mode:'RESEARCH_DEMO',candidate_id:f.model_id};
   $('decision').textContent=(director.decision||'WAITING').replaceAll('_',' ');
@@ -148,6 +155,14 @@ async function load(){
   $('v3Pnl').textContent=L3.shadow_pnl==null?'–':(L3.shadow_pnl>=0?'+':'')+L3.shadow_pnl.toFixed(2);
   $('v3Pnl').className='big '+((L3.shadow_pnl??0)>=0?'green':'red');
   $('v3Risk').textContent='ROI '+pct(L3.shadow_roi)+' · DD '+((L3.max_drawdown??0).toFixed(2))+' · coverage '+pct(L3.coverage);
+  $('v4Policy').textContent=B4.policy?B4.policy.replaceAll('_',' '):(v4.status||'COLLECTING');
+  $('v4Meta').textContent=(B4.source||'–')+' · reinv '+pct(B4.compound_fraction)+' · pausa MATCH '+(B4.pause_after_match??'–');
+  $('v4Sessions').textContent=(B4.sessions_completed??0)+' cerradas';
+  $('v4Result').textContent=(B4.targets??0)+' metas · '+(B4.stops??0)+' stops · target rate '+pct(B4.target_rate);
+  const O4=B4.open_session||{};
+  $('v4Open').textContent=(O4.pnl==null?'–':((O4.pnl>=0?'+':'')+'$'+O4.pnl.toFixed(2)));
+  $('v4Open').className='big '+((O4.pnl??0)>=0?'green':'red');
+  $('v4OpenMeta').textContent='Etapa '+(O4.stage??1)+'/4 · bloque '+(O4.batch_trades??0)+'/5 · stake $'+((O4.stake??1).toFixed(2));
  }catch(e){$('decision').textContent='MEMORY WAITING'}
 }
 
