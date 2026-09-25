@@ -409,7 +409,9 @@ function selectDiversifiedDigit(rows){
    const immediate=(d===Number(last1)?IMMEDIATE_REPEAT_PENALTY:0)+(d===Number(last2)?.0015:0);
    const reuse=RECENT_USE_PENALTY*use;
    const diversityBonus=.00035*(maxCount-use);
-   const adjusted=Number(x.matchProb)+immediate+reuse-diversityBonus+.012*Number(x.uncertainty||0);
+   const coldBonus=.00055*Math.min(6,Number(x.sourceConsensus||0));
+   const hotPenalty=.0010*Math.min(6,Number(x.dangerConsensus||0));
+   const adjusted=Number(x.matchProb)+immediate+reuse-diversityBonus+.010*Number(x.uncertainty||0)+hotPenalty-coldBonus;
    return {...x,adjustedRisk:adjusted,recentUse:use};
  }).sort((a,b)=>a.adjustedRisk-b.adjustedRisk||Number(a.matchProb)-Number(b.matchProb));
  return ranked[0]||sorted[0];
@@ -526,7 +528,7 @@ function resetProfitSession(){
  if(latestLiveEnsemble)liveEnsemble=latestLiveEnsemble;
  liveRuleId='avoid_match_adaptive_all_digits';
  $('sessionPolicy').textContent='V3 · AVOID MATCH';
- $('policyMeta').textContent='ANTI-MATCH ESTADISTICO - 1 contrato - memoria offline 24/7 + T1/T2/T3 + demo real - neural apoyo - objetivo +20';
+ $('policyMeta').textContent='ANTI-MATCH ADAPTATIVO - T1/T2/T3 + memoria 24/7 + detector de régimen + consenso caliente/frío - 1 contrato - objetivo +20';
  renderProfitSession();renderStreakLab();
  trace('SESIÓN NUEVA · meta +$20.00 · stop -$'+sessionStopLoss().toFixed(2)+' · '+$('sessionPolicy').textContent,true);
 }
@@ -1152,6 +1154,30 @@ function offlineStatRiskVector(){
  const total=parts.reduce((z,x)=>z+x.w,0)||1;
  return normVec(Array.from({length:10},(_,d)=>parts.reduce((z,x)=>z+x.w*Number(x.p[d]||0),0)/total));
 }
+function regimeShiftScore(){
+ if(liveSeq.length<80)return 0;
+ const recent=smoothShareVector(50,2);
+ const longer=smoothShareVector(Math.min(600,liveSeq.length),4);
+ const tv=.5*recent.reduce((z,x,d)=>z+Math.abs(Number(x)-Number(longer[d])),0);
+ return clamp01(tv/.18);
+}
+function offlineFreshness(){
+ const t=Number(offlineStats?.created_at||0);
+ if(!t)return 0;
+ const age=Math.max(0,Date.now()/1000-t);
+ return clamp01(1-age/(3*3600));
+}
+function statisticalConfidence(regime=0){
+ const live=Math.min(1,liveSeq.length/300);
+ const exec=Math.min(1,execHistory.length/100);
+ const fresh=offlineFreshness();
+ return clamp01(.30+.32*live+.16*exec+.14*fresh+.08*(1-regime));
+}
+function vectorArgmin(v){
+ let b=0;
+ for(let d=1;d<10;d++)if(Number(v[d]||0)<Number(v[b]||0))b=d;
+ return b;
+}
 function scanAvoidMatchDigits(){
  if(liveSeq.length<1)return [];
  const transition=transitionRiskVector(800);
@@ -1164,6 +1190,8 @@ function scanAvoidMatchDigits(){
  const execution=executionDigitRiskVector();
  const contextExecution=contextualExecutionRiskVector();
  const offline=offlineStatRiskVector();
+ const regime=regimeShiftScore();
+ const confidence=statisticalConfidence(regime);
 
  const coreW=learnerWeights();
  const advW=advancedWeights();
@@ -1175,6 +1203,7 @@ function scanAvoidMatchDigits(){
  const adaptiveSources=[transition,transition2,recent,micro,frequency,neural];
  const allSources=[transition,transition2,transition3,recent,micro,frequency,execution,contextExecution,offline,neural];
  const top2=allSources.map(v=>Array.from({length:10},(_,d)=>d).sort((a,b)=>v[a]-v[b]).slice(0,2));
+ const hot2=allSources.map(v=>Array.from({length:10},(_,d)=>d).sort((a,b)=>v[b]-v[a]).slice(0,2));
  const rows=[];
  for(let d=0;d<10;d++){
    const learnedRisk=adaptiveSources.reduce((z,v,i)=>z+advW[i]*Number(v[d]||0),0);
@@ -1183,28 +1212,48 @@ function scanAvoidMatchDigits(){
    // PRIORIDAD ESTADISTICA:
    // transición 1/2, frecuencia, recencia y desempeño real pesan mucho más
    // que la red neural. La IA queda como desempate/apoyo.
-   const statisticalRisk=
-     .12*Number(transition[d]||0)+
-     .14*Number(transition2[d]||0)+
-     .13*Number(transition3[d]||0)+
-     .12*Number(recent[d]||0)+
-     .07*Number(micro[d]||0)+
-     .13*Number(frequency[d]||0)+
-     .07*Number(execution[d]||0)+
-     .07*Number(contextExecution[d]||0)+
-     .15*Number(offline[d]||0);
+   // Régimen alto => más peso a lo reciente y menos a memoria offline antigua.
+   const wT1=.12;
+   const wT2=.14;
+   const wT3=.13;
+   const wRecent=.12+.05*regime;
+   const wMicro=.07+.04*regime;
+   const wFreq=.13+.03*regime;
+   const wExec=.07;
+   const wCtx=.07;
+   const wOffline=.15*(1-.75*regime)*(.55+.45*offlineFreshness());
+   const wSum=wT1+wT2+wT3+wRecent+wMicro+wFreq+wExec+wCtx+wOffline;
+
+   const statisticalRisk=(
+     wT1*Number(transition[d]||0)+
+     wT2*Number(transition2[d]||0)+
+     wT3*Number(transition3[d]||0)+
+     wRecent*Number(recent[d]||0)+
+     wMicro*Number(micro[d]||0)+
+     wFreq*Number(frequency[d]||0)+
+     wExec*Number(execution[d]||0)+
+     wCtx*Number(contextExecution[d]||0)+
+     wOffline*Number(offline[d]||0)
+   )/Math.max(.0001,wSum);
+
    const adaptiveStat=.65*legacyRisk+.35*learnedRisk;
-   const baseRisk=.80*statisticalRisk+.15*adaptiveStat+.05*Number(neural[d]||0);
+   const rawBaseRisk=.80*statisticalRisk+.15*adaptiveStat+.05*Number(neural[d]||0);
+
+   // Con poca evidencia, evita falsa precisión y acerca el riesgo al 10% base.
+   const baseRisk=.10+(rawBaseRisk-.10)*confidence;
    const components=allSources.map(v=>Number(v[d]||0));
    const uncertainty=Math.max(...components)-Math.min(...components);
-   // Conservative ranking only: uncertainty slightly penalizes a digit, but never blocks a trade.
-   const rankRisk=Math.min(.30,Math.max(.001,baseRisk+.06*uncertainty));
    const sourceConsensus=top2.reduce((n,a)=>n+(a.includes(d)?1:0),0);
+   const dangerConsensus=hot2.reduce((n,a)=>n+(a.includes(d)?1:0),0);
+
+   // Si varias señales creen que este dígito está "caliente", lo castigamos.
+   const dangerPenalty=.0018*dangerConsensus;
+   const rankRisk=Math.min(.30,Math.max(.001,baseRisk+.05*uncertainty+dangerPenalty));
    rows.push({
      digit:d,matchProb:rankRisk,rawMatchProb:baseRisk,avoidProb:1-rankRisk,
      transition:transition[d],transition2:transition2[d],transition3:transition3[d],recent:recent[d],micro:micro[d],frequency:frequency[d],
      neuralRisk:neural[d],executionRisk:execution[d],contextExecutionRisk:contextExecution[d],offlineRisk:offline[d],agree:votes[d]||0,
-     uncertainty,sourceConsensus
+     uncertainty,sourceConsensus,dangerConsensus,regime,confidence
    });
  }
  rows.sort((a,b)=>a.matchProb-b.matchProb||b.sourceConsensus-a.sourceConsensus||a.neuralRisk-b.neuralRisk||a.digit-b.digit);
@@ -1297,7 +1346,7 @@ function renderAvoidMatchScanner(){
  $('safetyMeta').textContent='diversificacion suave · '+usedRecent+'/10 digitos usados recientemente · MATCH 100/250/500 '+(r100==null?'–':pct(r100))+' / '+(r250==null?'–':pct(r250))+' / '+(r500==null?'–':pct(r500))+' · HIT real '+(ec.hit==null?'–':pct(ec.hit))+' ('+ec.n+')';
  $('safetyGap').textContent=d.opportunityScore+' / '+d.opportunityThreshold;
  $('safetyRecent').textContent=r100==null?'–':pct(r100);
- $('safetyTransition').textContent='D'+d.digit+' · T1 '+pct(d.transition)+' · T2 '+pct(d.transition2)+' · T3 '+pct(d.transition3)+' · offline '+pct(d.offlineRisk)+' · contexto '+pct(d.contextExecutionRisk)+' · neural '+pct(d.neuralRisk);
+ $('safetyTransition').textContent='D'+d.digit+' · T1 '+pct(d.transition)+' · T2 '+pct(d.transition2)+' · T3 '+pct(d.transition3)+' · caliente '+Number(d.dangerConsensus||0)+' · régimen '+pct(d.regime)+' · confianza '+pct(d.confidence);
  return d;
 }
 function coldDigit(a,n){
