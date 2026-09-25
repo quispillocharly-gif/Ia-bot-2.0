@@ -9,7 +9,7 @@ R=Path(__file__).resolve().parent
 M=R/"memory"; M.mkdir(exist_ok=True)
 CAND=M/"differ_candidate.joblib"; CANDMETA=M/"differ_candidate.json"
 FROZEN=M/"differ_frozen.joblib"; FMETA=M/"differ_frozen.json"
-STATE=M/"differ_forward_state.json"; OUT=M/"differ_forward_latest.json"; PAYOUT=M/"differ_payout_snapshot.json"
+STATE=M/"differ_forward_state.json"; OUT=M/"differ_forward_latest.json"; PAYOUT=M/"differ_payout_snapshot.json"; GRAVE=M/"differ_graveyard.json"
 BASE=.90; PAYOUT_MAX_AGE=7200
 
 VARIANTS=[
@@ -51,6 +51,10 @@ def payout_info():
     fresh=bool(age is not None and age<=PAYOUT_MAX_AGE and len(rows)==10 and be is not None)
     return rows,float(be) if be is not None else None,age,fresh
 
+def load_json(path,default=None):
+    try:return json.loads(path.read_text())
+    except Exception:return {} if default is None else default
+
 def freeze(ticks):
     if not CAND.exists() or not CANDMETA.exists(): raise RuntimeError("No DIFFER candidate")
     shutil.copy2(CAND,FROZEN); shutil.copy2(CANDMETA,FMETA)
@@ -71,8 +75,26 @@ def main():
     ticks=sorted(json.loads((R/"ticks.json").read_text())["ticks"],key=lambda x:int(x["epoch"]))
     if not ticks: raise RuntimeError("No ticks")
     pmap,be,payout_age,payout_fresh=payout_info()
-    if STATE.exists() and FROZEN.exists() and FMETA.exists(): st=json.loads(STATE.read_text())
-    else: st=freeze(ticks)
+    candmeta=load_json(CANDMETA,{})
+    prev=load_json(OUT,{})
+    if STATE.exists() and FROZEN.exists() and FMETA.exists():
+        st=json.loads(STATE.read_text())
+        prev_leader=prev.get("leader") or {}
+        failed=bool(prev_leader.get("status")=="NOT_CONFIRMED" and not prev.get("confirmed_variants"))
+        new_candidate=bool(candmeta.get("model_id") and candmeta.get("model_id")!=st.get("model_id"))
+        if failed and new_candidate:
+            grave=load_json(GRAVE,{"entries":[]})
+            grave.setdefault("entries",[]).append({
+                "model_id":st.get("model_id"),"failed_at":int(time.time()),
+                "leader_id":prev_leader.get("id"),"signals":prev_leader.get("signals"),
+                "hit_rate":prev_leader.get("hit_rate"),"wilson_lower":prev_leader.get("wilson_lower"),
+                "break_even_rate":prev.get("break_even_rate"),"reason":"FORWARD_NOT_CONFIRMED"
+            })
+            grave["entries"]=grave["entries"][-60:]
+            GRAVE.write_text(json.dumps(grave,indent=2))
+            st=freeze(ticks)
+    else:
+        st=freeze(ticks)
     bundle=joblib.load(FROZEN); clf=bundle["clf"]; enc=bundle["encoder"]; window=int(bundle["window"])
     fresh=[x for x in ticks if int(x["epoch"])>int(st["last_epoch"])]
     hist=list(map(int,st["history"]))
@@ -127,6 +149,7 @@ def main():
                          "uniformity_chi_square_p":chi_p,"max_digit_share_deviation":maxdev},
          "leader":rows[0] if rows else None,"variants":rows,
          "confirmed_variants":[x["id"] for x in rows if x["status"]=="ECONOMIC_CANDIDATE"],
+         "graveyard_size":len(load_json(GRAVE,{"entries":[]}).get("entries",[])),
          "status":"EDGE_CANDIDATE" if any(x["status"]=="ECONOMIC_CANDIDATE" for x in rows) else "RESEARCHING",
          "note":"Forward-only DIFFER shadow lab. 100% is not assumed or guaranteed. Promotion requires economic break-even, Wilson lower bound, Bonferroni significance, positive shadow P&L and stability across three time blocks."}
     OUT.write_text(json.dumps(out,indent=2)); print(json.dumps(out,indent=2))
