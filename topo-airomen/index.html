@@ -223,7 +223,7 @@ button:disabled{opacity:.45;cursor:not-allowed;filter:grayscale(.4)}
   <div><div class="lab">MEJOR RACHA</div><div id="streakBest" class="big green">0</div><div id="streakBestMeta" class="mini">Sin racha registrada</div></div>
   <div><div class="lab">46 WIN STREAK LAB</div><div id="streakLabState" class="big yellow">BUSCANDO 46</div><div id="streakLabMeta" class="mini">Filtro progresivo segun la racha.</div></div>
  </div>
- <div id="ladderInfo" class="mini statusline">46 WIN STREAK LAB: un LOSS reinicia la racha; el sistema aprende de las mejores rachas. Stake maximo USD 6. Sin martingala.</div>
+ <div id="ladderInfo" class="mini statusline">OBJETIVO PRINCIPAL: +$20 netos. Al alcanzarlo, AUTO-DEMO se detiene. La racha de 46 queda como métrica de investigación. Stake maximo USD 6. Sin martingala.</div>
  <div id="autoDemoState" class="mini statusline">La IA analiza continuamente los 10 dígitos y solo compra cuando detecta una oportunidad anti-MATCH que además supera el margen económico. Sin espera fija. Solo demo.</div>
  <div id="tradeTrace" class="mini statusline">TRACE: esperando AUTO-DEMO…</div>
 </div>
@@ -446,7 +446,7 @@ function resetProfitSession(){
  if(latestLiveEnsemble)liveEnsemble=latestLiveEnsemble;
  liveRuleId='avoid_match_adaptive_all_digits';
  $('sessionPolicy').textContent='V3 · AVOID MATCH';
- $('policyMeta').textContent='MENOS PROBABLE PRO · compra continua · 7 señales adaptativas · aprende MATCH reales · max 2 seguidas/numero · stake max USD 6';
+ $('policyMeta').textContent='MENOS PROBABLE PRO · objetivo principal +$20 · racha 46 solo investigación · compra continua · aprende MATCH reales · max 2 seguidas/numero · stake max USD 6';
  renderProfitSession();renderStreakLab();
  trace('SESIÓN NUEVA · meta +$20.00 · stop -$'+sessionStopLoss().toFixed(2)+' · '+$('sessionPolicy').textContent,true);
 }
@@ -477,17 +477,14 @@ function applyProfitLadder(profit){
    }
  }
  renderProfitSession();
- if(sessionPnl>=SESSION_TARGET && streakTargetHit){
+ if(sessionPnl>=SESSION_TARGET){
    countFinishedSession('WIN');
    sessionStopped=true;autoDemo=false;syncAutoDemoUI();
-   $('autoDemoState').textContent='META COMPLETA: USD '+sessionPnl.toFixed(2)+' y racha de 46 WIN registrada. AUTO-DEMO detenido.';
-   trace('OBJETIVO COMPLETO: USD 20 Y RACHA 46 WIN',true);
- }else if(sessionPnl>=SESSION_TARGET && !streakTargetHit){
-   $('autoDemoState').textContent='USD 20 alcanzados. STREAK LAB sigue buscando la racha de 46 WIN.';
-   trace('META ECONOMICA OK - buscando racha '+currentWinStreak+'/'+WIN_STREAK_TARGET);
+   $('autoDemoState').textContent='META +$20 ALCANZADA: USD '+sessionPnl.toFixed(2)+' netos. AUTO-DEMO detenido para proteger la sesión.';
+   trace('OBJETIVO +$20 NETOS ALCANZADO - sesión protegida',true);
  }else if(streakTargetHit && sessionPnl<SESSION_TARGET){
-   $('autoDemoState').textContent='Racha 46 WIN lograda. Buscando completar USD 20 netos.';
-   trace('RACHA 46 OK - PNL '+sessionPnl.toFixed(2)+' / 20');
+   $('autoDemoState').textContent='Racha 46 WIN registrada como investigación. La sesión sigue solo hasta completar +$20.';
+   trace('RACHA 46 REGISTRADA - objetivo económico sigue siendo +$20');
  }else if(sessionPnl<=-sessionStopLoss()){
    countFinishedSession('LOSS');
    sessionStopped=true;autoDemo=false;syncAutoDemoUI();
