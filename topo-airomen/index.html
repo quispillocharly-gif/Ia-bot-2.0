@@ -54,7 +54,7 @@ button:disabled{opacity:.45;cursor:not-allowed}
 </div>
 
 <div class="card signal">
- <div class="lab">ZERO-MATCH LIVE · MATCH AI CONTRARIAN + DIFFER · NO REPITE DÍGITO</div>
+ <div class="lab">ZERO-MATCH LIVE · MATCH AI CONTRARIAN + DIFFER · 10 DÍGITOS LIBRES</div>
  <div id="bestDigit" class="digit">DIFFER –</div>
  <div id="signalMeta" class="mini">Esperando historial R_75…</div>
  <div id="ranking" class="chips"></div>
@@ -103,7 +103,7 @@ button:disabled{opacity:.45;cursor:not-allowed}
 <script>
 'use strict';
 
-const BUILD='CLEAN-2.1-MATCH-CONTRARIAN';
+const BUILD='CLEAN-2.2-NO-DIGIT-FREEZE';
 const CADENCE_MIN=1,CADENCE_MAX=3;
 const SYMBOL='R_75';
 const TARGET=10;
@@ -460,9 +460,9 @@ function analyze(){
   const mb=matchBrain();
 
   const digits=[0,1,2,3,4,5,6,7,8,9];
-  const allowed=(lastBoughtDigit==null)
-    ?digits
-    :digits.filter(d=>Number(d)!==Number(lastBoughtDigit));
+  // Ningún dígito queda bloqueado entre operaciones.
+  // Los 10 vuelven a competir desde cero en CADA tick.
+  const allowed=digits;
 
   const rows=digits.map(d=>{
     const score=
@@ -491,8 +491,7 @@ function analyze(){
   const predicted=Number(mb.digit);
   const best=rows[predicted];
 
-  const noRepeat=lastBoughtDigit==null||predicted!==Number(lastBoughtDigit);
-  const dualAgreement=noRepeat&&safeSet.has(predicted);
+  const dualAgreement=safeSet.has(predicted);
   const enoughMatchVotes=mb.votes>=2;
   const hardRisk=best.score<=.105 && best.neural<=.115;
   const ok=dualAgreement&&enoughMatchVotes&&hardRisk;
@@ -546,7 +545,7 @@ function renderDecision(){
     ' · idle '+d.idleTradeTicks+
     ' · cadena '+d.cadenceStep+
     ' espera '+d.ticksIntoCadence+'/'+d.cadenceWait+
-    (d.lastBoughtDigit==null?'':' · bloqueado D'+d.lastBoughtDigit);
+    ' · 10/10 DÍGITOS LIBRES';
 
   $('ranking').innerHTML=d.rows.map(x=>
     '<span class="chip '+(x.digit===d.best.digit?'best':'')+'">D'+x.digit+' '+pct(x.score)+' · MV'+x.matchVotes+'</span>'
