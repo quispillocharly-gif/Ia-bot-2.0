@@ -325,7 +325,9 @@ const SESSION_TARGET=20;
 const WIN_STREAK_TARGET=46;
 const STREAK_BLOCK_SIZE=10;
 const HARD_MAX_STAKE=6;
-const AGGRESSIVE_WIN_GROWTH=2.25;
+const GRADUAL_WIN_GROWTH=.85;
+const MIN_WIN_STEP_RATE=.05;
+const MAX_WIN_STEP_RATE=.12;
 let blockPauseTicks=0,lastProtectedBlock=0;
 const STREAK_LAB_KEY='topo_airomen_streak_lab_v1';
 const EXEC_HISTORY_KEY='topo_airomen_exec_history_v1';
@@ -516,7 +518,7 @@ function resetProfitSession(){
  if(latestLiveEnsemble)liveEnsemble=latestLiveEnsemble;
  liveRuleId='avoid_match_adaptive_all_digits';
  $('sessionPolicy').textContent='V3 · AVOID MATCH';
- $('policyMeta').textContent='ANTI-MATCH TURBO - cada tick - stake sube rapido tras WIN hasta USD 6 - LOSS vuelve a base - objetivo +20';
+ $('policyMeta').textContent='ANTI-MATCH CONTINUO - cada WIN sube el stake gradualmente - max USD 6 - LOSS vuelve a base - objetivo +20';
  renderProfitSession();renderStreakLab();
  trace('SESIÓN NUEVA · meta +$20.00 · stop -$'+sessionStopLoss().toFixed(2)+' · '+$('sessionPolicy').textContent,true);
 }
@@ -524,9 +526,11 @@ function applyProfitLadder(profit){
  sessionPnl+=profit;
  if(profit>=0){
    sessionWins++;
-   const minStep=baseStake()*.12;
-   const step=Math.max(Math.max(0,profit)*AGGRESSIVE_WIN_GROWTH,minStep);
-   currentStake=Math.min(HARD_MAX_STAKE,maxSessionStake(),Math.max(baseStake(),currentStake+step));
+   const b=baseStake();
+   const rawStep=Math.max(Math.max(0,profit)*GRADUAL_WIN_GROWTH,b*MIN_WIN_STEP_RATE);
+   const maxStep=Math.max(b*MIN_WIN_STEP_RATE,currentStake*MAX_WIN_STEP_RATE);
+   const step=Math.min(rawStep,maxStep);
+   currentStake=Math.min(HARD_MAX_STAKE,maxSessionStake(),Math.max(b,currentStake+step));
    if(activeMoneyPolicy.promoted)sessionBatchWins++;
  }else{
    sessionLosses++;
