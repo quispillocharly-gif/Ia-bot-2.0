@@ -161,7 +161,12 @@ def main():
               "status":"MEASURED" if comp>=20 else "COLLECTING"
             })
 
-    measured=[r for r in rows if r["sessions_completed"]>=20]
+    measured=[
+      r for r in rows
+      if r["sessions_completed"]>=20
+      and r["target_rate"] is not None
+      and r["target_rate"]>=0.30
+    ]
     measured.sort(key=lambda r:(r["target_rate"],-r["max_drawdown"],-(r["median_trades_to_target"] or 99999)),reverse=True)
     leader=measured[0] if measured else None
 
@@ -171,6 +176,7 @@ def main():
       "stages":4,"batch_size":BATCH,"stop_loss":STOP,"base_stake":BASE,
       "max_stake":MAX_STAKE,"payout_win_profit_ratio":wr,"leader":leader,
       "policies":rows,"status":"POLICY_CANDIDATE" if leader else "COLLECTING",
+      "promotion_rule":"At least 20 completed prospective sessions and target_rate >= 30% before money-management promotion.",
       "note":"Prospective only. Four +$5 stages, checkpoints every 5 trades, optional compounding and pauses after MATCH. Live AUTO-DEMO is unchanged until enough completed sessions exist."
     }
     OUT.write_text(json.dumps(out,indent=2))
