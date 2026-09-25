@@ -223,8 +223,8 @@ button:disabled{opacity:.45;cursor:not-allowed;filter:grayscale(.4)}
   <div><div class="lab">MEJOR RACHA</div><div id="streakBest" class="big green">0</div><div id="streakBestMeta" class="mini">Sin racha registrada</div></div>
   <div><div class="lab">46 WIN STREAK LAB</div><div id="streakLabState" class="big yellow">BUSCANDO 46</div><div id="streakLabMeta" class="mini">Filtro progresivo segun la racha.</div></div>
  </div>
- <div id="ladderInfo" class="mini statusline">ANTI-MATCH DIVERSIFICADO: cada ciclo usa los 10 dígitos una vez, siempre empezando por el menos riesgoso entre los que faltan. Después de un MATCH observa 5-10 ticks y recalibra. Cada 10 WIN protege la racha. +$20 detiene la sesión.</div>
- <div id="autoDemoState" class="mini statusline">La IA analiza continuamente los 10 dígitos y solo compra cuando detecta una oportunidad anti-MATCH que además supera el margen económico. Sin espera fija. Solo demo.</div>
+ <div id="ladderInfo" class="mini statusline">ANTI-MATCH ESTADISTICO: 1 contrato a la vez. Prioriza transiciones T1/T2/T3, frecuencia, recencia y memoria de MATCH reales. La red neural solo apoya. Stake gradual y +$20 detiene la sesión.</div>
+ <div id="autoDemoState" class="mini statusline">AUTO-DEMO estadístico: al cerrar un contrato usa el tick más reciente para escoger el siguiente DIFFER. Un contrato a la vez. Solo demo.</div>
  <div id="tradeTrace" class="mini statusline">TRACE: esperando AUTO-DEMO…</div>
 </div>
 <div class="card"><div class="lab">TOURNAMENT · 6 VARIANTES PREDECLARADAS</div><div class="scroll"><table>
@@ -434,11 +434,10 @@ function armBlockProtection(){
  if(currentWinStreak%STREAK_BLOCK_SIZE===0 && block>lastProtectedBlock){
    lastProtectedBlock=block;
    blockPauseTicks=adaptiveBlockPauseTicks();
-   currentStake=baseStake();
-   trace('BLOQUE '+currentWinStreak+' WIN · recalibrando '+blockPauseTicks+' ticks para evitar MATCH',true);
+   trace('BLOQUE '+currentWinStreak+' WIN · recalibración estadística '+blockPauseTicks+' ticks · stake se mantiene',true);
  }
 }
-function renderStreakLab(){const p=streakPhase();if($('streakCurrent'))$('streakCurrent').textContent=currentWinStreak+' / '+WIN_STREAK_TARGET;if($('streakPhase'))$('streakPhase').textContent=blockPauseTicks>0?('RECALIBRANDO · '+blockPauseTicks+' ticks'):p.name;if($('streakBest'))$('streakBest').textContent=bestWinStreak;if($('streakLabState'))$('streakLabState').textContent=streakTargetHit?'46 ALCANZADO':(blockPauseTicks>0?'PROTEGIENDO RACHA':'BUSCANDO '+WIN_STREAK_TARGET);if($('streakLabMeta')){const ec=executionCalibration();$('streakLabMeta').textContent='bloques de 10 WIN · pausa adaptativa '+(blockPauseTicks>0?blockPauseTicks:'4-8')+' ticks · HIT real '+(ec.hit==null?'–':pct(ec.hit))+' · stake max USD '+HARD_MAX_STAKE.toFixed(2);}if($('streakBestMeta')){const c=bestStreakContext;$('streakBestMeta').textContent=c?('EDGE '+(c.edge>=0?'+':'')+pct(c.edge)+' - SCORE '+c.score+' - D'+c.barrier):'Sin racha registrada'}}
+function renderStreakLab(){const p=streakPhase();if($('streakCurrent'))$('streakCurrent').textContent=currentWinStreak+' / '+WIN_STREAK_TARGET;if($('streakPhase'))$('streakPhase').textContent=blockPauseTicks>0?('RECALIBRANDO · '+blockPauseTicks+' ticks'):p.name;if($('streakBest'))$('streakBest').textContent=bestWinStreak;if($('streakLabState'))$('streakLabState').textContent=streakTargetHit?'46 ALCANZADO':(blockPauseTicks>0?'PROTEGIENDO RACHA':'BUSCANDO '+WIN_STREAK_TARGET);if($('streakLabMeta')){const ec=executionCalibration();$('streakLabMeta').textContent='bloques de 10 WIN · recalibración sin detener compras '+(blockPauseTicks>0?blockPauseTicks:'4-8')+' ticks · HIT real '+(ec.hit==null?'–':pct(ec.hit))+' · stake max USD '+HARD_MAX_STAKE.toFixed(2);}if($('streakBestMeta')){const c=bestStreakContext;$('streakBestMeta').textContent=c?('EDGE '+(c.edge>=0?'+':'')+pct(c.edge)+' - SCORE '+c.score+' - D'+c.barrier):'Sin racha registrada'}}
 function updateWinStreak(profit,snapshot=activeSignalSnapshot){if(profit>0){currentWinStreak++;if(currentWinStreak>=WIN_STREAK_TARGET)streakTargetHit=true;if(currentWinStreak>bestWinStreak){bestWinStreak=currentWinStreak;bestStreakContext=snapshot?Object.assign({},snapshot):bestStreakContext;saveStreakLab()}armBlockProtection()}else{currentWinStreak=0;blockPauseTicks=0;lastProtectedBlock=0}renderStreakLab();}
 function loadExecHistory(){
  try{
@@ -457,6 +456,9 @@ function recordExecutedTrade(profit,snapshot){
   matchProb:Number(s.matchProb??0),
   barrier:Number(s.barrier??-1),
   streakBefore:Number(s.streakBefore??0),
+  last1:Number(s.last1??-1),
+  last2:Number(s.last2??-1),
+  last3:Number(s.last3??-1),
   t:Date.now()
  });
  if(execHistory.length>500)execHistory=execHistory.slice(-500);
@@ -1008,6 +1010,19 @@ function secondOrderTransitionRiskVector(n=1200){
  const blend=Math.max(.20,Math.min(.80,support/20));
  return normVec(order2.map((x,d)=>blend*x+(1-blend)*order1[d]));
 }
+function thirdOrderTransitionRiskVector(n=1500){
+ const z=liveSeq.slice(-n);
+ if(z.length<4)return secondOrderTransitionRiskVector(Math.min(n,1200));
+ const a=z[z.length-3],b=z[z.length-2],c0=z[z.length-1],c=Array(10).fill(1.2);
+ let support=0;
+ for(let i=3;i<z.length;i++){
+   if(z[i-3]===a&&z[i-2]===b&&z[i-1]===c0){c[z[i]]++;support++}
+ }
+ const order3=normVec(c);
+ const order2=secondOrderTransitionRiskVector(Math.min(n,1200));
+ const blend=Math.max(.10,Math.min(.70,support/15));
+ return normVec(order3.map((x,d)=>blend*x+(1-blend)*order2[d]));
+}
 function recentBehaviorVector(){
  const a=smoothShareVector(20,2),b=smoothShareVector(60,2);
  return normVec(a.map((x,d)=>.65*x+.35*b[d]));
@@ -1027,6 +1042,25 @@ function executionDigitRiskVector(){
    const z=rows.filter(x=>Number(x.barrier)===d);
    const matches=z.reduce((n,x)=>n+(Number(x.win||0)===0?1:0),0);
    out[d]=(2+matches)/(20+z.length);
+ }
+ return normVec(out);
+}
+function contextualExecutionRiskVector(){
+ const rows=(Array.isArray(execHistory)?execHistory:[]).slice(-400);
+ const l1=liveSeq[liveSeq.length-1],l2=liveSeq[liveSeq.length-2],l3=liveSeq[liveSeq.length-3];
+ const out=Array(10).fill(.10);
+ for(let d=0;d<10;d++){
+   let weightedMatches=1.5,weightedTotal=15;
+   for(const x of rows){
+     if(Number(x.barrier)!==d)continue;
+     let w=.20;
+     if(Number(x.last1)===Number(l1))w+=.60;
+     if(Number(x.last1)===Number(l1)&&Number(x.last2)===Number(l2))w+=.90;
+     if(Number(x.last1)===Number(l1)&&Number(x.last2)===Number(l2)&&Number(x.last3)===Number(l3))w+=1.20;
+     weightedTotal+=w;
+     if(Number(x.win||0)===0)weightedMatches+=w;
+   }
+   out[d]=weightedMatches/weightedTotal;
  }
  return normVec(out);
 }
@@ -1102,11 +1136,13 @@ function scanAvoidMatchDigits(){
  if(liveSeq.length<1)return [];
  const transition=transitionRiskVector(800);
  const transition2=secondOrderTransitionRiskVector(1200);
+ const transition3=thirdOrderTransitionRiskVector(1500);
  const recent=recentBehaviorVector();
  const micro=microBehaviorVector();
  const frequency=frequencyRecencyVector(240);
  const neural=neuralRiskVector();
  const execution=executionDigitRiskVector();
+ const contextExecution=contextualExecutionRiskVector();
 
  const coreW=learnerWeights();
  const advW=advancedWeights();
@@ -1116,7 +1152,7 @@ function scanAvoidMatchDigits(){
  for(const p of modelPs){let b=0;for(let d=1;d<10;d++)if(p[d]<p[b])b=d;votes[b]++}
 
  const adaptiveSources=[transition,transition2,recent,micro,frequency,neural];
- const allSources=[transition,transition2,recent,micro,frequency,neural,execution];
+ const allSources=[transition,transition2,transition3,recent,micro,frequency,execution,contextExecution,neural];
  const top2=allSources.map(v=>Array.from({length:10},(_,d)=>d).sort((a,b)=>v[a]-v[b]).slice(0,2));
  const rows=[];
  for(let d=0;d<10;d++){
@@ -1127,14 +1163,16 @@ function scanAvoidMatchDigits(){
    // transición 1/2, frecuencia, recencia y desempeño real pesan mucho más
    // que la red neural. La IA queda como desempate/apoyo.
    const statisticalRisk=
-     .22*Number(transition[d]||0)+
-     .20*Number(transition2[d]||0)+
-     .16*Number(recent[d]||0)+
-     .10*Number(micro[d]||0)+
-     .18*Number(frequency[d]||0)+
-     .14*Number(execution[d]||0);
+     .14*Number(transition[d]||0)+
+     .17*Number(transition2[d]||0)+
+     .15*Number(transition3[d]||0)+
+     .14*Number(recent[d]||0)+
+     .08*Number(micro[d]||0)+
+     .16*Number(frequency[d]||0)+
+     .08*Number(execution[d]||0)+
+     .08*Number(contextExecution[d]||0);
    const adaptiveStat=.65*legacyRisk+.35*learnedRisk;
-   const baseRisk=.72*statisticalRisk+.20*adaptiveStat+.08*Number(neural[d]||0);
+   const baseRisk=.80*statisticalRisk+.15*adaptiveStat+.05*Number(neural[d]||0);
    const components=allSources.map(v=>Number(v[d]||0));
    const uncertainty=Math.max(...components)-Math.min(...components);
    // Conservative ranking only: uncertainty slightly penalizes a digit, but never blocks a trade.
@@ -1142,15 +1180,15 @@ function scanAvoidMatchDigits(){
    const sourceConsensus=top2.reduce((n,a)=>n+(a.includes(d)?1:0),0);
    rows.push({
      digit:d,matchProb:rankRisk,rawMatchProb:baseRisk,avoidProb:1-rankRisk,
-     transition:transition[d],transition2:transition2[d],recent:recent[d],micro:micro[d],frequency:frequency[d],
-     neuralRisk:neural[d],executionRisk:execution[d],agree:votes[d]||0,
+     transition:transition[d],transition2:transition2[d],transition3:transition3[d],recent:recent[d],micro:micro[d],frequency:frequency[d],
+     neuralRisk:neural[d],executionRisk:execution[d],contextExecutionRisk:contextExecution[d],agree:votes[d]||0,
      uncertainty,sourceConsensus
    });
  }
  rows.sort((a,b)=>a.matchProb-b.matchProb||b.sourceConsensus-a.sourceConsensus||a.neuralRisk-b.neuralRisk||a.digit-b.digit);
  return {
    rows,
-   features:{transition,recent,frequency,advancedSources:adaptiveSources},
+   features:{transition,transition2,transition3,recent,frequency,advancedSources:adaptiveSources},
    weights:{core:coreW,advanced:advW}
  };
 }
@@ -1228,7 +1266,7 @@ function renderAvoidMatchScanner(){
  $('avoidBest').textContent='DIFFER '+d.digit;
  $('avoidBest').style.color=d.ok?'#6affb6':'#ffe66d';
  const r100=rollingMatchRate(100),r250=rollingMatchRate(250),r500=rollingMatchRate(500);
- $('avoidMeta').textContent='MENOS PROBABLE: D'+d.digit+' · riesgo MATCH '+pct(d.matchProb)+' · 7 señales aprendiendo · '+(d.ok?'COMPRA CONTINUA':'CARGANDO HISTORIAL');
+ $('avoidMeta').textContent='MENOS PROBABLE: D'+d.digit+' · riesgo MATCH '+pct(d.matchProb)+' · estadística T1/T2/T3 + recencia + memoria real · '+(d.ok?'LISTO':'APRENDIENDO');
  $('avoidRanking').innerHTML=d.rows.map(x=>'<span class="chip '+(x.digit===d.digit?'best':'')+'">D'+x.digit+' · riesgo '+pct(x.matchProb)+'</span>').join('');
  $('safetyStatus').textContent=d.ok?'DYNAMIC':'LEARNING';
  $('safetyStatus').className='big '+(d.ok?'green':'yellow');
@@ -1237,7 +1275,7 @@ function renderAvoidMatchScanner(){
  $('safetyMeta').textContent='diversificacion suave · '+usedRecent+'/10 digitos usados recientemente · MATCH 100/250/500 '+(r100==null?'–':pct(r100))+' / '+(r250==null?'–':pct(r250))+' / '+(r500==null?'–':pct(r500))+' · HIT real '+(ec.hit==null?'–':pct(ec.hit))+' ('+ec.n+')';
  $('safetyGap').textContent=d.opportunityScore+' / '+d.opportunityThreshold;
  $('safetyRecent').textContent=r100==null?'–':pct(r100);
- $('safetyTransition').textContent='D'+d.digit+' · T1 '+pct(d.transition)+' · T2 '+pct(d.transition2)+' · micro '+pct(d.micro)+' · neural '+pct(d.neuralRisk)+' · memoria MATCH '+pct(d.executionRisk);
+ $('safetyTransition').textContent='D'+d.digit+' · T1 '+pct(d.transition)+' · T2 '+pct(d.transition2)+' · T3 '+pct(d.transition3)+' · memoria contexto '+pct(d.contextExecutionRisk)+' · neural '+pct(d.neuralRisk);
  return d;
 }
 function coldDigit(a,n){
@@ -1333,7 +1371,12 @@ function maybeAutoBuy(signalOk,tickEpoch=Date.now()){
  const currency=derivDemoAccount?.currency||derivDemoAccount?.currency_code||'USD';
  const chosenPredictedWin=1-chosenRisk;
  const chosenRawEdge=chosenPredictedWin-currentBreakEven;
- pendingSignalSnapshot={barrier:chosenBarrier,edge:chosenRawEdge,score:chosenScore,matchProb:chosenRisk,predictedWin:chosenPredictedWin,consensus:chosenConsensus,uncertainty:chosenUncertainty,streakBefore:currentWinStreak,epoch:tickEpoch};
+ pendingSignalSnapshot={
+   barrier:chosenBarrier,edge:chosenRawEdge,score:chosenScore,matchProb:chosenRisk,
+   predictedWin:chosenPredictedWin,consensus:chosenConsensus,uncertainty:chosenUncertainty,
+   streakBefore:currentWinStreak,epoch:tickEpoch,
+   last1:liveSeq[liveSeq.length-1],last2:liveSeq[liveSeq.length-2],last3:liveSeq[liveSeq.length-3]
+ };
  pendingTrade=true;
  const req=++tradeReq;lastProposalReq={req,stake,barrier:chosenBarrier,predictedWin:chosenPredictedWin,minEdge:streakPhase().edge,currency,retries:0};
  $('lastDemoBuy').textContent='PROPUESTA '+chosenBarrier;
