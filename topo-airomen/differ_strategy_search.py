@@ -13,7 +13,7 @@ OUT=M/"differ_strategy_search_latest.json"
 
 MAX_EXAMPLES=5000
 MIN_HISTORY=220
-CADENCE=[1,2,3]
+CADENCE_MODES=['ctx3','ctx4','ctx3_nr']
 
 def load_json(path, default=None):
     try:return json.loads(path.read_text())
@@ -45,6 +45,17 @@ def trans_probs(hist,order,lookback):
         w=max(.08,min(.65,support/12))
         p=w*p+(1-w)*p2
     return p
+
+def cadence_wait(mode,ex,step,blocked,prev_wait):
+    tail=[int(x) for x in ex.get("tail",[])]
+    max_wait=4 if mode=="ctx4" else 3
+    h=17+int(step)*31+(0 if blocked is None else int(blocked)*13)
+    for i,d in enumerate(tail):
+        h=(h*33+d*(i+3)+7)%9973
+    wait=1+(h%max_wait)
+    if mode=="ctx3_nr" and prev_wait and wait==prev_wait:
+        wait=1+(wait%3)
+    return int(wait)
 
 def longest_streak(outcomes):
     best=cur=0
@@ -90,7 +101,14 @@ def strategy_grid():
     for rank in [1,2]:
         for ms in [.105,.100,.095]:
             out.append({"id":f"struct_r{rank}_s{ms:.3f}","family":"struct","max_rank":rank,"max_score":ms})
-    return out
+    expanded=[]
+    for cfg in out:
+        for mode in CADENCE_MODES:
+            z=dict(cfg)
+            z["cadence_mode"]=mode
+            z["id"]=cfg["id"]+"_"+mode
+            expanded.append(z)
+    return expanded
 
 def choose(cfg,ex,blocked=None):
     n=ex["neural"]; t1=ex["t1"]; t2=ex["t2"]; t3=ex["t3"]; recent=ex["recent"]
@@ -132,13 +150,15 @@ def choose(cfg,ex,blocked=None):
 def eval_strategy(cfg,examples):
     out=[]
     last_barrier=None
-    cadence_index=0
     ticks_waited=0
     emitted=0
+    mode=cfg.get("cadence_mode","ctx3_nr")
+    prev_wait=0
+    current_wait=cadence_wait(mode,examples[0],0,None,0) if examples else 1
+    chain=[]
     for ex in examples:
         ticks_waited+=1
-        need=CADENCE[cadence_index]
-        if ticks_waited<need:
+        if ticks_waited<current_wait:
             continue
         d=choose(cfg,ex,last_barrier)
         if d is None:
@@ -146,11 +166,14 @@ def eval_strategy(cfg,examples):
         out.append(int(int(ex["target"])!=d))
         emitted+=1
         last_barrier=d
-        cadence_index=(cadence_index+1)%len(CADENCE)
+        chain.append(current_wait)
+        prev_wait=current_wait
+        current_wait=cadence_wait(mode,ex,emitted,last_barrier,prev_wait)
         ticks_waited=0
     m=metrics(out,len(examples))
-    m["cadence"]=CADENCE
-    m["no_repeat"]=True
+    m["cadence_mode"]=mode
+    m["cadence_preview"]=chain[:30]
+    m["no_repeat_digit"]=True
     m["signals_emitted"]=emitted
     return m,out
 
@@ -185,6 +208,7 @@ def main():
         hist=digits[:i].tolist()
         examples.append({
             "epoch":int(epochs[i]),"target":int(digits[i]),"neural":full,
+            "tail":[int(x) for x in hist[-6:]],
             "recent":recent_probs(hist,80),
             "t1":trans_probs(hist,1,1000),
             "t2":trans_probs(hist,2,1200),
@@ -243,8 +267,8 @@ def main():
         "leader":leader,
         "perfect_candidates":perfect,
         "status":"PERFECT_FORWARD_CANDIDATE" if perfect else "SEARCHING",
-        "target":"Find 1-2-3 cadence + no-repeat strategies with 0 MATCH in both chronological validation and holdout with >=50 signals in each block. This is evidence, not a guarantee of future 100%.",
-        "note":"Every tested strategy uses cadence 1->2->3 and blocks the previous barrier digit. Strategy choice is made before the final holdout. Signal count is tracked so a sparse 3/3 rule cannot masquerade as a useful 100% strategy."
+        "target":"Find dynamic cadence + no-repeat-digit strategies with 0 MATCH in both chronological validation and holdout with >=50 signals in each block. This is evidence, not a guarantee of future 100%.",
+        "note":"Cadence families tested: dynamic 1-3, dynamic 1-4, and dynamic 1-3 without repeating the same wait. All block the previous barrier digit. Strategy choice is made before the final holdout; sparse samples are rejected."
     }
     OUT.write_text(json.dumps(out,indent=2)); print(json.dumps(out,indent=2))
 
