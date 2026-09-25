@@ -103,11 +103,12 @@ button:disabled{opacity:.45;cursor:not-allowed}
 <script>
 'use strict';
 
-const BUILD='CLEAN-2.3-FOUR-STAGE-20';
+const BUILD='CLEAN-2.4-STAGE-COOLDOWN';
 const CADENCE_MIN=1,CADENCE_MAX=3;
 const SYMBOL='R_75';
 const STAGE_TARGET=5;
 const TOTAL_STAGES=4;
+const STAGE_COOLDOWN_TICKS=5;
 const TARGET=STAGE_TARGET*TOTAL_STAGES;
 const HARD_MAX=6;
 const MARKET_URL='wss://api.derivws.com/trading/v1/options/ws/public';
@@ -133,6 +134,7 @@ let proposalTimer=null,buyTimer=null;
 
 let sessionPnl=0,sessionWins=0,sessionMatches=0,currentStake=1;
 let completedStages=0;
+let stageCooldownRemaining=0;
 let antiMatchStreak=0,bestAntiMatchStreak=0;
 let consecutiveMatches=0,targetRecoveryShield=false;
 let currentDecision=null,stableDigit=null,stableTicks=0,lastStabilityEpoch=0;
@@ -204,13 +206,16 @@ function renderSession(){
   const nextTarget=nextStageTarget();
   const remain=Math.max(0,nextTarget-sessionPnl);
   $('progressMeta').textContent=
+    (stageCooldownRemaining>0
+      ?'DESCANSO '+stageCooldownRemaining+' TICK'+(stageCooldownRemaining===1?'':'S')+' · '
+      :'')+
     'ETAPA '+stageNumber()+'/'+TOTAL_STAGES+
     ' · faltan $'+remain.toFixed(2)+' para +$'+nextTarget.toFixed(0)+
     ' · total '+Math.max(0,Math.min(100,sessionPnl/TARGET*100)).toFixed(1)+'% de +$'+TARGET;
 }
 
 function resetSession(){
-  sessionPnl=0;sessionWins=0;sessionMatches=0;sessionStopped=false;completedStages=0;
+  sessionPnl=0;sessionWins=0;sessionMatches=0;sessionStopped=false;completedStages=0;stageCooldownRemaining=0;
   antiMatchStreak=0;consecutiveMatches=0;targetRecoveryShield=false;
   currentStake=baseStake();pending=false;pendingOrder=null;
   stableDigit=null;stableTicks=0;recoveryTicks=0;
@@ -249,7 +254,15 @@ function applyResult(profit,snapshot){
   if(reachedStages>completedStages){
     completedStages=reachedStages;
     currentStake=b;
-    log('CHECKPOINT '+completedStages+'/'+TOTAL_STAGES+' · +$'+(completedStages*STAGE_TARGET).toFixed(0)+' NETOS · stake reiniciado a $'+b.toFixed(2));
+    if(completedStages<TOTAL_STAGES){
+      stageCooldownRemaining=STAGE_COOLDOWN_TICKS;
+      ticksIntoCadence=0;
+      idleTradeTicks=0;
+      log('CHECKPOINT '+completedStages+'/'+TOTAL_STAGES+' · +$'+(completedStages*STAGE_TARGET).toFixed(0)+' NETOS · DESCANSO '+STAGE_COOLDOWN_TICKS+' TICKS · stake base $'+b.toFixed(2));
+    }else{
+      stageCooldownRemaining=0;
+      log('CHECKPOINT '+completedStages+'/'+TOTAL_STAGES+' · +$'+(completedStages*STAGE_TARGET).toFixed(0)+' NETOS · stake base $'+b.toFixed(2));
+    }
   }else{
     const blockProfit=Math.max(0,sessionPnl-completedStages*STAGE_TARGET);
     currentStake=money(Math.min(HARD_MAX,maxStake(),Math.max(b,b+blockProfit)));
@@ -521,7 +534,8 @@ function analyze(){
   const dualAgreement=safeSet.has(predicted);
   const enoughMatchVotes=mb.votes>=2;
   const hardRisk=best.score<=.105 && best.neural<=.115;
-  const ok=dualAgreement&&enoughMatchVotes&&hardRisk;
+  const cooldownClear=stageCooldownRemaining<=0;
+  const ok=cooldownClear&&dualAgreement&&enoughMatchVotes&&hardRisk;
 
   const sorted=[...rows].sort((x,y)=>x.score-y.score||x.neural-y.neural);
   const second=sorted.find(x=>x.digit!==predicted)||best;
@@ -545,7 +559,8 @@ function analyze(){
     cadenceStep,
     ticksIntoCadence,
     lastBoughtDigit,
-    idleTradeTicks
+    idleTradeTicks,
+    stageCooldownRemaining
   };
 }
 function renderDecision(){
@@ -566,7 +581,9 @@ function renderDecision(){
     ' · riesgo '+pct(d.best.score);
 
   $('signalMeta').textContent=
-    (d.ok?'LISTO':'ESPERAR')+
+    (d.stageCooldownRemaining>0
+      ?'DESCANSO '+d.stageCooldownRemaining+' TICK'+(d.stageCooldownRemaining===1?'':'S')
+      :(d.ok?'LISTO':'ESPERAR'))+
     ' · CONTRARIAN'+
     ' · racha '+antiMatchStreak+
     ' · etapa '+d.stage+'/'+TOTAL_STAGES+
@@ -940,13 +957,31 @@ function handleMarket(m){
     lastEpoch=epoch;lastDigit=digit;lastQuote=quote;
     seq.push(digit);if(seq.length>1500)seq.shift();
 
+    $('lastTick').textContent=quote+' · '+digit;
+    $('tickMeta').textContent='epoch '+epoch;
+
+    // DESCANSO ENTRE ETAPAS: sigue analizando cada tick, pero no compra.
+    if(stageCooldownRemaining>0 && auto&&!sessionStopped&&!pending&&!activeContract){
+      stageCooldownRemaining--;
+      ticksIntoCadence=0;
+      idleTradeTicks=0;
+      renderSession();
+      const d=renderDecision();
+      if(stageCooldownRemaining>0){
+        $('contractMeta').textContent='DESCANSO ENTRE ETAPAS · '+stageCooldownRemaining+' tick(s) restantes';
+        log('DESCANSO ETAPA · '+stageCooldownRemaining+' tick(s) restantes');
+      }else{
+        $('contractMeta').textContent='DESCANSO TERMINADO · reanudando etapa '+stageNumber()+'/'+TOTAL_STAGES;
+        log('DESCANSO TERMINADO · AUTO continúa · etapa '+stageNumber()+'/'+TOTAL_STAGES);
+      }
+      return;
+    }
+
     if(auto&&!sessionStopped&&!pending&&!activeContract){
       ticksIntoCadence=Math.min(999,ticksIntoCadence+1);
       idleTradeTicks=Math.min(999,idleTradeTicks+1);
     }
 
-    $('lastTick').textContent=quote+' · '+digit;
-    $('tickMeta').textContent='epoch '+epoch;
     const d=renderDecision();
 
     if(activeContract)querySettlement();
@@ -1034,7 +1069,7 @@ async function loadMemory(){
 $('connectBtn').onclick=connectDemo;
 $('autoBtn').onclick=()=>{
   if(sessionStopped){
-    $('connectStatus').textContent='Reinicia la sesión +$10';
+    $('connectStatus').textContent='Reinicia la sesión +$20';
     return;
   }
   if(!savedAppId||!savedPat){
