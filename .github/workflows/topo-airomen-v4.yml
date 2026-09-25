@@ -1,0 +1,38 @@
+name: TOPO AIROMEN - V4 Batch5 Lab
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "topo-airomen/differ_v4_batch5.py"
+      - ".github/workflows/topo-airomen-v4.yml"
+  schedule:
+    - cron: "1,21,41 * * * *"
+permissions:
+  contents: write
+concurrency:
+  group: topo-airomen-v4
+  cancel-in-progress: false
+jobs:
+  v4:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Evaluate prospective Batch-5 session policies
+        run: python topo-airomen/differ_v4_batch5.py
+      - name: Persist V4 state
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add topo-airomen/memory/differ_v4_batch5_state.json topo-airomen/memory/differ_v4_batch5_latest.json
+          git diff --cached --quiet || git commit -m "TOPO AIROMEN V4 Batch5 research"
+          for attempt in 1 2 3; do
+            git pull --rebase origin main
+            if git push; then break; fi
+            if [ "$attempt" -eq 3 ]; then exit 1; fi
+            sleep 3
+          done
