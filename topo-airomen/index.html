@@ -328,9 +328,9 @@ const SESSION_TARGET=20;
 const WIN_STREAK_TARGET=46;
 const STREAK_BLOCK_SIZE=10;
 const HARD_MAX_STAKE=6;
-const GRADUAL_WIN_GROWTH=.40;
+const GRADUAL_WIN_GROWTH=.60;
 const MIN_WIN_STEP_RATE=.05;
-const MAX_WIN_STEP_RATE=.06;
+const MAX_WIN_STEP_RATE=.10;
 let blockPauseTicks=0,lastProtectedBlock=0;
 const STREAK_LAB_KEY='topo_airomen_streak_lab_v1';
 const EXEC_HISTORY_KEY='topo_airomen_exec_history_v1';
@@ -631,12 +631,21 @@ function sessionRiskMode(){
  if(sessionPnl<0||dd>=1.25||consecutiveDemoLosses===1)return 'YELLOW';
  return 'GREEN';
 }
+function progressiveStakeMultiplier(){
+ const p=Math.max(0,Number(sessionPnl)||0);
+ if(p<1)return 1.08;
+ if(p<3)return 1.25;
+ if(p<6)return 1.50;
+ if(p<10)return 1.85;
+ if(p<14)return 2.20;
+ if(p<17)return 2.55;
+ return 3.00;
+}
 function sessionRiskStakeCap(){
  const b=baseStake(),mode=sessionRiskMode();
  if(mode==='RED')return b;
- if(mode==='YELLOW')return Math.min(maxSessionStake(),money2(b*1.08));
- if(sessionPnl<5)return b;
- return maxSessionStake();
+ if(mode==='YELLOW')return b;
+ return Math.min(HARD_MAX_STAKE,maxSessionStake(),money2(b*progressiveStakeMultiplier()));
 }
 function renderProfitSession(){
  const progress=Math.max(0,Math.min(100,(sessionPnl/SESSION_TARGET)*100));
@@ -645,7 +654,7 @@ function renderProfitSession(){
  $('sessionProgress').textContent=progress.toFixed(1)+'% de la meta';
  $('nextStake').textContent='$'+currentStake.toFixed(2);
  const mode=sessionRiskMode(),dd=sessionDrawdown();
- $('sessionWL').textContent=sessionWins+' WIN · '+sessionLosses+' LOSS · '+mode+' · DD USD '+dd.toFixed(2);
+ $('sessionWL').textContent=sessionWins+' WIN · '+sessionLosses+' LOSS · '+mode+' · DD USD '+dd.toFixed(2)+' · x'+progressiveStakeMultiplier().toFixed(2);
 }
 function resetProfitSession(){
  sessionPnl=0;sessionWins=0;sessionLosses=0;sessionStopped=false;
@@ -666,7 +675,7 @@ function resetProfitSession(){
  if(latestLiveEnsemble)liveEnsemble=latestLiveEnsemble;
  liveRuleId='avoid_match_adaptive_all_digits';
  $('sessionPolicy').textContent='V3 · AVOID MATCH';
- $('policyMeta').textContent='ANTI-MATCH RISK SHIELD - GREEN/YELLOW/RED por drawdown - oportunidad solo en GREEN - stake defensivo - memoria 24/7 - objetivo +20';
+ $('policyMeta').textContent='ANTI-MATCH RISK SHIELD + PROGRESSIVE TURBO - stake sube por etapas en GREEN y vuelve a base en LOSS/YELLOW/RED - memoria 24/7 - objetivo +20';
  renderProfitSession();renderStreakLab();
  trace('SESIÓN NUEVA · meta +$20.00 · stop -$'+sessionStopLoss().toFixed(2)+' · '+$('sessionPolicy').textContent,true);
 }
@@ -678,13 +687,15 @@ function applyProfitLadder(profit){
    sessionWins++;
    const b=baseStake();
    const mode=sessionRiskMode();
-   if(mode!=='GREEN'||sessionPnl<5){
+   if(mode!=='GREEN'){
      currentStake=money2(b);
    }else{
-     const rawStep=Math.max(Math.max(0,profit)*GRADUAL_WIN_GROWTH,b*MIN_WIN_STEP_RATE);
-     const maxStep=Math.max(b*MIN_WIN_STEP_RATE,currentStake*MAX_WIN_STEP_RATE);
+     const stageCap=sessionRiskStakeCap();
+     const streakBoost=currentWinStreak>=8?1.18:currentWinStreak>=4?1.08:1;
+     const rawStep=Math.max(Math.max(0,profit)*GRADUAL_WIN_GROWTH*streakBoost,b*.06);
+     const maxStep=Math.max(b*.06,currentStake*MAX_WIN_STEP_RATE);
      const step=Math.min(rawStep,maxStep);
-     currentStake=money2(Math.min(HARD_MAX_STAKE,sessionRiskStakeCap(),Math.max(b,currentStake+step)));
+     currentStake=money2(Math.min(HARD_MAX_STAKE,stageCap,Math.max(b,currentStake+step)));
    }
    if(activeMoneyPolicy.promoted)sessionBatchWins++;
  }else{
