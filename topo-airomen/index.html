@@ -254,7 +254,7 @@ let derivSocket=null,derivDemoAccount=null,publicSocket=null,liveModel=null,live
 let latestPublicTickEpoch=0,latestPublicTickDigit=null,latestPublicTickQuote=null,ticksWithoutSignal=0;
 let lastAvoidDecision=null,pendingLearnSnapshot=null;
 let lastBoughtBarrier=null,sameBarrierBuyStreak=0,pendingBuyBarrier=null,activeTradeBarrier=null;
-const MAX_SAME_BARRIER_BUYS=2;
+const MAX_SAME_BARRIER_BUYS=1;
 const ALT_RISK_TOLERANCE=.005;
 const ONLINE_LEARNER_KEY='topo_airomen_avoidmatch_learner_v2';
 let researchPolicy={source:'v1',rule:'neural_argmin',mode:'RESEARCH_DEMO'},sessionPolicy={source:'v1',rule:'neural_argmin',mode:'RESEARCH_DEMO'},currentBreakEven=.9174311926605504;
@@ -308,7 +308,7 @@ function resetProfitSession(){
  if(latestLiveEnsemble)liveEnsemble=latestLiveEnsemble;
  liveRuleId='avoid_match_adaptive_all_digits';
  $('sessionPolicy').textContent='V3 · AVOID MATCH';
- $('policyMeta').textContent='RESEARCH_DEMO · selector 0–9 dinámico · anti-fijo máx. 2 compras por dígito · compra solo con oportunidad válida';
+ $('policyMeta').textContent='RESEARCH_DEMO · selector 0–9 dinámico · anti-fijo máx. 1 compra por dígito · compra solo con oportunidad válida';
  renderProfitSession();
  trace('SESIÓN NUEVA · meta +$20.00 · stop -$'+sessionStopLoss().toFixed(2)+' · '+$('sessionPolicy').textContent,true);
 }
@@ -761,7 +761,7 @@ function maybeAutoBuy(signalOk,tickEpoch=Date.now()){
      Number(x.matchProb)-bestRisk<=ALT_RISK_TOLERANCE
    );
    if(!alt){
-     trace('ANTI-FIJO · D'+lastBoughtBarrier+' ya se usó '+sameBarrierBuyStreak+' veces · esperando otro dígito válido');
+     trace('ANTI-FIJO · D'+lastBoughtBarrier+' ya se usó '+sameBarrierBuyStreak+' vez · esperando otro dígito válido');
      $('autoDemoState').textContent='ANTI-FIJO: esperando que otro de los 9 dígitos pase el filtro anti-MATCH.';
      return;
    }
