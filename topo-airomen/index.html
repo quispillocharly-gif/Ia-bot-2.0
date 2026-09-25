@@ -44,7 +44,7 @@ button:disabled{opacity:.45;cursor:not-allowed}
 <div class="wrap">
 <header>
   <div class="logo">&gt; TOPO AIROMEN CLEAN_</div>
-  <div class="sub">R_75 · DIGITDIFF · DEMO ONLY · CLEAN BUILD 1.0</div>
+  <div class="sub">R_75 · DIGITDIFF · DEMO ONLY · CLEAN BUILD 1.1 FAST</div>
 </header>
 
 <div class="grid">
@@ -82,7 +82,7 @@ button:disabled{opacity:.45;cursor:not-allowed}
 <div class="grid">
  <div class="card"><div class="lab">META</div><div class="big green">+$10 NETOS</div><div id="progressMeta" class="mini">0.0%</div></div>
  <div class="card"><div class="lab">P&L SESIÓN</div><div id="sessionPnl" class="big">+$0.00</div><div id="sessionWL" class="mini">0 WIN · 0 MATCH</div></div>
- <div class="card"><div class="lab">PRÓXIMO STAKE</div><div id="nextStake" class="big cyan">$1.00</div><div class="mini">WIN sube · MATCH vuelve a base</div></div>
+ <div class="card"><div class="lab">PRÓXIMO STAKE</div><div id="nextStake" class="big cyan">$1.00</div><div class="mini">Stake = base + P&L neto positivo · máximo $6</div></div>
 </div>
 
 <div class="card">
@@ -103,7 +103,7 @@ button:disabled{opacity:.45;cursor:not-allowed}
 <script>
 'use strict';
 
-const BUILD='CLEAN-1.0';
+const BUILD='CLEAN-1.1-FAST';
 const SYMBOL='R_75';
 const TARGET=10;
 const HARD_MAX=6;
@@ -184,16 +184,14 @@ function applyResult(profit,snapshot){
   sessionPnl=money(sessionPnl+Number(profit||0));
   if(profit>=0){
     sessionWins++;
-    const b=baseStake();
-    const rawStep=Math.max(Number(profit||0)*.85,b*.05);
-    const maxStep=Math.max(b*.05,currentStake*.12);
-    const step=Math.min(rawStep,maxStep);
-    currentStake=money(Math.min(HARD_MAX,maxStake(),Math.max(b,currentStake+step)));
   }else{
     sessionMatches++;
-    currentStake=baseStake();
-    recoveryTicks=sessionMatches>1?2:1;
+    recoveryTicks=actualMatchRate(30)>=.14?2:1;
   }
+
+  // Reinvierte toda la ganancia NETA de la sesión, sin perseguir pérdidas.
+  const b=baseStake();
+  currentStake=money(Math.min(HARD_MAX,maxStake(),Math.max(b,b+Math.max(0,sessionPnl))));
 
   if(snapshot){
     execHistory.push({
@@ -201,7 +199,12 @@ function applyResult(profit,snapshot){
       barrier:Number(snapshot.barrier),
       combined:Number(snapshot.combined),
       neural:Number(snapshot.neural),
+      calibratedNeural:Number(snapshot.calibratedNeural??snapshot.neural),
       neuralRank:Number(snapshot.neuralRank),
+      structHot:Number(snapshot.structHot||0),
+      last1:Number(snapshot.last1??-1),
+      last2:Number(snapshot.last2??-1),
+      last3:Number(snapshot.last3??-1),
       t:Date.now()
     });
     if(execHistory.length>500)execHistory=execHistory.slice(-500);
@@ -306,6 +309,45 @@ function neuralVector(){
   }
 }
 
+function calibratedNeuralRisk(p){
+  const raw=clamp(p,.001,.30);
+  const bins=Array.isArray(model?.calibration)?model.calibration:[];
+  const bin=bins.find(x=>raw>=Number(x.lo||0)&&raw<Number(x.hi||1));
+  if(!bin||Number(bin.n||0)<30||bin.empirical_loss==null)return raw;
+  const empirical=clamp(bin.empirical_loss,.001,.30);
+  const strength=Math.min(.70,Number(bin.n||0)/700);
+  return (1-strength)*raw+strength*empirical;
+}
+
+function contextualMatchVector(){
+  const l1=seq[seq.length-1],l2=seq[seq.length-2],l3=seq[seq.length-3];
+  const out=Array(10).fill(.10);
+  const rows=execHistory.slice(-350);
+  for(let d=0;d<10;d++){
+    let loss=1.5,total=15;
+    for(const x of rows){
+      if(Number(x.barrier)!==d)continue;
+      let w=.12;
+      if(Number(x.last1)===Number(l1))w+=.35;
+      if(Number(x.last1)===Number(l1)&&Number(x.last2)===Number(l2))w+=.65;
+      if(Number(x.last1)===Number(l1)&&Number(x.last2)===Number(l2)&&Number(x.last3)===Number(l3))w+=1.00;
+      total+=w;
+      if(Number(x.win)===0)loss+=w;
+    }
+    out[d]=clamp(loss/total,.02,.30);
+  }
+  return out;
+}
+
+function recentBarrierLossPenalty(d){
+  const rows=execHistory.slice(-40);
+  let p=0;
+  for(const x of rows){
+    if(Number(x.barrier)===Number(d)&&Number(x.win)===0)p+=.0013;
+  }
+  return Math.min(.0065,p);
+}
+
 function execRiskVector(){
   const out=Array(10).fill(.1);
   for(let d=0;d<10;d++){
@@ -329,67 +371,102 @@ function analyze(){
   const t1=transitionVector(1,900);
   const t2=transitionVector(2,1200);
   const t3=transitionVector(3,1500);
-  const recent=distRecent(120);
+  const recent=distRecent(100);
   const off=offlineVector();
   const neural=neuralVector();
+  const calNeural=neural.map(calibratedNeuralRisk);
   const exec=execRiskVector();
+  const context=contextualMatchVector();
 
-  const sources=[t1,t2,t3,recent,off,neural,exec];
-  const neuralOrder=[0,1,2,3,4,5,6,7,8,9].sort((a,b)=>neural[a]-neural[b]);
-  const coldSets=sources.map(v=>[0,1,2,3,4,5,6,7,8,9].sort((a,b)=>v[a]-v[b]).slice(0,2));
-  const hotSets=sources.map(v=>[0,1,2,3,4,5,6,7,8,9].sort((a,b)=>v[b]-v[a]).slice(0,2));
+  const digits=[0,1,2,3,4,5,6,7,8,9];
+  const neuralOrder=[...digits].sort((a,b)=>calNeural[a]-calNeural[b]);
+  const allSources=[t1,t2,t3,recent,off,calNeural,exec,context];
+  const coldSets=allSources.map(v=>[...digits].sort((a,b)=>v[a]-v[b]).slice(0,2));
+  const hotSets=allSources.map(v=>[...digits].sort((a,b)=>v[b]-v[a]).slice(0,2));
+  const t2Hot=[...digits].sort((a,b)=>t2[b]-t2[a]).slice(0,2);
+  const t3Hot=[...digits].sort((a,b)=>t3[b]-t3[a]).slice(0,2);
+  const offHot=[...digits].sort((a,b)=>off[b]-off[a]).slice(0,2);
 
   const rows=[];
-  for(let d=0;d<10;d++){
-    const core=
-      .30*neural[d]+
-      .12*t1[d]+
-      .16*t2[d]+
-      .14*t3[d]+
-      .10*recent[d]+
-      .10*off[d]+
-      .08*exec[d];
-
-    const vals=sources.map(v=>Number(v[d]||.1));
-    const unc=Math.max(...vals)-Math.min(...vals);
+  for(const d of digits){
     const cold=coldSets.reduce((n,a)=>n+(a.includes(d)?1:0),0);
     const hot=hotSets.reduce((n,a)=>n+(a.includes(d)?1:0),0);
-    const combined=Math.min(.30,Math.max(.001,core+.035*unc+.0015*hot-.0005*cold));
+    const structHot=
+      (t2Hot.includes(d)?1:0)+
+      (t3Hot.includes(d)?1:0)+
+      (offHot.includes(d)?1:0);
+
+    // Neural manda; transición/contexto vetan falsos "fríos".
+    const core=
+      .42*calNeural[d]+
+      .07*t1[d]+
+      .15*t2[d]+
+      .13*t3[d]+
+      .06*recent[d]+
+      .09*off[d]+
+      .04*exec[d]+
+      .04*context[d];
+
+    const vals=allSources.map(v=>Number(v[d]||.1));
+    const unc=Math.max(...vals)-Math.min(...vals);
+    const combined=Math.min(.30,Math.max(.001,
+      core+
+      .022*unc+
+      .0023*structHot+
+      .0007*hot-
+      .00035*cold+
+      recentBarrierLossPenalty(d)
+    ));
 
     rows.push({
-      digit:d,combined,neural:neural[d],neuralRank:neuralOrder.indexOf(d)+1,
-      cold,hot,unc,t1:t1[d],t2:t2[d],t3:t3[d],off:off[d]
+      digit:d,combined,
+      neural:neural[d],calibratedNeural:calNeural[d],
+      neuralRank:neuralOrder.indexOf(d)+1,
+      cold,hot,structHot,unc,
+      t1:t1[d],t2:t2[d],t3:t3[d],off:off[d],context:context[d]
     });
   }
 
-  rows.sort((a,b)=>a.combined-b.combined||a.neuralRank-b.neuralRank||b.cold-a.cold);
-  const best=rows[0],second=rows[1];
+  rows.sort((a,b)=>a.combined-b.combined||a.neuralRank-b.neuralRank||a.structHot-b.structHot);
+
+  // FAST SAFE: buscar dentro de los 3 mejores neurales y vetar doble calor estructural.
+  let eligible=rows.filter(x=>x.neuralRank<=3&&x.structHot<2);
+  if(!eligible.length)eligible=rows.filter(x=>x.neuralRank<=3);
+  if(!eligible.length)eligible=rows;
+  eligible.sort((a,b)=>a.combined-b.combined||a.neuralRank-b.neuralRank);
+  const best=eligible[0];
+  const second=eligible[1]||best;
+
   const mr=actualMatchRate(50);
   const gap=Math.max(0,second.combined-best.combined);
 
-  let maxRisk=.118,maxNeural=.10,maxNeuralRank=2,maxHot=4,minCold=1,minGap=.00005;
+  let maxRisk=.119,maxNeural=.105,maxNeuralRank=3,maxStructHot=1,maxHot=5,minGap=0;
   if(mr!=null&&execHistory.length>=20){
-    if(mr>=.14){maxRisk=.104;maxNeural=.080;maxNeuralRank=1;maxHot=1;minCold=2;minGap=.0008}
-    else if(mr>=.11){maxRisk=.110;maxNeural=.088;maxNeuralRank=1;maxHot=2;minCold=1;minGap=.00035}
-    else if(mr>=.09){maxRisk=.115;maxNeural=.095;maxNeuralRank=2;maxHot=3;minCold=1;minGap=.00012}
+    if(mr>=.15){
+      maxRisk=.103;maxNeural=.083;maxNeuralRank=1;maxStructHot=0;maxHot=2;minGap=.00035;
+    }else if(mr>=.12){
+      maxRisk=.109;maxNeural=.091;maxNeuralRank=2;maxStructHot=1;maxHot=3;minGap=.00012;
+    }else if(mr>=.095){
+      maxRisk=.115;maxNeural=.099;maxNeuralRank=2;maxStructHot=1;maxHot=4;minGap=.00004;
+    }
   }
 
-  const stableNeed=(mr!=null&&mr>=.12)?2:1;
+  // Solo exige estabilidad extra si el MATCH real está claramente alto.
+  const stableNeed=(mr!=null&&mr>=.15)?2:1;
   if(stableDigit===best.digit)stableTicks++;
   else{stableDigit=best.digit;stableTicks=1}
 
   const ok=
     best.combined<=maxRisk &&
-    best.neural<=maxNeural &&
+    best.calibratedNeural<=maxNeural &&
     best.neuralRank<=maxNeuralRank &&
+    best.structHot<=maxStructHot &&
     best.hot<=maxHot &&
-    best.cold>=minCold &&
     gap>=minGap &&
     stableTicks>=stableNeed;
 
   return {best,rows,gap,mr,ok,stableNeed};
 }
-
 function renderDecision(){
   const d=analyze();
   currentDecision=d;
@@ -401,7 +478,7 @@ function renderDecision(){
 
   $('bestDigit').textContent='DIFFER '+d.best.digit;
   $('riskView').textContent=pct(d.best.combined);
-  $('riskMeta').textContent='neural #'+d.best.neuralRank+' '+pct(d.best.neural)+' · cold '+d.best.cold+' · hot '+d.best.hot;
+  $('riskMeta').textContent='neural #'+d.best.neuralRank+' '+pct(d.best.calibratedNeural)+' · structHot '+d.best.structHot+' · ctx '+pct(d.best.context);
   $('signalMeta').textContent=
     (d.ok?'LISTO':'ANALIZANDO')+
     ' · gap '+pct(d.gap)+
@@ -452,9 +529,14 @@ function requestProposal(decision){
       barrier,
       combined:decision.best.combined,
       neural:decision.best.neural,
+      calibratedNeural:decision.best.calibratedNeural,
       neuralRank:decision.best.neuralRank,
       cold:decision.best.cold,
       hot:decision.best.hot,
+      structHot:decision.best.structHot,
+      last1:seq[seq.length-1],
+      last2:seq[seq.length-2],
+      last3:seq[seq.length-3],
       epoch:lastEpoch
     }
   };
