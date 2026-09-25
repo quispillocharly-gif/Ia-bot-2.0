@@ -285,17 +285,17 @@ function rollingMatchRate(n){
 function rollingCount(n){return Math.min(n,selectorStats.outcomes.length)}
 function clamp01(x){return Math.max(0,Math.min(1,Number(x)||0))}
 function adaptiveOpportunityThreshold(){
- let threshold=55;
+ let threshold=48;
  const r100=rollingMatchRate(100),n100=rollingCount(100);
  if(n100>=30){
-   if(r100>=.13)threshold=76;
-   else if(r100>=.11)threshold=68;
-   else if(r100>=.09)threshold=60;
-   else if(r100<=.07)threshold=50;
+   if(r100>=.13)threshold=72;
+   else if(r100>=.11)threshold=62;
+   else if(r100>=.09)threshold=54;
+   else if(r100<=.07)threshold=44;
  }
- if(consecutiveDemoLosses>=3)threshold=Math.max(threshold,82);
- else if(consecutiveDemoLosses>=2)threshold=Math.max(threshold,72);
- else if(consecutiveDemoLosses===1)threshold=Math.max(threshold,62);
+ if(consecutiveDemoLosses>=3)threshold=Math.max(threshold,78);
+ else if(consecutiveDemoLosses>=2)threshold=Math.max(threshold,68);
+ else if(consecutiveDemoLosses===1)threshold=Math.max(threshold,56);
  return threshold;
 }
 function sessionStats(){
@@ -344,7 +344,7 @@ function resetProfitSession(){
  if(latestLiveEnsemble)liveEnsemble=latestLiveEnsemble;
  liveRuleId='avoid_match_adaptive_all_digits';
  $('sessionPolicy').textContent='V3 · AVOID MATCH';
- $('policyMeta').textContent='0–9 compiten en cada tick · puede repetir el mejor · EDGE sobre break-even · SCORE adaptativo · freno por pérdidas';
+ $('policyMeta').textContent='0–9 compiten cada tick · puede repetir el mejor · EDGE ágil · más entradas válidas · freno adaptativo';
  renderProfitSession();
  trace('SESIÓN NUEVA · meta +$20.00 · stop -$'+sessionStopLoss().toFixed(2)+' · '+$('sessionPolicy').textContent,true);
 }
@@ -706,18 +706,19 @@ function avoidMatchDecision(){
  const gap=Math.max(0,Number(second.matchProb)-Number(best.matchProb));
  const predictedWin=1-Number(best.matchProb);
  const edge=predictedWin-currentBreakEven;
- const minEdge=.001;
+ const minEdge=.0003;
  const economicMatchLimit=Math.max(.04,1-currentBreakEven-minEdge);
- const maxMatchRisk=Math.min(.0825,economicMatchLimit);
- const minGap=.0015;
+ const maxMatchRisk=Math.min(.085,economicMatchLimit);
+ const minGap=.0008;
  const historyOk=liveSeq.length>=40;
  const riskOk=Number(best.matchProb)<=maxMatchRisk;
  const edgeOk=edge>=minEdge;
- const strongRisk=Number(best.matchProb)<=maxMatchRisk-.008;
- const gapOk=gap>=minGap || strongRisk;
+ const strongRisk=Number(best.matchProb)<=maxMatchRisk-.006;
+ const strongEdge=edge>=.006;
+ const gapOk=gap>=minGap || strongRisk || strongEdge;
  const opportunityThreshold=adaptiveOpportunityThreshold();
  const opportunityScore=candidateOpportunityScore(best,gap,maxMatchRisk);
- const scoreOk=opportunityScore>=opportunityThreshold;
+ const scoreOk=opportunityScore>=opportunityThreshold || strongEdge;
  const ok=historyOk && riskOk && edgeOk && gapOk && scoreOk;
 
  return {
@@ -740,7 +741,7 @@ function renderAvoidMatchScanner(){
  $('avoidBest').textContent='DIFFER '+d.digit;
  $('avoidBest').style.color=d.ok?'#6affb6':'#ffe66d';
  const r100=rollingMatchRate(100),r250=rollingMatchRate(250),r500=rollingMatchRate(500);
- $('avoidMeta').textContent='EDGE '+(d.edge>=0?'+':'')+pct(d.edge)+' · SCORE '+d.opportunityScore+'/'+d.opportunityThreshold+' · MATCH '+pct(d.matchProb)+' · '+(d.ok?'VENTAJA VÁLIDA':'SIN VENTAJA');
+ $('avoidMeta').textContent='EDGE '+(d.edge>=0?'+':'')+pct(d.edge)+' · SCORE '+d.opportunityScore+'/'+d.opportunityThreshold+' · MATCH '+pct(d.matchProb)+' · '+(d.ok?'ENTRADA ÁGIL':'ANALIZANDO');
  $('avoidRanking').innerHTML=d.rows.map(x=>'<span class="chip '+(x.digit===d.digit?'best':'')+'">D'+x.digit+' · riesgo '+pct(x.matchProb)+'</span>').join('');
  $('safetyStatus').textContent=d.ok?'DYNAMIC':'LEARNING';
  $('safetyStatus').className='big '+(d.ok?'green':'yellow');
