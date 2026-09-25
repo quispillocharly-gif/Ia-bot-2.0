@@ -332,6 +332,7 @@ let blockPauseTicks=0,lastProtectedBlock=0;
 const STREAK_LAB_KEY='topo_airomen_streak_lab_v1';
 const EXEC_HISTORY_KEY='topo_airomen_exec_history_v1';
 let currentWinStreak=0,bestWinStreak=0,bestStreakContext=null,streakTargetHit=false;
+let lastSettlementProbeEpoch=0;
 let pendingSignalSnapshot=null,activeSignalSnapshot=null;
 let sessionPnl=0,sessionWins=0,sessionLosses=0,currentStake=1,sessionStopped=false,lastSettledContractId=null;
 let sessionBatchTrades=0,sessionBatchWins=0,sessionStage=1,sessionPauseLeft=0;
@@ -518,7 +519,7 @@ function resetProfitSession(){
  if(latestLiveEnsemble)liveEnsemble=latestLiveEnsemble;
  liveRuleId='avoid_match_adaptive_all_digits';
  $('sessionPolicy').textContent='V3 · AVOID MATCH';
- $('policyMeta').textContent='ANTI-MATCH CONTINUO - cada WIN sube el stake gradualmente - max USD 6 - LOSS vuelve a base - objetivo +20';
+ $('policyMeta').textContent='ANTI-MATCH CONTINUO - cierre verificado en cada tick - stake gradual hasta USD 6 - LOSS vuelve a base - objetivo +20';
  renderProfitSession();renderStreakLab();
  trace('SESIÓN NUEVA · meta +$20.00 · stop -$'+sessionStopLoss().toFixed(2)+' · '+$('sessionPolicy').textContent,true);
 }
@@ -610,6 +611,20 @@ function apiError(j,fallback){
  return (j&&j.error&&(j.error.message||j.error.code))||
         (j&&j.errors&&j.errors[0]&&(j.errors[0].message||j.errors[0].code))||fallback;
 }
+function probeActiveContractSettlement(tickEpoch){
+ if(!activeContractId||!derivSocket||derivSocket.readyState!==WebSocket.OPEN)return false;
+ if(Number(tickEpoch)===Number(lastSettlementProbeEpoch))return false;
+ lastSettlementProbeEpoch=Number(tickEpoch)||Date.now();
+ try{
+   derivSocket.send(JSON.stringify({
+     proposal_open_contract:1,
+     contract_id:activeContractId,
+     req_id:++tradeReq
+   }));
+   trace('CHECK CIERRE · contrato '+activeContractId+' · tick '+lastSettlementProbeEpoch);
+   return true;
+ }catch(_){return false}
+}
 function processR75MarketMessage(m,source){
  if(m.history?.prices){
    livePip=Number(m.pip_size??livePip??4);
@@ -646,6 +661,11 @@ function processR75MarketMessage(m,source){
    $('liveTick').textContent=q+' · '+d;
    $('liveReason').textContent=(source==='demo'?'DEMO':'PUBLIC')+' R_75 · tick '+d+' · recalculando DIFFER';
    trace('TICK '+latestPublicTickEpoch+' · '+source.toUpperCase()+' · recalculando DIFFER');
+
+   // Un contrato de 1 tick debería poder liquidarse en este nuevo tick.
+   // Consultamos su estado de inmediato para no esperar una notificación tardía.
+   if(activeContractId)probeActiveContractSettlement(latestPublicTickEpoch);
+
    tryNextTickTrade();
    return true;
  }
@@ -742,6 +762,7 @@ async function connectDerivDemo(){
     if(m.buy){
       const b=m.buy||{};
       activeContractId=b.contract_id;
+      lastSettlementProbeEpoch=0;
       pendingTrade=false;
       activeTradeBarrier=(pendingBuyBarrier==null?liveBarrier:Number(pendingBuyBarrier));
       pendingBuyBarrier=null;
@@ -766,7 +787,7 @@ async function connectDerivDemo(){
         if(cid)lastSettledContractId=cid;
         $('lastDemoBuy').textContent=(profit>=0?'WIN ':'LOSS ')+(profit>=0?'+':'')+profit.toFixed(2);
         $('lastDemoBuy').className='big '+(profit>=0?'green':'red');
-        activeContractId=null; pendingTrade=false;activeTradeBarrier=null;
+        activeContractId=null; lastSettlementProbeEpoch=0; pendingTrade=false;activeTradeBarrier=null;
         recentTradeResults.push(profit>=0?1:0);if(recentTradeResults.length>50)recentTradeResults.shift();
         consecutiveDemoLosses=profit<0?consecutiveDemoLosses+1:0;
         if(profit<0)matchRecoveryTicks=adaptiveMatchRecoveryTicks();
