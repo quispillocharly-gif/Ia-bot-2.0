@@ -335,6 +335,8 @@ const EXEC_HISTORY_KEY='topo_airomen_exec_history_v1';
 let currentWinStreak=0,bestWinStreak=0,bestStreakContext=null,streakTargetHit=false;
 let lastSettlementProbeEpoch=0;
 let pendingSignalSnapshot=null,activeSignalSnapshot=null;
+let buyReqContexts=new Map(),activeContractContexts=new Map(),settledContractIds=new Set();
+const MAX_INFLIGHT_CONTRACTS=3;
 let sessionPnl=0,sessionWins=0,sessionLosses=0,currentStake=1,sessionStopped=false,lastSettledContractId=null;
 let sessionBatchTrades=0,sessionBatchWins=0,sessionStage=1,sessionPauseLeft=0;
 const SESSION_STATS_KEY='topo_airomen_session_stats_v1';
@@ -437,7 +439,7 @@ function armBlockProtection(){
  }
 }
 function renderStreakLab(){const p=streakPhase();if($('streakCurrent'))$('streakCurrent').textContent=currentWinStreak+' / '+WIN_STREAK_TARGET;if($('streakPhase'))$('streakPhase').textContent=blockPauseTicks>0?('RECALIBRANDO · '+blockPauseTicks+' ticks'):p.name;if($('streakBest'))$('streakBest').textContent=bestWinStreak;if($('streakLabState'))$('streakLabState').textContent=streakTargetHit?'46 ALCANZADO':(blockPauseTicks>0?'PROTEGIENDO RACHA':'BUSCANDO '+WIN_STREAK_TARGET);if($('streakLabMeta')){const ec=executionCalibration();$('streakLabMeta').textContent='bloques de 10 WIN · pausa adaptativa '+(blockPauseTicks>0?blockPauseTicks:'4-8')+' ticks · HIT real '+(ec.hit==null?'–':pct(ec.hit))+' · stake max USD '+HARD_MAX_STAKE.toFixed(2);}if($('streakBestMeta')){const c=bestStreakContext;$('streakBestMeta').textContent=c?('EDGE '+(c.edge>=0?'+':'')+pct(c.edge)+' - SCORE '+c.score+' - D'+c.barrier):'Sin racha registrada'}}
-function updateWinStreak(profit){if(profit>0){currentWinStreak++;if(currentWinStreak>=WIN_STREAK_TARGET)streakTargetHit=true;if(currentWinStreak>bestWinStreak){bestWinStreak=currentWinStreak;bestStreakContext=activeSignalSnapshot?Object.assign({},activeSignalSnapshot):bestStreakContext;saveStreakLab()}armBlockProtection()}else{currentWinStreak=0;blockPauseTicks=0;lastProtectedBlock=0}renderStreakLab();}
+function updateWinStreak(profit,snapshot=activeSignalSnapshot){if(profit>0){currentWinStreak++;if(currentWinStreak>=WIN_STREAK_TARGET)streakTargetHit=true;if(currentWinStreak>bestWinStreak){bestWinStreak=currentWinStreak;bestStreakContext=snapshot?Object.assign({},snapshot):bestStreakContext;saveStreakLab()}armBlockProtection()}else{currentWinStreak=0;blockPauseTicks=0;lastProtectedBlock=0}renderStreakLab();}
 function loadExecHistory(){
  try{
   const x=JSON.parse(localStorage.getItem(EXEC_HISTORY_KEY)||'[]');
@@ -515,12 +517,13 @@ function resetProfitSession(){
  activeMoneyPolicy=researchPolicy.money_policy?{...researchPolicy.money_policy}:{promoted:false,compound_fraction:1,pause_after_match:0,batch_size:5,stage_size:5};
  sessionBatchTrades=0;sessionBatchWins=0;sessionStage=1;sessionPauseLeft=0;
  pendingBuyBarrier=null;activeTradeBarrier=null;
+ buyReqContexts.clear();activeContractContexts.clear();settledContractIds.clear();activeContractId=null;
  recentTradeResults=[];consecutiveDemoLosses=0;
  if(latestLiveModel)liveModel=latestLiveModel;
  if(latestLiveEnsemble)liveEnsemble=latestLiveEnsemble;
  liveRuleId='avoid_match_adaptive_all_digits';
  $('sessionPolicy').textContent='V3 · AVOID MATCH';
- $('policyMeta').textContent='ANTI-MATCH CONTINUO - cierre verificado en cada tick - stake gradual hasta USD 6 - LOSS vuelve a base - objetivo +20';
+ $('policyMeta').textContent='ANTI-MATCH CONTINUO - una nueva compra por tick disponible - contratos separados - stake gradual hasta USD 6 - objetivo +20';
  renderProfitSession();renderStreakLab();
  trace('SESIÓN NUEVA · meta +$20.00 · stop -$'+sessionStopLoss().toFixed(2)+' · '+$('sessionPolicy').textContent,true);
 }
@@ -613,18 +616,23 @@ function apiError(j,fallback){
         (j&&j.errors&&j.errors[0]&&(j.errors[0].message||j.errors[0].code))||fallback;
 }
 function probeActiveContractSettlement(tickEpoch){
- if(!activeContractId||!derivSocket||derivSocket.readyState!==WebSocket.OPEN)return false;
+ if(!derivSocket||derivSocket.readyState!==WebSocket.OPEN)return false;
  if(Number(tickEpoch)===Number(lastSettlementProbeEpoch))return false;
  lastSettlementProbeEpoch=Number(tickEpoch)||Date.now();
- try{
-   derivSocket.send(JSON.stringify({
-     proposal_open_contract:1,
-     contract_id:activeContractId,
-     req_id:++tradeReq
-   }));
-   trace('CHECK CIERRE · contrato '+activeContractId+' · tick '+lastSettlementProbeEpoch);
-   return true;
- }catch(_){return false}
+ let sent=0;
+ for(const cid of activeContractContexts.keys()){
+   if(sent>=MAX_INFLIGHT_CONTRACTS)break;
+   try{
+     derivSocket.send(JSON.stringify({
+       proposal_open_contract:1,
+       contract_id:cid,
+       req_id:++tradeReq
+     }));
+     sent++;
+   }catch(_){}
+ }
+ if(sent)trace('CHECK CIERRE · '+sent+' contrato(s) · tick '+lastSettlementProbeEpoch);
+ return sent>0;
 }
 function clearProposalRetry(){
  if(proposalRetryTimer){clearTimeout(proposalRetryTimer);proposalRetryTimer=null}
@@ -707,7 +715,7 @@ function processR75MarketMessage(m,source){
 
    // Un contrato de 1 tick debería poder liquidarse en este nuevo tick.
    // Consultamos su estado de inmediato para no esperar una notificación tardía.
-   if(activeContractId)probeActiveContractSettlement(latestPublicTickEpoch);
+   if(activeContractContexts.size)probeActiveContractSettlement(latestPublicTickEpoch);
 
    tryNextTickTrade();
    return true;
@@ -804,59 +812,92 @@ async function connectDerivDemo(){
       }
       pendingBuyBarrier=Number(lastProposalReq.barrier);
       clearProposalRetry();
+      const buyReq=++tradeReq;
+      buyReqContexts.set(buyReq,{
+        barrier:Number(lastProposalReq.barrier),
+        snapshot:pendingSignalSnapshot?Object.assign({},pendingSignalSnapshot):null,
+        stake:Number(lastProposalReq.stake||0)
+      });
       trace('PROPUESTA OK · D'+lastProposalReq.barrier+' · ID recibido · enviando BUY',true);
-      derivSocket.send(JSON.stringify({buy:p.id,price:maxPrice,req_id:++tradeReq}));
+      derivSocket.send(JSON.stringify({buy:p.id,price:maxPrice,req_id:buyReq}));
       $('lastDemoBuy').textContent='COMPRANDO…';
+      pendingSignalSnapshot=null;
       lastProposalReq=null;
       return;
     }
     if(m.buy){
       clearProposalRetry();
       const b=m.buy||{};
-      activeContractId=b.contract_id;
+      const buyReq=Number(m.req_id??m.echo_req?.req_id??0);
+      const ctx=buyReqContexts.get(buyReq)||{
+        barrier:(pendingBuyBarrier==null?liveBarrier:Number(pendingBuyBarrier)),
+        snapshot:activeSignalSnapshot?Object.assign({},activeSignalSnapshot):null,
+        stake:0
+      };
+      if(buyReq)buyReqContexts.delete(buyReq);
+
+      const cid=String(b.contract_id??'');
+      if(!cid){pendingTrade=false;trace('BUY SIN CONTRACT ID');return}
+
+      activeContractId=cid;
       lastSettlementProbeEpoch=0;
       pendingTrade=false;
-      activeTradeBarrier=(pendingBuyBarrier==null?liveBarrier:Number(pendingBuyBarrier));
       pendingBuyBarrier=null;
-      activeSignalSnapshot=pendingSignalSnapshot?Object.assign({},pendingSignalSnapshot):null;
-      pendingSignalSnapshot=null;
-      if(activeTradeBarrier===lastBoughtBarrier)sameBarrierBuyStreak++;
-      else{lastBoughtBarrier=activeTradeBarrier;sameBarrierBuyStreak=1;}
-      rememberBoughtDigit(activeTradeBarrier);
-      trace('BUY OK · contrato '+activeContractId+' · DIFFER '+activeTradeBarrier+' · repetición '+sameBarrierBuyStreak+'/'+MAX_SAME_BARRIER_BUYS+' · racha '+currentWinStreak+'/'+WIN_STREAK_TARGET,true);
-      $('lastDemoBuy').textContent='DIFFER '+activeTradeBarrier;
+
+      const barrier=Number(ctx.barrier);
+      const snapshot=ctx.snapshot?Object.assign({},ctx.snapshot):null;
+      activeContractContexts.set(cid,{barrier,snapshot,openedEpoch:latestPublicTickEpoch});
+
+      if(barrier===lastBoughtBarrier)sameBarrierBuyStreak++;
+      else{lastBoughtBarrier=barrier;sameBarrierBuyStreak=1;}
+      rememberBoughtDigit(barrier);
+
+      trace('BUY OK · contrato '+cid+' · DIFFER '+barrier+' · en vuelo '+activeContractContexts.size+'/'+MAX_INFLIGHT_CONTRACTS,true);
+      $('lastDemoBuy').textContent='DIFFER '+barrier;
       $('lastDemoBuy').className='big yellow';
-      $('autoDemoState').textContent='Contrato demo activo '+activeContractId+' · esperando resultado.';
-      derivSocket.send(JSON.stringify({proposal_open_contract:1,contract_id:activeContractId,subscribe:1,req_id:++tradeReq}));
+      $('autoDemoState').textContent='BUY confirmado · preparando próximos ticks mientras liquida.';
+      derivSocket.send(JSON.stringify({proposal_open_contract:1,contract_id:cid,subscribe:1,req_id:++tradeReq}));
       return;
     }
     if(m.proposal_open_contract){
       const c=m.proposal_open_contract||{};
       if(c.is_sold){
-        const cid=String(c.contract_id??activeContractId??'');
-        if(cid && cid===lastSettledContractId)return;
+        const cid=String(c.contract_id??'');
+        if(!cid||settledContractIds.has(cid))return;
+        settledContractIds.add(cid);
+        if(settledContractIds.size>200){
+          settledContractIds=new Set(Array.from(settledContractIds).slice(-100));
+        }
+
+        const ctx=activeContractContexts.get(cid)||{barrier:null,snapshot:null};
+        activeContractContexts.delete(cid);
+        if(String(activeContractId||'')===cid){
+          const ids=Array.from(activeContractContexts.keys());
+          activeContractId=ids.length?ids[ids.length-1]:null;
+        }
+        lastSettlementProbeEpoch=0;
+
         const profit=Number(c.profit??0);
-        if(cid)lastSettledContractId=cid;
         $('lastDemoBuy').textContent=(profit>=0?'WIN ':'LOSS ')+(profit>=0?'+':'')+profit.toFixed(2);
         $('lastDemoBuy').className='big '+(profit>=0?'green':'red');
-        activeContractId=null; lastSettlementProbeEpoch=0; pendingTrade=false;activeTradeBarrier=null;
-        recentTradeResults.push(profit>=0?1:0);if(recentTradeResults.length>50)recentTradeResults.shift();
+
+        recentTradeResults.push(profit>=0?1:0);
+        if(recentTradeResults.length>50)recentTradeResults.shift();
         consecutiveDemoLosses=profit<0?consecutiveDemoLosses+1:0;
         if(profit<0)matchRecoveryTicks=adaptiveMatchRecoveryTicks();
-        updateWinStreak(profit);
-        recordExecutedTrade(profit,activeSignalSnapshot);
+
+        updateWinStreak(profit,ctx.snapshot);
+        recordExecutedTrade(profit,ctx.snapshot);
         applyProfitLadder(profit);
-        activeSignalSnapshot=null;
-        if(!sessionStopped)$('autoDemoState').textContent='Contrato demo cerrado · usando el tick más reciente para preparar la siguiente compra.';
-        trace('CONTRATO CERRADO · '+(profit>=0?'WIN ':'LOSS ')+profit.toFixed(2)+' · P&L sesión '+sessionPnl.toFixed(2),profit>=0);
+
+        if(!sessionStopped)$('autoDemoState').textContent='Contrato cerrado · '+activeContractContexts.size+' en vuelo · siguiente tick sigue operando.';
+        trace('CONTRATO '+cid+' CERRADO · '+(profit>=0?'WIN ':'LOSS ')+profit.toFixed(2)+' · P&L '+sessionPnl.toFixed(2),profit>=0);
         if(m.subscription?.id)derivSocket.send(JSON.stringify({forget:m.subscription.id}));
 
-        // Catch-up: si el tick de cierre llegó mientras el contrato seguía activo,
-        // compra para el siguiente tick inmediatamente después de liquidar.
+        // Si el último tick todavía no generó una orden, úsalo sin esperar otro tick.
         if(autoDemo&&!sessionStopped&&latestPublicTickEpoch&&latestPublicTickEpoch!==lastSignalEpoch){
           setTimeout(()=>tryNextTickTrade(),0);
         }
-
       }
     }
    }catch(_){}
@@ -1256,7 +1297,7 @@ function maybeAutoBuy(signalOk,tickEpoch=Date.now()){
  if(!autoDemo){trace('AUTO-DEMO OFF');return}
  if(!signalOk){trace('SIN OPORTUNIDAD CLARA · IA sigue analizando los 10 dígitos');return}
  if(pendingTrade){trace('ESPERANDO RESPUESTA DE PROPUESTA/BUY');return}
- if(activeContractId){trace('CONTRATO '+activeContractId+' AÚN ABIERTO');return}
+ if(activeContractContexts.size>=MAX_INFLIGHT_CONTRACTS){trace('ESPERANDO CIERRE · '+activeContractContexts.size+' contratos en vuelo');probeActiveContractSettlement(tickEpoch);return}
  if(!derivSocket||derivSocket.readyState!==WebSocket.OPEN){trace('WEBSOCKET DEMO NO LISTO');return}
  if(liveBarrier==null){trace('SIN DÍGITO DIFFER');return}
 
