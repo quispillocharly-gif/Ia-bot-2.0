@@ -66,7 +66,7 @@ button:disabled{opacity:.55;cursor:not-allowed}.formgrid{display:grid;grid-templ
  <div id="derivAccount" class="mini">El PAT se usa solo en esta pestaña y no se guarda en GitHub.</div>
 </div>
 <div class="card signalbox">
- <div class="lab">LIVE DIFFER DECISION · PRÓXIMO TICK</div>
+ <div class="lab">LIVE DIFFER DECISION · DESPUÉS DE CADA TICK → SIGUIENTE TICK</div>
  <div id="liveDiffer" class="signalDigit">DIFFER –</div>
  <div id="liveReason" class="mini">Cargando modelo neural y stream R_75…</div>
  <div class="grid" style="margin-top:10px">
@@ -167,6 +167,7 @@ async function load(){
 }
 
 let derivSocket=null,derivDemoAccount=null,publicSocket=null,liveModel=null,liveEnsemble=null,latestLiveModel=null,latestLiveEnsemble=null,liveSeq=[],livePip=4,liveBarrier=null,liveBarrierProb=null,liveRuleId='neural_argmin',autoDemo=false,pendingTrade=false,activeContractId=null,tradeReq=5000,lastProposalReq=null,lastSignalEpoch=0;
+let latestPublicTickEpoch=0,latestPublicTickDigit=null,latestPublicTickQuote=null;
 let researchPolicy={source:'v1',rule:'neural_argmin',mode:'RESEARCH_DEMO'},sessionPolicy={source:'v1',rule:'neural_argmin',mode:'RESEARCH_DEMO'},currentBreakEven=.9174311926605504;
 let activeMoneyPolicy={promoted:false,compound_fraction:1,pause_after_match:0,batch_size:5,stage_size:5};
 const SESSION_TARGET=20;
@@ -365,6 +366,7 @@ async function connectDerivDemo(){
         if(!sessionStopped)$('autoDemoState').textContent='Contrato demo cerrado · profit '+profit.toFixed(2)+' · próximo stake $'+currentStake.toFixed(2);
         trace('CONTRATO CERRADO · '+(profit>=0?'WIN ':'LOSS ')+profit.toFixed(2)+' · P&L sesión '+sessionPnl.toFixed(2),profit>=0);
         if(m.subscription?.id)derivSocket.send(JSON.stringify({forget:m.subscription.id}));
+        if(!sessionStopped && autoDemo)setTimeout(tryNextTickTrade,25);
       }
     }
    }catch(_){}
@@ -441,22 +443,27 @@ function scanAvoidMatchDigits(){
  if(models.length<3)return [];
  const ps=models.map(m=>modelProbs(m,liveSeq));
  if(ps.some(x=>!x))return [];
+ const votes=Array(10).fill(0);
+ for(const p of ps){
+   let b=0;for(let d=1;d<10;d++)if(p[d]<p[b])b=d;
+   votes[b]++;
+ }
  const rows=[];
  for(let d=0;d<10;d++){
    const vals=ps.map(p=>Number(p[d]));
    const avg=vals.reduce((a,b)=>a+b,0)/vals.length;
    const variance=vals.reduce((z,x)=>z+(x-avg)*(x-avg),0)/vals.length;
    const sd=Math.sqrt(variance);
-   rows.push({digit:d,matchProb:avg,avoidProb:1-avg,sd,margin:(1-avg)-currentBreakEven});
+   rows.push({digit:d,matchProb:avg,avoidProb:1-avg,sd,agree:votes[d],margin:(1-avg)-currentBreakEven});
  }
- rows.sort((a,b)=>a.matchProb-b.matchProb||a.sd-b.sd||a.digit-b.digit);
+ rows.sort((a,b)=>a.matchProb-b.matchProb||b.agree-a.agree||a.sd-b.sd||a.digit-b.digit);
  return rows;
 }
 function avoidMatchDecision(){
  const rows=scanAvoidMatchDigits();
  if(!rows.length)return null;
- const best=rows[0];
- const ok=best.avoidProb>=currentBreakEven+.002 && best.sd<=.025;
+ const best=rows.find(x=>x.agree>=2)||rows[0];
+ const ok=best.agree>=2 && best.avoidProb>=currentBreakEven+.002 && best.sd<=.025;
  return {...best,ok,rows};
 }
 function renderAvoidMatchScanner(){
@@ -469,8 +476,8 @@ function renderAvoidMatchScanner(){
  }
  $('avoidBest').textContent='DIFFER '+d.digit;
  $('avoidBest').style.color=d.ok?'#6affb6':'#ffe66d';
- $('avoidMeta').textContent='Prob. MATCH '+pct(d.matchProb)+' · evitar MATCH '+pct(d.avoidProb)+' · margen '+pct(d.margin)+' · dispersión '+pct(d.sd)+' · '+(d.ok?'SEÑAL VÁLIDA':'ESPERAR');
- $('avoidRanking').innerHTML=d.rows.map((x,i)=>'<span class="chip '+(i===0?'best':'')+'">D'+x.digit+' · MATCH '+pct(x.matchProb)+'</span>').join('');
+ $('avoidMeta').textContent='Prob. MATCH '+pct(d.matchProb)+' · evitar MATCH '+pct(d.avoidProb)+' · acuerdo '+d.agree+'/3 · margen '+pct(d.margin)+' · '+(d.ok?'SEÑAL VÁLIDA':'ESPERAR');
+ $('avoidRanking').innerHTML=d.rows.map(x=>'<span class="chip '+(x.digit===d.digit?'best':'')+'">D'+x.digit+' · MATCH '+pct(x.matchProb)+' · '+x.agree+'/3</span>').join('');
  return d;
 }
 function coldDigit(a,n){
@@ -512,6 +519,11 @@ function renderLiveDecision(){
  $('liveDiffer').textContent='DIFFER '+barrier;$('liveProb').textContent=pct(pmin);
  $('liveReason').textContent='V1 · '+(liveModel?.model_id||'–')+' · '+liveRuleId+' · prob. DIFFER '+pct(1-pmin)+' · consenso '+gate.agree+'/3 · '+(gate.ok?'SEÑAL VÁLIDA':'ESPERAR');
  $('liveDiffer').style.color=gate.ok?'#4ddcff':'#ffe66d';return gate.ok;
+}
+function tryNextTickTrade(){
+ if(!latestPublicTickEpoch)return;
+ const ok=renderLiveDecision();
+ maybeAutoBuy(ok,latestPublicTickEpoch);
 }
 function maybeAutoBuy(signalOk,tickEpoch=Date.now()){
  if(sessionStopped){trace('META +$20 YA ALCANZADA');return}
@@ -569,10 +581,12 @@ function startPublicDiffer(){
    }else if(m.tick){
     livePip=Number(m.tick.pip_size??livePip);
     const q=Number(m.tick.quote).toFixed(livePip),d=Number(q.slice(-1));
+    latestPublicTickEpoch=Number(m.tick.epoch??Date.now());
+    latestPublicTickDigit=d;latestPublicTickQuote=q;
     liveSeq.push(d);if(liveSeq.length>1500)liveSeq.shift();
     $('liveTick').textContent=q+' · '+d;
-    const ok=renderLiveDecision();
-    maybeAutoBuy(ok,Number(m.tick.epoch??Date.now()));
+    trace('TICK '+latestPublicTickEpoch+' CERRADO · recalculando DIFFER para el siguiente');
+    tryNextTickTrade();
    }
   }catch(_){}
  };
