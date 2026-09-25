@@ -1,6 +1,6 @@
 {
   "version": "2.0-differ-director",
-  "timestamp": 1790334974,
+  "timestamp": 1790335078,
   "decision": "COLLECT_V2_FORWARD_DATA",
   "baseline_random": 0.9,
   "payout_status": "OK",
@@ -10,16 +10,35 @@
   "v4_status": "COLLECTING",
   "v1_leader": {
     "id": "neural_argmin",
-    "signals": 0,
-    "wins": 0,
-    "losses": 0,
-    "hit_rate": null,
-    "wilson_lower": 0.0,
-    "raw_economic_p": 1.0,
+    "signals": 615,
+    "wins": 549,
+    "losses": 66,
+    "hit_rate": 0.8926829268292683,
+    "wilson_lower": 0.865737233870165,
+    "raw_economic_p": 0.987013315120874,
     "bonferroni_p": 1.0,
-    "shadow_pnl": 0.0,
-    "shadow_roi": null,
-    "temporal_blocks": [],
+    "shadow_pnl": -16.590000000000032,
+    "shadow_roi": -0.026975609756097613,
+    "temporal_blocks": [
+      {
+        "n": 205,
+        "wins": 187,
+        "hit_rate": 0.9121951219512195,
+        "wilson_lower": 0.8654871084828075
+      },
+      {
+        "n": 205,
+        "wins": 183,
+        "hit_rate": 0.8926829268292683,
+        "wilson_lower": 0.8428638192944746
+      },
+      {
+        "n": 205,
+        "wins": 179,
+        "hit_rate": 0.8731707317073171,
+        "wilson_lower": 0.8206529973264765
+      }
+    ],
     "block_stable": false,
     "status": "COLLECTING"
   },
@@ -74,11 +93,11 @@
   "v4_leader": null,
   "v1_confirmed": [],
   "v2_confirmed": [],
-  "candidate_model_id": "918759d678c921ba",
-  "ensemble_id": "71f7a7b8eda1d5de",
+  "candidate_model_id": "f8c62d8aa3fa5da0",
+  "ensemble_id": "a337adc1941d899d",
   "live_policy": {
     "version": "2.0-live-policy",
-    "timestamp": 1790334974,
+    "timestamp": 1790335078,
     "source": "v2",
     "rule": "vote2_margin005",
     "candidate_id": "f81db252073342fe",
