@@ -1,6 +1,6 @@
 {
   "version": "2.0-differ-director",
-  "timestamp": 1790367302,
+  "timestamp": 1790367402,
   "decision": "COLLECT_V2_FORWARD_DATA",
   "baseline_random": 0.9,
   "payout_status": "OK",
@@ -9,17 +9,36 @@
   "v2_status": "RESEARCHING",
   "v4_status": "COLLECTING",
   "v1_leader": {
-    "id": "neural_argmin",
-    "signals": 519,
-    "wins": 462,
-    "losses": 57,
-    "hit_rate": 0.8901734104046243,
-    "wilson_lower": 0.8603520256938623,
-    "raw_economic_p": 0.9877986737999187,
+    "id": "neural_p08",
+    "signals": 783,
+    "wins": 702,
+    "losses": 81,
+    "hit_rate": 0.896551724137931,
+    "wilson_lower": 0.8732482288684906,
+    "raw_economic_p": 0.9832871746530008,
     "bonferroni_p": 1.0,
-    "shadow_pnl": -15.42000000000003,
-    "shadow_roi": -0.029710982658959596,
-    "temporal_blocks": [],
+    "shadow_pnl": -17.820000000000075,
+    "shadow_roi": -0.022758620689655267,
+    "temporal_blocks": [
+      {
+        "n": 261,
+        "wins": 232,
+        "hit_rate": 0.8888888888888888,
+        "wilson_lower": 0.8449799484002898
+      },
+      {
+        "n": 261,
+        "wins": 233,
+        "hit_rate": 0.89272030651341,
+        "wilson_lower": 0.8493192628797688
+      },
+      {
+        "n": 261,
+        "wins": 237,
+        "hit_rate": 0.9080459770114943,
+        "wilson_lower": 0.8668255894162056
+      }
+    ],
     "block_stable": false,
     "status": "COLLECTING"
   },
@@ -74,11 +93,11 @@
   "v4_leader": null,
   "v1_confirmed": [],
   "v2_confirmed": [],
-  "candidate_model_id": "7c7300cb2b76173d",
-  "ensemble_id": "fca472046b8c0ce1",
+  "candidate_model_id": "3dd90e2d7f44efe7",
+  "ensemble_id": "8666691e2d4caf77",
   "live_policy": {
     "version": "2.0-live-policy",
-    "timestamp": 1790367302,
+    "timestamp": 1790367402,
     "source": "v2",
     "rule": "vote2_margin005",
     "candidate_id": "9a8c3f5714d83024",
