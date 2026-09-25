@@ -223,7 +223,7 @@ button:disabled{opacity:.45;cursor:not-allowed;filter:grayscale(.4)}
   <div><div class="lab">MEJOR RACHA</div><div id="streakBest" class="big green">0</div><div id="streakBestMeta" class="mini">Sin racha registrada</div></div>
   <div><div class="lab">46 WIN STREAK LAB</div><div id="streakLabState" class="big yellow">BUSCANDO 46</div><div id="streakLabMeta" class="mini">Filtro progresivo segun la racha.</div></div>
  </div>
- <div id="ladderInfo" class="mini statusline">OBJETIVO PRINCIPAL: +$20 netos. Al alcanzarlo, AUTO-DEMO se detiene. La racha de 46 queda como métrica de investigación. Stake maximo USD 6. Sin martingala.</div>
+ <div id="ladderInfo" class="mini statusline">ANTI-MATCH POR BLOQUES: cada 10 WIN, pausa adaptativa de 4-8 ticks para recalibrar sin comprar; luego retoma buscando el menos probable. +$20 detiene la sesión. Stake maximo USD 6.</div>
  <div id="autoDemoState" class="mini statusline">La IA analiza continuamente los 10 dígitos y solo compra cuando detecta una oportunidad anti-MATCH que además supera el margen económico. Sin espera fija. Solo demo.</div>
  <div id="tradeTrace" class="mini statusline">TRACE: esperando AUTO-DEMO…</div>
 </div>
@@ -316,7 +316,9 @@ let researchPolicy={source:'v1',rule:'neural_argmin',mode:'RESEARCH_DEMO'},sessi
 let activeMoneyPolicy={promoted:false,compound_fraction:1,pause_after_match:0,batch_size:5,stage_size:5};
 const SESSION_TARGET=20;
 const WIN_STREAK_TARGET=46;
+const STREAK_BLOCK_SIZE=10;
 const HARD_MAX_STAKE=6;
+let blockPauseTicks=0,lastProtectedBlock=0;
 const STREAK_LAB_KEY='topo_airomen_streak_lab_v1';
 const EXEC_HISTORY_KEY='topo_airomen_exec_history_v1';
 let currentWinStreak=0,bestWinStreak=0,bestStreakContext=null,streakTargetHit=false;
@@ -364,8 +366,26 @@ function adaptiveOpportunityThreshold(){
 function loadStreakLab(){try{const x=JSON.parse(localStorage.getItem(STREAK_LAB_KEY)||'null');if(x){bestWinStreak=Math.max(0,Number(x.bestWinStreak)||0);bestStreakContext=x.bestStreakContext||null}}catch(_){}}
 function saveStreakLab(){try{localStorage.setItem(STREAK_LAB_KEY,JSON.stringify({bestWinStreak:bestWinStreak,bestStreakContext:bestStreakContext}))}catch(_){}}
 function streakPhase(){if(currentWinStreak>=40)return {name:'FASE 5 - PROTEGER 40+',score:72,edge:.0050,consensus:3,maxUnc:.035};if(currentWinStreak>=30)return {name:'FASE 4 - PROTEGER 30+',score:66,edge:.0035,consensus:3,maxUnc:.040};if(currentWinStreak>=20)return {name:'FASE 3 - PROTEGER 20+',score:60,edge:.0022,consensus:2,maxUnc:.045};if(currentWinStreak>=10)return {name:'FASE 2 - PROTEGER 10+',score:54,edge:.0012,consensus:2,maxUnc:.050};return {name:'FASE 1 - BUSCANDO VENTAJA',score:48,edge:.0003,consensus:1,maxUnc:.060};}
-function renderStreakLab(){const p=streakPhase();if($('streakCurrent'))$('streakCurrent').textContent=currentWinStreak+' / '+WIN_STREAK_TARGET;if($('streakPhase'))$('streakPhase').textContent=p.name;if($('streakBest'))$('streakBest').textContent=bestWinStreak;if($('streakLabState'))$('streakLabState').textContent=streakTargetHit?'46 ALCANZADO':'BUSCANDO '+WIN_STREAK_TARGET;if($('streakLabMeta')){const ec=executionCalibration();$('streakLabMeta').textContent='SCORE '+p.score+' - EDGE '+pct(p.edge)+' - consenso '+p.consensus+'/4 - incertidumbre '+pct(p.maxUnc)+' - HIT real '+(ec.hit==null?'–':pct(ec.hit))+' - stake max USD '+HARD_MAX_STAKE.toFixed(2);}if($('streakBestMeta')){const c=bestStreakContext;$('streakBestMeta').textContent=c?('EDGE '+(c.edge>=0?'+':'')+pct(c.edge)+' - SCORE '+c.score+' - D'+c.barrier):'Sin racha registrada'}}
-function updateWinStreak(profit){if(profit>0){currentWinStreak++;if(currentWinStreak>=WIN_STREAK_TARGET)streakTargetHit=true;if(currentWinStreak>bestWinStreak){bestWinStreak=currentWinStreak;bestStreakContext=activeSignalSnapshot?Object.assign({},activeSignalSnapshot):bestStreakContext;saveStreakLab()}}else{currentWinStreak=0}renderStreakLab();}
+function adaptiveBlockPauseTicks(){
+ const r100=rollingMatchRate(100);
+ const ec=executionCalibration();
+ if(r100!=null&&r100>=.12)return 8;
+ if(ec.hit!=null&&ec.hit<.94)return 7;
+ if(r100!=null&&r100<=.07)return 4;
+ return 6;
+}
+function armBlockProtection(){
+ if(currentWinStreak<=0||currentWinStreak>=WIN_STREAK_TARGET)return;
+ const block=Math.floor(currentWinStreak/STREAK_BLOCK_SIZE);
+ if(currentWinStreak%STREAK_BLOCK_SIZE===0 && block>lastProtectedBlock){
+   lastProtectedBlock=block;
+   blockPauseTicks=adaptiveBlockPauseTicks();
+   currentStake=baseStake();
+   trace('BLOQUE '+currentWinStreak+' WIN · recalibrando '+blockPauseTicks+' ticks para evitar MATCH',true);
+ }
+}
+function renderStreakLab(){const p=streakPhase();if($('streakCurrent'))$('streakCurrent').textContent=currentWinStreak+' / '+WIN_STREAK_TARGET;if($('streakPhase'))$('streakPhase').textContent=blockPauseTicks>0?('RECALIBRANDO · '+blockPauseTicks+' ticks'):p.name;if($('streakBest'))$('streakBest').textContent=bestWinStreak;if($('streakLabState'))$('streakLabState').textContent=streakTargetHit?'46 ALCANZADO':(blockPauseTicks>0?'PROTEGIENDO RACHA':'BUSCANDO '+WIN_STREAK_TARGET);if($('streakLabMeta')){const ec=executionCalibration();$('streakLabMeta').textContent='bloques de 10 WIN · pausa adaptativa '+(blockPauseTicks>0?blockPauseTicks:'4-8')+' ticks · HIT real '+(ec.hit==null?'–':pct(ec.hit))+' · stake max USD '+HARD_MAX_STAKE.toFixed(2);}if($('streakBestMeta')){const c=bestStreakContext;$('streakBestMeta').textContent=c?('EDGE '+(c.edge>=0?'+':'')+pct(c.edge)+' - SCORE '+c.score+' - D'+c.barrier):'Sin racha registrada'}}
+function updateWinStreak(profit){if(profit>0){currentWinStreak++;if(currentWinStreak>=WIN_STREAK_TARGET)streakTargetHit=true;if(currentWinStreak>bestWinStreak){bestWinStreak=currentWinStreak;bestStreakContext=activeSignalSnapshot?Object.assign({},activeSignalSnapshot):bestStreakContext;saveStreakLab()}armBlockProtection()}else{currentWinStreak=0;blockPauseTicks=0;lastProtectedBlock=0}renderStreakLab();}
 function loadExecHistory(){
  try{
   const x=JSON.parse(localStorage.getItem(EXEC_HISTORY_KEY)||'[]');
@@ -435,6 +455,7 @@ function renderProfitSession(){
 function resetProfitSession(){
  sessionPnl=0;sessionWins=0;sessionLosses=0;sessionStopped=false;
  currentWinStreak=0;streakTargetHit=false;activeSignalSnapshot=null;pendingSignalSnapshot=null;
+ blockPauseTicks=0;lastProtectedBlock=0;
  lastBoughtBarrier=null;sameBarrierBuyStreak=0;
  currentStake=baseStake();lastSettledContractId=null;
  sessionPolicy={source:'v3',rule:'avoid_match_adaptive_all_digits',mode:'RESEARCH_DEMO',candidate_id:(latestLiveEnsemble?.ensemble_id||researchPolicy.candidate_id||'–')};
@@ -446,7 +467,7 @@ function resetProfitSession(){
  if(latestLiveEnsemble)liveEnsemble=latestLiveEnsemble;
  liveRuleId='avoid_match_adaptive_all_digits';
  $('sessionPolicy').textContent='V3 · AVOID MATCH';
- $('policyMeta').textContent='MENOS PROBABLE PRO · objetivo principal +$20 · racha 46 solo investigación · compra continua · aprende MATCH reales · max 2 seguidas/numero · stake max USD 6';
+ $('policyMeta').textContent='MENOS PROBABLE PRO · bloques de 10 WIN · pausa adaptativa anti-MATCH · objetivo +$20 · max 2 seguidas/numero · stake max USD 6';
  renderProfitSession();renderStreakLab();
  trace('SESIÓN NUEVA · meta +$20.00 · stop -$'+sessionStopLoss().toFixed(2)+' · '+$('sessionPolicy').textContent,true);
 }
@@ -1015,6 +1036,14 @@ function tryNextTickTrade(){
    };
  }
  ticksWithoutSignal=0;
+ if(blockPauseTicks>0){
+   const before=blockPauseTicks;
+   blockPauseTicks=Math.max(0,blockPauseTicks-1);
+   $('autoDemoState').textContent='PROTECCIÓN DE RACHA · '+before+' tick'+(before===1?'':'s')+' de recalibración · sigue aprendiendo sin comprar.';
+   trace('RECALIBRANDO · '+before+' tick'+(before===1?'':'s')+' · ranking anti-MATCH actualizado');
+   renderStreakLab();
+   return;
+ }
  maybeAutoBuy(ok,latestPublicTickEpoch);
 }
 function maybeAutoBuy(signalOk,tickEpoch=Date.now()){
