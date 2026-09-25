@@ -302,6 +302,7 @@ async function load(){
 }
 
 let derivSocket=null,derivDemoAccount=null,publicSocket=null,liveModel=null,liveEnsemble=null,latestLiveModel=null,latestLiveEnsemble=null,liveSeq=[],livePip=4,liveBarrier=null,liveBarrierProb=null,liveRuleId='neural_argmin',autoDemo=false,pendingTrade=false,activeContractId=null,tradeReq=5000,lastProposalReq=null,lastSignalEpoch=0;
+let proposalRetryTimer=null;
 let publicReconnectTimer=null,publicWatchdogTimer=null,lastPublicMessageAt=0,lastPublicConnectAt=0;
 let demoMarketActive=false,lastDemoMarketMessageAt=0;
 const DEMO_MARKET_REQ=9101;
@@ -625,6 +626,48 @@ function probeActiveContractSettlement(tickEpoch){
    return true;
  }catch(_){return false}
 }
+function clearProposalRetry(){
+ if(proposalRetryTimer){clearTimeout(proposalRetryTimer);proposalRetryTimer=null}
+}
+function armProposalRetry(){
+ clearProposalRetry();
+ proposalRetryTimer=setTimeout(()=>{
+   proposalRetryTimer=null;
+   if(!pendingTrade||!lastProposalReq||activeContractId)return;
+   if(!derivSocket||derivSocket.readyState!==WebSocket.OPEN)return;
+   if(Number(lastProposalReq.retries||0)>=2){
+     trace('PROPUESTA SIN RESPUESTA · liberando para reintentar en próximo tick');
+     pendingTrade=false;
+     lastProposalReq=null;
+     pendingSignalSnapshot=null;
+     $('lastDemoBuy').textContent='REINTENTAR';
+     return;
+   }
+   lastProposalReq.retries=Number(lastProposalReq.retries||0)+1;
+   const req=++tradeReq;
+   lastProposalReq.req=req;
+   trace('PROPUESTA LENTA · reintento '+lastProposalReq.retries+'/2');
+   try{
+     derivSocket.send(JSON.stringify({
+       proposal:1,
+       amount:lastProposalReq.stake,
+       basis:'stake',
+       contract_type:'DIGITDIFF',
+       currency:lastProposalReq.currency,
+       duration:1,
+       duration_unit:'t',
+       barrier:String(lastProposalReq.barrier),
+       underlying_symbol:'R_75',
+       req_id:req
+     }));
+     armProposalRetry();
+   }catch(_){
+     pendingTrade=false;
+     lastProposalReq=null;
+     pendingSignalSnapshot=null;
+   }
+ },2200);
+}
 function processR75MarketMessage(m,source){
  if(m.history?.prices){
    livePip=Number(m.pip_size??livePip??4);
@@ -733,13 +776,20 @@ async function connectDerivDemo(){
     if(processR75MarketMessage(m,'demo'))return;
     if(m.error||m.errors){
       const err=apiError(m,'respuesta de error');
+      clearProposalRetry();
       pendingTrade=false; lastProposalReq=null;
       derivMsg('DERIV: '+err);
       $('autoDemoState').textContent='Orden rechazada por Deriv · AUTO-DEMO '+(autoDemo?'ON':'OFF');
       trace('ERROR '+err);
       return;
     }
-    if(m.proposal && lastProposalReq && m.req_id===lastProposalReq.req){
+    if((m.msg_type==='proposal'||m.proposal) && m.proposal && lastProposalReq){
+      const responseReq=Number(m.req_id??m.echo_req?.req_id??0);
+      const expectedReq=Number(lastProposalReq.req??0);
+      if(responseReq&&expectedReq&&responseReq!==expectedReq){
+        // Puede ser la respuesta de un reintento anterior; aun es valida si seguimos esperando una propuesta.
+        trace('PROPUESTA RECIBIDA · req '+responseReq+' mientras esperaba '+expectedReq+' · aceptando primera válida');
+      }
       const p=m.proposal||{};
       if(!p.id){pendingTrade=false;lastProposalReq=null;trace('PROPUESTA SIN ID');return}
       const maxPrice=Number(p.ask_price??lastProposalReq.stake);
@@ -753,13 +803,15 @@ async function connectDerivDemo(){
         pendingSignalSnapshot.realEdge=realEdge;
       }
       pendingBuyBarrier=Number(lastProposalReq.barrier);
-      trace('PROPUESTA OK · MENOS PROBABLE D'+lastProposalReq.barrier+' · enviando BUY',true);
+      clearProposalRetry();
+      trace('PROPUESTA OK · D'+lastProposalReq.barrier+' · ID recibido · enviando BUY',true);
       derivSocket.send(JSON.stringify({buy:p.id,price:maxPrice,req_id:++tradeReq}));
       $('lastDemoBuy').textContent='COMPRANDO…';
       lastProposalReq=null;
       return;
     }
     if(m.buy){
+      clearProposalRetry();
       const b=m.buy||{};
       activeContractId=b.contract_id;
       lastSettlementProbeEpoch=0;
@@ -1229,7 +1281,7 @@ function maybeAutoBuy(signalOk,tickEpoch=Date.now()){
  const chosenRawEdge=chosenPredictedWin-currentBreakEven;
  pendingSignalSnapshot={barrier:chosenBarrier,edge:chosenRawEdge,score:chosenScore,matchProb:chosenRisk,predictedWin:chosenPredictedWin,consensus:chosenConsensus,uncertainty:chosenUncertainty,streakBefore:currentWinStreak,epoch:tickEpoch};
  pendingTrade=true;
- const req=++tradeReq;lastProposalReq={req,stake,barrier:chosenBarrier,predictedWin:chosenPredictedWin,minEdge:streakPhase().edge};
+ const req=++tradeReq;lastProposalReq={req,stake,barrier:chosenBarrier,predictedWin:chosenPredictedWin,minEdge:streakPhase().edge,currency,retries:0};
  $('lastDemoBuy').textContent='PROPUESTA '+chosenBarrier;
  trace('SEÑAL VÁLIDA DIFFER '+chosenBarrier+' · solicitando propuesta',true);
  derivSocket.send(JSON.stringify({
@@ -1237,6 +1289,7 @@ function maybeAutoBuy(signalOk,tickEpoch=Date.now()){
    currency,duration:1,duration_unit:'t',barrier:String(chosenBarrier),
    underlying_symbol:'R_75',req_id:req
  }));
+ armProposalRetry();
 }
 async function loadLiveModel(){
  try{
