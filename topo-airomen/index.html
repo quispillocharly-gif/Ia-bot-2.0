@@ -103,7 +103,7 @@ button:disabled{opacity:.45;cursor:not-allowed}
 <script>
 'use strict';
 
-const BUILD='CLEAN-1.5-DYNAMIC-CADENCE';
+const BUILD='CLEAN-1.6-CONNECTION-GUARD';
 const CADENCE_MIN=1,CADENCE_MAX=3;
 const SYMBOL='R_75';
 const TARGET=10;
@@ -120,6 +120,8 @@ const pct=x=>(100*Number(x||0)).toFixed(2)+'%';
 
 let marketSocket=null,tradeSocket=null,tradeAccount=null;
 let marketLastAt=0,marketReconnectTimer=null,marketPip=4;
+let tradeLastAt=0,tradeReconnectTimer=null,tradeHeartbeatTimer=null,tradeReconnectAttempts=0;
+let savedAppId='',savedPat='',autoWanted=false;
 let seq=[],lastEpoch=0,lastDigit=null,lastQuote='–';
 
 let offline=null,model=null;
@@ -249,11 +251,11 @@ function applyResult(profit,snapshot){
   renderSession();
 
   if(sessionPnl>=TARGET){
-    sessionStopped=true;auto=false;syncAuto();
+    sessionStopped=true;autoWanted=false;auto=false;syncAuto();
     $('contractMeta').textContent='META +$10 ALCANZADA · sesión protegida';
     log('META +$10 NETOS ALCANZADA');
   }else if(sessionPnl<=-stopLoss()){
-    sessionStopped=true;auto=false;syncAuto();
+    sessionStopped=true;autoWanted=false;auto=false;syncAuto();
     $('contractMeta').textContent='STOP LOSS alcanzado · sesión detenida';
     log('STOP LOSS ALCANZADO · '+sessionPnl.toFixed(2));
   }
@@ -606,8 +608,11 @@ function renderDecision(){
 }
 
 function syncAuto(){
-  $('autoBtn').textContent=auto?'AUTO-DEMO ON':'AUTO-DEMO OFF';
-  $('autoBtn').className=auto?'':'secondary';
+  const online=!!tradeSocket&&tradeSocket.readyState===WebSocket.OPEN;
+  const live=autoWanted&&online&&!sessionStopped;
+  auto=live;
+  $('autoBtn').textContent=live?'AUTO-DEMO ON':(autoWanted?'AUTO-DEMO RECONNECTING':'AUTO-DEMO OFF');
+  $('autoBtn').className=live?'':'secondary';
 }
 
 function canTrade(){
@@ -779,18 +784,63 @@ function onTradeMessage(e){
   else if(m.proposal_open_contract)onContract(m);
 }
 
-async function connectDemo(){
-  const appId=$('appId').value.trim();
-  const pat=$('pat').value.trim();
+function clearTradeHeartbeat(){
+  if(tradeHeartbeatTimer){clearInterval(tradeHeartbeatTimer);tradeHeartbeatTimer=null}
+}
+function startTradeHeartbeat(ws){
+  clearTradeHeartbeat();
+  tradeLastAt=Date.now();
+  tradeHeartbeatTimer=setInterval(()=>{
+    if(tradeSocket!==ws)return;
+    if(ws.readyState!==WebSocket.OPEN)return;
+    try{
+      ws.send(JSON.stringify({ping:1,req_id:++req}));
+    }catch(_){}
+  },20000);
+}
+function scheduleTradeReconnect(reason){
+  if(sessionStopped||!autoWanted||!savedAppId||!savedPat)return;
+  if(tradeReconnectTimer)return;
+  const delay=Math.min(10000,1500*Math.max(1,tradeReconnectAttempts+1));
+  tradeReconnectAttempts++;
+  $('demoState').textContent='RECONNECTING';
+  $('demoState').className='big yellow';
+  $('connectStatus').textContent='Reconectando DEMO'+(reason?' · '+reason:'')+'…';
+  log('DEMO RECONNECT · intento '+tradeReconnectAttempts+' en '+delay+'ms');
+  tradeReconnectTimer=setTimeout(()=>{
+    tradeReconnectTimer=null;
+    connectDemo(true);
+  },delay);
+}
+function recoverActiveContract(){
+  if(!activeContract||!tradeSocket||tradeSocket.readyState!==WebSocket.OPEN)return;
+  try{
+    sendTrade({proposal_open_contract:1,contract_id:activeContract.id,subscribe:1,req_id:++req});
+    log('RECUPERANDO CONTRATO · '+activeContract.id);
+  }catch(e){
+    log('RECUPERACIÓN CONTRATO ERROR · '+e.message);
+  }
+}
+
+async function connectDemo(isReconnect=false){
+  if(typeof isReconnect!=='boolean')isReconnect=false;
+  const appId=isReconnect?savedAppId:$('appId').value.trim();
+  const pat=isReconnect?savedPat:$('pat').value.trim();
   if(!appId||!pat){
     $('connectStatus').textContent='Falta App ID o PAT';
     return;
   }
+  if(!isReconnect){
+    savedAppId=appId;
+    savedPat=pat;
+    autoWanted=true;
+  }
 
   const btn=$('connectBtn');
   btn.disabled=true;
-  $('demoState').textContent='AUTH…';
-  $('connectStatus').textContent='Leyendo cuentas DEMO…';
+  $('demoState').textContent=isReconnect?'RECONNECTING':'AUTH…';
+  $('demoState').className='big yellow';
+  $('connectStatus').textContent=isReconnect?'Renovando conexión DEMO…':'Leyendo cuentas DEMO…';
 
   try{
     const headers={'Authorization':'Bearer '+pat,'Deriv-App-ID':appId,'Accept':'application/json'};
@@ -819,38 +869,57 @@ async function connectDemo(){
     const url=oj?.data?.url;
     if(!url)throw Error('Deriv no devolvió URL WebSocket');
 
-    if(tradeSocket)try{tradeSocket.close()}catch(_){}
-    tradeSocket=new WebSocket(url);
+    const old=tradeSocket;
+    const ws=new WebSocket(url);
+    tradeSocket=ws;
+    if(old&&old!==ws)try{old.close()}catch(_){}
 
-    tradeSocket.onopen=()=>{
+    ws.onopen=()=>{
+      if(tradeSocket!==ws)return;
+      tradeLastAt=Date.now();
+      tradeReconnectAttempts=0;
       btn.disabled=false;btn.textContent='RECONECTAR DEMO';
       $('demoState').textContent='ONLINE';
       $('demoState').className='big green';
       $('demoMeta').textContent='DEMO '+accountId+' · '+(demo.currency||'USD');
-      $('connectStatus').textContent='CONECTADO · stream de mercado independiente OK';
-      log('DEMO CONECTADA · '+accountId);
-      auto=true;syncAuto();
+      $('connectStatus').textContent='CONECTADO · keepalive + autoreconnect activos';
+      log('DEMO CONECTADA · '+accountId+(isReconnect?' · RECUPERADA':''));
+      startTradeHeartbeat(ws);
+      syncAuto();
+      if(activeContract)recoverActiveContract();
     };
 
-    tradeSocket.onmessage=onTradeMessage;
-    tradeSocket.onerror=()=>{
-      $('connectStatus').textContent='Error WebSocket DEMO';
+    ws.onmessage=e=>{
+      if(tradeSocket!==ws)return;
+      tradeLastAt=Date.now();
+      onTradeMessage(e);
+    };
+    ws.onerror=()=>{
+      if(tradeSocket!==ws)return;
+      $('connectStatus').textContent='Error WebSocket DEMO · intentando recuperar';
       log('ERROR WEBSOCKET DEMO');
     };
-    tradeSocket.onclose=()=>{
-      auto=false;syncAuto();pending=false;activeContract=null;clearTimers();
-      $('demoState').textContent='OFFLINE';
-      $('demoState').className='big red';
-      $('connectStatus').textContent='Conexión DEMO cerrada';
+    ws.onclose=e=>{
+      if(tradeSocket!==ws)return;
+      tradeSocket=null;
+      clearTradeHeartbeat();
+      // Las solicitudes a medio camino sí se liberan; un contrato ya comprado NO se borra.
+      pending=false;pendingOrder=null;buyContexts.clear();clearTimers();
+      syncAuto();
+      $('demoState').textContent='RECONNECTING';
+      $('demoState').className='big yellow';
+      $('connectStatus').textContent='Conexión DEMO cerrada · reconectando';
       btn.disabled=false;
-      log('DEMO DESCONECTADA');
+      log('DEMO DESCONECTADA · code '+(e?.code??'–')+' · preservando contrato '+(activeContract?.id||'ninguno'));
+      scheduleTradeReconnect('socket cerrado');
     };
   }catch(e){
     btn.disabled=false;
-    $('demoState').textContent='ERROR';
-    $('demoState').className='big red';
+    $('demoState').textContent=isReconnect?'RECONNECTING':'ERROR';
+    $('demoState').className='big '+(isReconnect?'yellow':'red');
     $('connectStatus').textContent=e.message;
     log('CONEXIÓN ERROR · '+e.message);
+    if(isReconnect)scheduleTradeReconnect(e.message);
   }
 }
 
@@ -974,18 +1043,22 @@ async function loadMemory(){
 
 $('connectBtn').onclick=connectDemo;
 $('autoBtn').onclick=()=>{
-  if(!tradeSocket||tradeSocket.readyState!==WebSocket.OPEN){
-    $('connectStatus').textContent='Primero conecta DEMO';
-    return;
-  }
   if(sessionStopped){
     $('connectStatus').textContent='Reinicia la sesión +$10';
     return;
   }
-  auto=!auto;syncAuto();
-  log('AUTO-DEMO '+(auto?'ON':'OFF'));
+  if(!savedAppId||!savedPat){
+    $('connectStatus').textContent='Primero conecta DEMO';
+    return;
+  }
+  autoWanted=!autoWanted;
+  syncAuto();
+  log('AUTO-DEMO '+(autoWanted?'ON':'OFF'));
+  if(autoWanted&&(!tradeSocket||tradeSocket.readyState!==WebSocket.OPEN)){
+    scheduleTradeReconnect('AUTO activado');
+  }
 };
-$('resetBtn').onclick=()=>{resetSession();if(tradeSocket?.readyState===WebSocket.OPEN){auto=true;syncAuto()}};
+$('resetBtn').onclick=()=>{resetSession();if(savedAppId&&savedPat)autoWanted=true;syncAuto();if(autoWanted&&(!tradeSocket||tradeSocket.readyState!==WebSocket.OPEN))scheduleTradeReconnect('sesión reiniciada')};
 $('baseStake').onchange=()=>{if(sessionWins===0&&sessionMatches===0){currentStake=baseStake();renderSession()}};
 $('maxStake').onchange=()=>{currentStake=Math.min(currentStake,maxStake(),HARD_MAX);renderSession()};
 
@@ -993,6 +1066,26 @@ setInterval(()=>{
   if(!marketSocket||marketSocket.readyState!==WebSocket.OPEN||Date.now()-marketLastAt>14000){
     log('WATCHDOG MARKET · reconectando');
     connectMarket();
+  }
+},5000);
+
+setInterval(()=>{
+  if(!autoWanted||sessionStopped)return;
+  if(!tradeSocket||tradeSocket.readyState!==WebSocket.OPEN){
+    scheduleTradeReconnect('watchdog offline');
+    return;
+  }
+  const idle=Date.now()-tradeLastAt;
+  if(idle>45000){
+    try{
+      tradeSocket.send(JSON.stringify({ping:1,req_id:++req}));
+      log('WATCHDOG DEMO · ping forzado '+Math.round(idle/1000)+'s');
+    }catch(_){}
+  }
+  if(idle>75000){
+    const stale=tradeSocket;
+    log('WATCHDOG DEMO · socket sin respuesta, renovando');
+    try{stale.close()}catch(_){}
   }
 },5000);
 
