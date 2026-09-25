@@ -255,7 +255,7 @@ let latestPublicTickEpoch=0,latestPublicTickDigit=null,latestPublicTickQuote=nul
 let lastAvoidDecision=null,pendingLearnSnapshot=null;
 let lastBoughtBarrier=null,sameBarrierBuyStreak=0,pendingBuyBarrier=null,activeTradeBarrier=null;
 const MAX_SAME_BARRIER_BUYS=1;
-const ALT_RISK_TOLERANCE=.005;
+const ALT_RISK_TOLERANCE=.0075;
 const ONLINE_LEARNER_KEY='topo_airomen_avoidmatch_learner_v2';
 const SELECTOR_STATS_KEY='topo_airomen_selector_stats_v3';
 let recentTradeResults=[],consecutiveDemoLosses=0;
@@ -287,16 +287,17 @@ function rollingMatchRate(n){
 function rollingCount(n){return Math.min(n,selectorStats.outcomes.length)}
 function clamp01(x){return Math.max(0,Math.min(1,Number(x)||0))}
 function adaptiveOpportunityThreshold(){
- let threshold=70;
+ let threshold=55;
  const r100=rollingMatchRate(100),n100=rollingCount(100);
  if(n100>=30){
-   if(r100>=.12)threshold=88;
-   else if(r100>=.10)threshold=80;
-   else if(r100<=.07)threshold=66;
+   if(r100>=.13)threshold=76;
+   else if(r100>=.11)threshold=68;
+   else if(r100>=.09)threshold=60;
+   else if(r100<=.07)threshold=50;
  }
- if(consecutiveDemoLosses>=3)threshold=Math.max(threshold,92);
- else if(consecutiveDemoLosses>=2)threshold=Math.max(threshold,86);
- else if(consecutiveDemoLosses===1)threshold=Math.max(threshold,76);
+ if(consecutiveDemoLosses>=3)threshold=Math.max(threshold,82);
+ else if(consecutiveDemoLosses>=2)threshold=Math.max(threshold,72);
+ else if(consecutiveDemoLosses===1)threshold=Math.max(threshold,62);
  return threshold;
 }
 function sessionStats(){
@@ -345,7 +346,7 @@ function resetProfitSession(){
  if(latestLiveEnsemble)liveEnsemble=latestLiveEnsemble;
  liveRuleId='avoid_match_adaptive_all_digits';
  $('sessionPolicy').textContent='V3 · AVOID MATCH';
- $('policyMeta').textContent='0–9 dinámico · 1 compra consecutiva máx. por dígito · SCORE adaptativo · rolling 100/250/500 · freno por pérdidas';
+ $('policyMeta').textContent='0–9 dinámico · 1 compra máx. seguida por dígito · SCORE balanceado · más oportunidades válidas · freno adaptativo';
  renderProfitSession();
  trace('SESIÓN NUEVA · meta +$20.00 · stop -$'+sessionStopLoss().toFixed(2)+' · '+$('sessionPolicy').textContent,true);
 }
@@ -682,20 +683,20 @@ function scanAvoidMatchDigits(){
  return {rows,features:{transition,recent,frequency},weights:w};
 }
 function candidateOpportunityScore(x,bestRisk,gap,maxMatchRisk,isBest){
- const safety=100*clamp01((.11-Number(x.matchProb))/.07);
- const margin=100*clamp01((maxMatchRisk-Number(x.matchProb))/.02);
+ const risk=Number(x.matchProb);
+ // Score relativo al límite económico: una señal dentro del límite ya recibe crédito útil.
+ const safety=100*clamp01((maxMatchRisk+.005-risk)/.015);
  const separation=isBest
-   ?100*clamp01(gap/.006)
-   :100*clamp01(1-(Number(x.matchProb)-bestRisk)/ALT_RISK_TOLERANCE);
- const neural=100*clamp01((.11-Number(x.neuralRisk??.10))/.07);
+   ?100*clamp01(gap/.004)
+   :100*clamp01(1-(risk-bestRisk)/ALT_RISK_TOLERANCE);
+ const neural=100*clamp01((.105-Number(x.neuralRisk??.10))/.045);
  const r100=rollingMatchRate(100);
- const rolling=r100==null?60:100*clamp01((.14-r100)/.08);
+ const rolling=r100==null?65:100*clamp01((.14-r100)/.08);
  return Math.round(
-   .45*safety+
-   .25*margin+
-   .15*separation+
-   .10*neural+
-   .05*rolling
+   .55*safety+
+   .20*separation+
+   .15*neural+
+   .10*rolling
  );
 }
 function avoidMatchDecision(){
@@ -710,12 +711,13 @@ function avoidMatchDecision(){
 
  const best=eligible[0],second=eligible[1]||best;
  const gap=Math.max(0,Number(second.matchProb)-Number(best.matchProb));
- const economicMatchLimit=Math.max(.04,1-currentBreakEven-.003);
- const maxMatchRisk=Math.min(.08,economicMatchLimit);
- const minGap=.0025;
+ const economicMatchLimit=Math.max(.04,1-currentBreakEven-.001);
+ const maxMatchRisk=Math.min(.0825,economicMatchLimit);
+ const minGap=.0015;
  const historyOk=liveSeq.length>=40;
  const riskOk=Number(best.matchProb)<=maxMatchRisk;
- const gapOk=gap>=minGap;
+ const strongRisk=Number(best.matchProb)<=maxMatchRisk-.008;
+ const gapOk=gap>=minGap || strongRisk;
  const opportunityThreshold=adaptiveOpportunityThreshold();
  const opportunityScore=candidateOpportunityScore(best,Number(best.matchProb),gap,maxMatchRisk,true);
  const scoreOk=opportunityScore>=opportunityThreshold;
@@ -741,7 +743,7 @@ function renderAvoidMatchScanner(){
  $('avoidBest').textContent='DIFFER '+d.digit;
  $('avoidBest').style.color=d.ok?'#6affb6':'#ffe66d';
  const r100=rollingMatchRate(100),r250=rollingMatchRate(250),r500=rollingMatchRate(500);
- $('avoidMeta').textContent='SCORE '+d.opportunityScore+'/100 · mínimo '+d.opportunityThreshold+' · riesgo MATCH '+pct(d.matchProb)+' · límite '+pct(d.maxMatchRisk)+' · '+(d.ok?'OPORTUNIDAD VÁLIDA':'SEGUIR ANALIZANDO');
+ $('avoidMeta').textContent='SCORE '+d.opportunityScore+'/100 · mínimo '+d.opportunityThreshold+' · riesgo MATCH '+pct(d.matchProb)+' / límite '+pct(d.maxMatchRisk)+' · '+(d.ok?'ENTRADA VÁLIDA':'ANALIZANDO');
  $('avoidRanking').innerHTML=d.rows.map(x=>'<span class="chip '+(x.digit===d.digit?'best':'')+'">D'+x.digit+' · riesgo '+pct(x.matchProb)+'</span>').join('');
  $('safetyStatus').textContent=d.ok?'DYNAMIC':'LEARNING';
  $('safetyStatus').className='big '+(d.ok?'green':'yellow');
