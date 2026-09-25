@@ -325,6 +325,7 @@ const SESSION_TARGET=20;
 const WIN_STREAK_TARGET=46;
 const STREAK_BLOCK_SIZE=10;
 const HARD_MAX_STAKE=6;
+const AGGRESSIVE_WIN_GROWTH=2.25;
 let blockPauseTicks=0,lastProtectedBlock=0;
 const STREAK_LAB_KEY='topo_airomen_streak_lab_v1';
 const EXEC_HISTORY_KEY='topo_airomen_exec_history_v1';
@@ -515,7 +516,7 @@ function resetProfitSession(){
  if(latestLiveEnsemble)liveEnsemble=latestLiveEnsemble;
  liveRuleId='avoid_match_adaptive_all_digits';
  $('sessionPolicy').textContent='V3 · AVOID MATCH';
- $('policyMeta').textContent='ANTI-MATCH CONTINUO - aprovecha cada tick disponible - diversificacion suave 0-9 - recalibra sin pausar - objetivo +20';
+ $('policyMeta').textContent='ANTI-MATCH TURBO - cada tick - stake sube rapido tras WIN hasta USD 6 - LOSS vuelve a base - objetivo +20';
  renderProfitSession();renderStreakLab();
  trace('SESIÓN NUEVA · meta +$20.00 · stop -$'+sessionStopLoss().toFixed(2)+' · '+$('sessionPolicy').textContent,true);
 }
@@ -523,8 +524,9 @@ function applyProfitLadder(profit){
  sessionPnl+=profit;
  if(profit>=0){
    sessionWins++;
-   const frac=activeMoneyPolicy.promoted?Number(activeMoneyPolicy.compound_fraction??0):1;
-   currentStake=Math.min(maxSessionStake(),Math.max(baseStake(),currentStake+profit*frac));
+   const minStep=baseStake()*.12;
+   const step=Math.max(Math.max(0,profit)*AGGRESSIVE_WIN_GROWTH,minStep);
+   currentStake=Math.min(HARD_MAX_STAKE,maxSessionStake(),Math.max(baseStake(),currentStake+step));
    if(activeMoneyPolicy.promoted)sessionBatchWins++;
  }else{
    sessionLosses++;
@@ -534,23 +536,18 @@ function applyProfitLadder(profit){
  if(activeMoneyPolicy.promoted){
    sessionBatchTrades++;
    const bs=Math.max(1,Number(activeMoneyPolicy.batch_size??5));
-   if(sessionBatchTrades>=bs){
-     if(sessionBatchWins<bs)currentStake=baseStake();
-     sessionBatchTrades=0;sessionBatchWins=0;
-   }
+   if(sessionBatchTrades>=bs){sessionBatchTrades=0;sessionBatchWins=0}
    const stageSize=Math.max(1,Number(activeMoneyPolicy.stage_size??5));
    if(sessionStage<4 && sessionPnl>=sessionStage*stageSize){
      sessionStage++;
-     currentStake=baseStake();
      sessionBatchTrades=0;sessionBatchWins=0;sessionPauseLeft=0;
    }
  }
  const checkpoint=Math.min(3,Math.floor(Math.max(0,sessionPnl)/5));
  if(checkpoint>lastProfitCheckpoint && sessionPnl<SESSION_TARGET){
    lastProfitCheckpoint=checkpoint;
-   currentStake=baseStake();
-   blockPauseTicks=Math.max(blockPauseTicks,3);
-   trace('CHECKPOINT +USD '+(checkpoint*5)+' - stake base - recalibrando 3 ticks',true);
+   blockPauseTicks=Math.max(blockPauseTicks,2);
+   trace('CHECKPOINT +USD '+(checkpoint*5)+' - stake mantiene crecimiento - recalibrando ranking',true);
  }
  renderProfitSession();
  if(sessionPnl>=SESSION_TARGET){
@@ -1201,12 +1198,7 @@ function maybeAutoBuy(signalOk,tickEpoch=Date.now()){
  $('liveReason').textContent='ANTI-MATCH SUAVE - D'+chosenBarrier+' - riesgo '+pct(chosenRisk)+' - uso reciente '+Number(pick.recentUse||0)+' - todos los digitos compiten';
  if(tickEpoch===lastSignalEpoch){trace('TICK YA PROCESADO');return}
  lastSignalEpoch=tickEpoch;
- let targetStake=Math.min(HARD_MAX_STAKE,Math.max(.35,currentStake||baseStake()));
- const bStake=baseStake();
- if(sessionPnl>=15)targetStake=Math.min(targetStake,Math.max(bStake,bStake*1.35));
- else if(sessionPnl>=10)targetStake=Math.min(targetStake,Math.max(bStake,bStake*1.75));
- else if(sessionPnl>=5)targetStake=Math.min(targetStake,Math.max(bStake,bStake*2.25));
- const stake=targetStake;
+ const stake=Math.min(HARD_MAX_STAKE,maxSessionStake(),Math.max(.35,currentStake||baseStake()));
  const currency=derivDemoAccount?.currency||derivDemoAccount?.currency_code||'USD';
  const chosenPredictedWin=1-chosenRisk;
  const chosenRawEdge=chosenPredictedWin-currentBreakEven;
