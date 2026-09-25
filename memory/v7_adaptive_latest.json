@@ -1,21 +1,21 @@
 {
   "version": "7.0-adaptive-shadow-lab",
-  "timestamp": 1790349978,
+  "timestamp": 1790351071,
   "model_id": "4d99ca520bf96c63",
   "search_version": null,
-  "runs": 64,
-  "new_ticks_this_run": 769,
+  "runs": 65,
+  "new_ticks_this_run": 547,
   "window": 10,
   "hidden": [
     32
   ],
   "confidence_threshold": 0.0,
-  "current_regime": "REPEAT_HEAVY",
+  "current_regime": "UNIFORM",
   "regime_features": {
-    "entropy": 0.9929288922969611,
-    "repeat_rate": 0.16080402010050251,
-    "max_share": 0.13,
-    "transition_peak": 0.15937970344692792
+    "entropy": 0.9886169794069893,
+    "repeat_rate": 0.11557788944723618,
+    "max_share": 0.135,
+    "transition_peak": 0.17009216271112776
   },
   "regime_performance": [
     {
@@ -29,12 +29,12 @@
     },
     {
       "regime": "UNIFORM",
-      "opportunities": 24048,
-      "signals": 1999,
-      "wins": 185,
-      "hit_rate": 0.09254627313656828,
-      "wilson_lower": 0.08061192368486465,
-      "shadow_pnl": -346.94999999999925
+      "opportunities": 24479,
+      "signals": 2043,
+      "wins": 186,
+      "hit_rate": 0.09104258443465492,
+      "wilson_lower": 0.07932393810896436,
+      "shadow_pnl": -382.01999999999924
     },
     {
       "regime": "CONCENTRATED",
@@ -47,30 +47,30 @@
     },
     {
       "regime": "REPEAT_HEAVY",
-      "opportunities": 4637,
-      "signals": 990,
-      "wins": 86,
-      "hit_rate": 0.08686868686868687,
-      "wilson_lower": 0.07088255260251944,
-      "shadow_pnl": -222.01999999999958
+      "opportunities": 4753,
+      "signals": 1014,
+      "wins": 90,
+      "hit_rate": 0.08875739644970414,
+      "wilson_lower": 0.07276902138848164,
+      "shadow_pnl": -210.29999999999956
     }
   ],
-  "opportunities": 37879,
-  "predictions": 5106,
-  "wins": 487,
-  "losses": 4619,
-  "hit_rate": 0.0953779866823345,
-  "wilson_lower": 0.08762247058498988,
-  "coverage": 0.13479764513318726,
+  "opportunities": 38426,
+  "predictions": 5174,
+  "wins": 492,
+  "losses": 4682,
+  "hit_rate": 0.09509083880943177,
+  "wilson_lower": 0.08739548377452519,
+  "coverage": 0.1346484151355853,
   "skipped_confidence": 0,
-  "skipped_agreement": 32773,
-  "mean_confidence": 0.17648458829579333,
-  "mean_expert_agreement": 2.7757540148844497,
+  "skipped_agreement": 33252,
+  "mean_confidence": 0.17652341957874726,
+  "mean_expert_agreement": 2.777348279860843,
   "calibration": {
-    "ece": 0.07630392328880697,
-    "brier_binary": 0.09696980754185182,
-    "brier_multiclass": 0.09404838016230717,
-    "brier_multiclass_samples": 27116,
+    "ece": 0.07649366731055914,
+    "brier_binary": 0.09686285322532535,
+    "brier_multiclass": 0.09399819353550719,
+    "brier_multiclass_samples": 27663,
     "bins": [
       {
         "bin": "0.00-0.12",
@@ -81,59 +81,59 @@
       },
       {
         "bin": "0.12-0.14",
-        "n": 4051,
-        "wins": 373,
-        "hit_rate": 0.092076030609726,
-        "avg_confidence": 0.13309103228065355
+        "n": 4105,
+        "wins": 381,
+        "hit_rate": 0.0928136419001218,
+        "avg_confidence": 0.13310559333895358
       },
       {
         "bin": "0.14-0.16",
-        "n": 9913,
-        "wins": 997,
-        "hit_rate": 0.10057500252194089,
-        "avg_confidence": 0.15053284120892801
+        "n": 10055,
+        "wins": 1005,
+        "hit_rate": 0.09995027349577325,
+        "avg_confidence": 0.15053489646438578
       },
       {
         "bin": "0.16-0.18",
-        "n": 9592,
-        "wins": 955,
-        "hit_rate": 0.09956213511259383,
-        "avg_confidence": 0.16945763153984858
+        "n": 9735,
+        "wins": 971,
+        "hit_rate": 0.0997431946584489,
+        "avg_confidence": 0.16946858249692717
       },
       {
         "bin": "0.18-0.22",
-        "n": 10084,
-        "wins": 1011,
-        "hit_rate": 0.10025783419278064,
-        "avg_confidence": 0.1964201418751646
+        "n": 10231,
+        "wins": 1021,
+        "hit_rate": 0.09979474147199688,
+        "avg_confidence": 0.19641898742706448
       },
       {
         "bin": "0.22-1.01",
-        "n": 4155,
-        "wins": 450,
-        "hit_rate": 0.10830324909747292,
-        "avg_confidence": 0.24932014024788435
+        "n": 4216,
+        "wins": 456,
+        "hit_rate": 0.10815939278937381,
+        "avg_confidence": 0.24931463852977165
       }
     ],
-    "samples": 37879
+    "samples": 38426
   },
   "placebo": {
-    "random_10pct_p": 0.732,
-    "economic_break_even_p": 0.9896,
+    "random_10pct_p": 0.7238,
+    "economic_break_even_p": 0.9894,
     "bootstrap_95_rate": [
-      0.0839875,
-      0.109
+      0.083,
+      0.1095
     ],
     "recent_samples": 2000
   },
   "economic": {
     "break_even_rate": 0.11198208286674133,
-    "shadow_pnl": -757.0900000000074,
-    "shadow_staked": 5106.0,
-    "shadow_roi": -0.1482745789267543,
-    "ev_per_signal": -0.1482745789267543,
+    "shadow_pnl": -780.4400000000077,
+    "shadow_staked": 5174.0,
+    "shadow_roi": -0.15083880943177574,
+    "ev_per_signal": -0.15083880943177574,
     "payout_snapshot_available": true,
-    "payout_snapshot_age_seconds": 3007,
+    "payout_snapshot_age_seconds": 602,
     "payout_snapshot_fresh": true,
     "payout_max_age_seconds": 7200
   },
