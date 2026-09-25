@@ -13,6 +13,7 @@ OUT=M/"differ_strategy_search_latest.json"
 
 MAX_EXAMPLES=5000
 MIN_HISTORY=220
+CADENCE=[1,2,3]
 
 def load_json(path, default=None):
     try:return json.loads(path.read_text())
@@ -91,10 +92,12 @@ def strategy_grid():
             out.append({"id":f"struct_r{rank}_s{ms:.3f}","family":"struct","max_rank":rank,"max_score":ms})
     return out
 
-def choose(cfg,ex):
+def choose(cfg,ex,blocked=None):
     n=ex["neural"]; t1=ex["t1"]; t2=ex["t2"]; t3=ex["t3"]; recent=ex["recent"]
     digits=np.arange(10)
-    norder=np.argsort(n)
+    allowed=[int(d) for d in digits if blocked is None or int(d)!=int(blocked)]
+    if not allowed:return None
+    norder=np.asarray(sorted(allowed,key=lambda d:(n[d],d)),dtype=int)
     ngap=float(n[norder[1]]-n[norder[0]])
     mins=[int(np.argmin(x)) for x in (recent,t1,t2,t3)]
     top_hot=set(np.argsort(t2)[-2:].tolist()+np.argsort(t3)[-2:].tolist())
@@ -112,14 +115,14 @@ def choose(cfg,ex):
 
     score=.45*n+.10*recent+.13*t1+.17*t2+.15*t3
     if fam=="hybrid":
-        cand=norder[:cfg["topk"]]
+        cand=norder[:min(cfg["topk"],len(norder))]
         d=int(min(cand,key=lambda x:(score[x],n[x],x)))
         struct_hot=int(d in top_hot)
         emit=float(score[d])<=cfg["max_score"] and struct_hot<=cfg["max_struct_hot"]
         return d if emit else None
 
     if fam=="struct":
-        d=int(np.argmin(score))
+        d=int(min(allowed,key=lambda x:(score[x],n[x],x)))
         nr=int(np.where(norder==d)[0][0])+1
         emit=float(score[d])<=cfg["max_score"] and nr<=cfg["max_rank"]
         return d if emit else None
@@ -128,11 +131,28 @@ def choose(cfg,ex):
 
 def eval_strategy(cfg,examples):
     out=[]
+    last_barrier=None
+    cadence_index=0
+    ticks_waited=0
+    emitted=0
     for ex in examples:
-        d=choose(cfg,ex)
-        if d is None:continue
+        ticks_waited+=1
+        need=CADENCE[cadence_index]
+        if ticks_waited<need:
+            continue
+        d=choose(cfg,ex,last_barrier)
+        if d is None:
+            continue
         out.append(int(int(ex["target"])!=d))
-    return metrics(out,len(examples)),out
+        emitted+=1
+        last_barrier=d
+        cadence_index=(cadence_index+1)%len(CADENCE)
+        ticks_waited=0
+    m=metrics(out,len(examples))
+    m["cadence"]=CADENCE
+    m["no_repeat"]=True
+    m["signals_emitted"]=emitted
+    return m,out
 
 def main():
     if not TICKS.exists() or not FROZEN.exists() or not STATE.exists():
@@ -223,8 +243,8 @@ def main():
         "leader":leader,
         "perfect_candidates":perfect,
         "status":"PERFECT_FORWARD_CANDIDATE" if perfect else "SEARCHING",
-        "target":"Find strategies with 0 MATCH in both chronological validation and holdout with >=50 signals in each block. This is evidence, not a guarantee of future 100%.",
-        "note":"Strategy choice is made before the final holdout. Signal count is tracked so a sparse 3/3 rule cannot masquerade as a useful 100% strategy."
+        "target":"Find 1-2-3 cadence + no-repeat strategies with 0 MATCH in both chronological validation and holdout with >=50 signals in each block. This is evidence, not a guarantee of future 100%.",
+        "note":"Every tested strategy uses cadence 1->2->3 and blocks the previous barrier digit. Strategy choice is made before the final holdout. Signal count is tracked so a sparse 3/3 rule cannot masquerade as a useful 100% strategy."
     }
     OUT.write_text(json.dumps(out,indent=2)); print(json.dumps(out,indent=2))
 
