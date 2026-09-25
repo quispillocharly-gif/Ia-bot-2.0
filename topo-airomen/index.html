@@ -103,7 +103,7 @@ button:disabled{opacity:.45;cursor:not-allowed}
 <script>
 'use strict';
 
-const BUILD='CLEAN-2.9-CLOSE-TO-NEXT';
+const BUILD='CLEAN-3.0-PURE-LEAST-LEARNER';
 const CADENCE_MIN=1,CADENCE_MAX=3;
 const SYMBOL='R_75';
 const STAGE_TARGET=5;
@@ -146,18 +146,17 @@ let recoveryTicks=0;
 let cadenceStep=0,ticksIntoCadence=0,currentCadenceWait=1,lastCadenceWait=0,lastBoughtDigit=null;
 let idleTradeTicks=0;
 
+// PURE LEARNER: empieza limpio y aprende únicamente de los ticks/resultados
+// de esta sesión. No carga modelos, estadísticas ni reglas anteriores.
+let learnerCounts=Array(10).fill(1);
+let learnerMatchEma=Array(10).fill(.10);
+let learnerSamples=0;
 let execHistory=[];
-try{
-  const x=JSON.parse(localStorage.getItem(EXEC_KEY)||'[]');
-  if(Array.isArray(x))execHistory=x.slice(-500);
-}catch(_){}
 try{
   bestAntiMatchStreak=Math.max(0,Number(localStorage.getItem(STREAK_KEY)||0));
 }catch(_){}
 
-function saveExec(){
-  try{localStorage.setItem(EXEC_KEY,JSON.stringify(execHistory.slice(-500)))}catch(_){}
-}
+function saveExec(){ /* CLEAN 3.0 no usa memoria histórica para decidir */ }
 
 function log(msg){
   const stamp=new Date().toLocaleTimeString();
@@ -218,6 +217,7 @@ function renderSession(){
 
 function resetSession(){
   sessionPnl=0;sessionWins=0;sessionMatches=0;sessionStopped=false;completedStages=0;stageCooldownRemaining=0;campaignActive=false;campaignWins=0;campaignAttempts=0;shadowWins=0;shadowPending=null;shadowAttempts=0;
+  learnerReset();
   antiMatchStreak=0;consecutiveMatches=0;targetRecoveryShield=false;
   currentStake=baseStake();pending=false;pendingOrder=null;
   stableDigit=null;stableTicks=0;recoveryTicks=0;
@@ -226,7 +226,7 @@ function resetSession(){
   renderSession();
   $('contractView').textContent='–';
   $('contractView').className='big';
-  log('SESIÓN NUEVA · SECUENCIAL ANTI-MATCH · 4 etapas de +$5 · meta final +$20 · stake base $'+currentStake.toFixed(2));
+  log('SESIÓN NUEVA · PURE LEARNER · meta +$20 · stake base $'+currentStake.toFixed(2));
 }
 
 function applyResult(profit,snapshot){
@@ -500,116 +500,93 @@ function lastSeenDistance(d,maxLook=40){
   return maxLook+1;
 }
 
+function learnerReset(){
+  learnerCounts=Array(10).fill(1);
+  learnerMatchEma=Array(10).fill(.10);
+  learnerSamples=0;
+}
+
+function learnerObserveTick(d){
+  // Memoria adaptativa con decaimiento: lo reciente pesa más,
+  // pero ningún dígito queda congelado.
+  for(let i=0;i<10;i++)learnerCounts[i]=Math.max(.05,learnerCounts[i]*.997);
+  learnerCounts[Number(d)]+=1;
+  learnerSamples++;
+}
+
+function learnerObserveTrade(barrier,win){
+  const d=Number(barrier);
+  if(!Number.isFinite(d)||d<0||d>9)return;
+  const y=win?0:1; // MATCH = 1, DIFFER WIN = 0
+  learnerMatchEma[d]=.92*Number(learnerMatchEma[d]||.10)+.08*y;
+}
+
 function analyze(){
-  if(seq.length<40)return null;
+  if(seq.length<10)return null;
 
-  const recent40=distRecent(40);
-  const recent80=distRecent(80);
-  const t1=transitionVector(1,1000);
-  const t2=transitionVector(2,1200);
-  const t3=transitionVector(3,1500);
-  const neural=neuralVector();
-  const off=offlineVector();
-  const context=contextualMatchVector();
-  const exec=execRiskVector();
-  const digits=[0,1,2,3,4,5,6,7,8,9];
+  const total=learnerCounts.reduce((x,y)=>x+y,0)||1;
+  const rows=[0,1,2,3,4,5,6,7,8,9].map(d=>{
+    const freq=learnerCounts[d]/total;
+    const learnedMatch=Number(learnerMatchEma[d]||.10);
 
-  const sources=[recent40,recent80,t1,t2,t3,neural,off,context,exec];
-  const bottom3=sources.map(v=>
-    [...digits].sort((x,y)=>Number(v[x]||.1)-Number(v[y]||.1)||x-y).slice(0,3)
-  );
-
-  const rows=digits.map(d=>{
-    const leastVotes=bottom3.reduce((n,set)=>n+(set.includes(d)?1:0),0);
-    const age=lastSeenDistance(d,60);
-    const score=
-      .06*Number(recent40[d]||.1)+
-      .07*Number(recent80[d]||.1)+
-      .08*Number(t1[d]||.1)+
-      .17*Number(t2[d]||.1)+
-      .27*Number(t3[d]||.1)+
-      .15*Number(neural[d]||.1)+
-      .07*Number(off[d]||.1)+
-      .07*Number(context[d]||.1)+
-      .06*Number(exec[d]||.1)+
-      recentBarrierLossPenalty(d)-
-      Math.min(30,age)*.00015;
-
+    // ÚNICA decisión: probabilidad adaptativa estimada del próximo MATCH.
+    // 85% proviene de lo observado en ticks y 15% del error real aprendido
+    // cuando ese dígito fue usado como barrera.
+    const probability=.85*freq+.15*learnedMatch;
     return {
       digit:d,
-      score,
-      combined:score,
-      campaignRisk:score,
-      leastVotes,
-      age,
-      neural:Number(neural[d]||.1),
-      calibratedNeural:Number(neural[d]||.1)
+      probability,
+      score:probability,
+      combined:probability,
+      neural:probability,
+      calibratedNeural:probability,
+      samples:learnerSamples,
+      freq,
+      learnedMatch
     };
   });
 
-  // Anti-MATCH sin pausas: evita primero los dígitos que varias fuentes
-  // consideran "calientes". Si todos quedan vetados, usa el menor riesgo global.
-  const hotSources=[t2,t3,neural,context];
-  const hotCounts=Array(10).fill(0);
-  for(const src of hotSources){
-    const hot2=[...digits].sort((x,y)=>Number(src[y]||.1)-Number(src[x]||.1)||x-y).slice(0,2);
-    hot2.forEach(d=>hotCounts[d]++);
-  }
-  rows.forEach(x=>x.hotVotes=hotCounts[x.digit]);
-
-  const sorted=[...rows].sort((x,y)=>
-    x.hotVotes-y.hotVotes ||
-    y.leastVotes-x.leastVotes ||
-    x.score-y.score ||
-    y.age-x.age ||
-    x.digit-y.digit
-  );
-  const safePool=sorted.filter(x=>x.hotVotes===0);
-  const best=(safePool.length?safePool:sorted)[0];
+  rows.sort((x,y)=>x.probability-y.probability||x.digit-y.digit);
+  const best=rows[0];
 
   return {
     best,
-    rows:sorted,
-    ok:stageCooldownRemaining<=0 && !sessionStopped,
-    gap:sorted[1]?Math.max(0,Number(sorted[1].score)-Number(best.score)):0,
-    mr:actualMatchRate(50),
-    strategyId:'CLOSE-TO-NEXT ANTI-MATCH',
-    remainingToTarget:Math.max(0,nextStageTarget()-sessionPnl),
+    rows,
+    ok:!sessionStopped,
+    strategyId:'PURE LEAST-PROBABLE LEARNER',
+    remainingToTarget:Math.max(0,TARGET-sessionPnl),
     stage:stageNumber(),
     stageTarget:nextStageTarget(),
-    idleTradeTicks,
-    stageCooldownRemaining,
     differRank:1,
     matchVotes:0
   };
 }
+
 function renderDecision(){
   const d=analyze();
   currentDecision=d;
   if(!d){
     $('bestDigit').textContent='DIFFER –';
-    $('signalMeta').textContent='Cargando historial…';
+    $('signalMeta').textContent='Aprendiendo primeros ticks…';
     return null;
   }
 
   $('bestDigit').textContent='DIFFER '+d.best.digit;
-  $('riskView').textContent=pct(d.best.score);
+  $('riskView').textContent=pct(d.best.probability);
   $('riskMeta').textContent=
-    'SECUENCIAL · menos probable '+d.best.leastVotes+'/9'+
-    ' · hot '+d.best.hotVotes+'/4'+
-    ' · edad '+d.best.age+'t'+
-    ' · riesgo '+pct(d.best.score);
+    'MENOS PROBABLE · D'+d.best.digit+
+    ' · estimado '+pct(d.best.probability)+
+    ' · aprendido '+d.best.samples+' ticks';
 
   $('signalMeta').textContent=
-    'CIERRA → RECALCULA → COMPRA'+
-    ' · etapa '+d.stage+'/'+TOTAL_STAGES+
-    ' · faltan $'+d.remainingToTarget.toFixed(2)+' para +$'+d.stageTarget.toFixed(0)+
-    ' · puede repetir D'+d.best.digit+
-    ' · 10/10 DÍGITOS LIBRES';
+    'CIERRA → RECALCULA 10 DÍGITOS → COMPRA'+
+    ' · P&L '+(sessionPnl>=0?'+':'')+'$'+sessionPnl.toFixed(2)+
+    ' · faltan $'+Math.max(0,TARGET-sessionPnl).toFixed(2)+' para +$20'+
+    ' · repetición permitida';
 
   $('ranking').innerHTML=d.rows.map(x=>
     '<span class="chip '+(x.digit===d.best.digit?'best':'')+'">D'+x.digit+
-    ' LP'+x.leastVotes+'/9 · H'+x.hotVotes+'/4 · '+pct(x.score)+
+    ' '+pct(x.probability)+
     '</span>'
   ).join('');
   return d;
@@ -685,13 +662,13 @@ function requestProposal(decision){
       cadenceStep,
       cadenceTail:seq.slice(-6),
       previousBarrier:lastBoughtDigit,
-      matchVotes:Number(decision.matchVotes||0),
-      differRank:Number(decision.differRank||0),
-      leastVotes:Number(decision.best.leastVotes||0),
-      patternRisk:Number(decision.best.patternRisk||0),
-      age:Number(decision.best.age||0),
-      campaignStart:Boolean(decision.campaignStart),
-      campaignWinsBefore:Number(campaignWins||0),
+      matchVotes:0,
+      differRank:1,
+      leastVotes:0,
+      patternRisk:Number(decision.best.probability||0),
+      age:0,
+      campaignStart:false,
+      campaignWinsBefore:0,
       epoch:lastEpoch
     }
   };
@@ -791,6 +768,7 @@ function onContract(m){
   $('contractMeta').textContent='Cerrado · P&L sesión '+sessionPnl.toFixed(2);
 
   log((profit>=0?'WIN ':'MATCH ')+profit.toFixed(2)+' · D'+ctx.barrier);
+  learnerObserveTrade(ctx.barrier,profit>=0);
   applyResult(profit,ctx.snapshot);
 
   // SECUENCIAL: el cierre del contrato es el único disparador de la siguiente compra.
@@ -975,6 +953,8 @@ function handleMarket(m){
   if(m.history?.prices){
     marketPip=Number(m.pip_size??4);
     seq=m.history.prices.map(x=>Number(Number(x).toFixed(marketPip).slice(-1))).slice(-1500);
+    learnerReset();
+    for(const d of seq)learnerObserveTick(d);
     marketLastAt=Date.now();
     $('marketState').textContent='ONLINE';
     $('marketState').className='big green';
@@ -993,6 +973,7 @@ function handleMarket(m){
 
     lastEpoch=epoch;lastDigit=digit;lastQuote=quote;
     seq.push(digit);if(seq.length>1500)seq.shift();
+    learnerObserveTick(digit);
 
     $('lastTick').textContent=quote+' · '+digit;
     $('tickMeta').textContent='epoch '+epoch;
@@ -1056,23 +1037,8 @@ function scheduleMarketReconnect(){
 }
 
 async function loadMemory(){
-  try{
-    const stamp=Date.now();
-    const [a,b]=await Promise.all([
-      fetch(RAW_BASE+'differ_offline_stats.json?t='+stamp,{cache:'no-store'}),
-      fetch(RAW_BASE+'differ_live_model.json?t='+stamp,{cache:'no-store'})
-    ]);
-    if(a.ok)offline=await a.json();
-    if(b.ok)model=await b.json();
-    $('memoryMeta').textContent=
-      'offline '+(offline?.runs??'–')+' runs · model '+(model?.model_id||'–');
-    renderDecision();
-  }catch(e){
-    $('memoryMeta').textContent='Memoria remota no disponible · análisis local activo';
-    log('MEMORIA · '+e.message);
-  }
+  $('memoryMeta').textContent='PURE LEARNER · sin memoria/modelos anteriores';
 }
-
 $('connectBtn').onclick=connectDemo;
 $('autoBtn').onclick=()=>{
   if(sessionStopped){
@@ -1132,7 +1098,6 @@ setInterval(()=>{
   }
 },5000);
 
-setInterval(loadMemory,60000);
 
 resetSession();
 syncAuto();
