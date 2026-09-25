@@ -123,7 +123,7 @@ def freeze_candidate(ticks):
         "history":[int(x["digit"]) for x in ticks[-1500:]],"runs":0,
         "opportunities":0,"n":0,"w":0,"skipped_confidence":0,"skipped_agreement":0,
         "shadow_pnl":0.0,"shadow_staked":0.0,"confidence_sum":0.0,"agreement_sum":0.0,
-        "brier_sum":0.0,"multiclass_brier_sum":0.0,"calibration_n":0,"calibration":{},"regimes":{},
+        "brier_sum":0.0,"multiclass_brier_sum":0.0,"multiclass_brier_n":0,"calibration_n":0,"calibration":{},"regimes":{},
         "recent_outcomes":[]
     }
     STATE.write_text(json.dumps(st,indent=2)); return st
@@ -180,6 +180,7 @@ def main():
             for cls,pv in zip(clf.classes_,proba): full[int(cls)]=float(pv)
             target=np.zeros(10,dtype=float); target[d]=1.0
             st["multiclass_brier_sum"]=float(st.get("multiclass_brier_sum",0.0))+float(np.mean((full-target)**2))
+            st["multiclass_brier_n"]=int(st.get("multiclass_brier_n",0))+1
             key=calibration_key(conf)
             cb=st["calibration"].setdefault(key,{"n":0,"w":0,"conf_sum":0.0})
             cb["n"]+=1; cb["w"]+=hit; cb["conf_sum"]+=conf
@@ -229,7 +230,8 @@ def main():
         cal_rows.append({"bin":key,"n":bn,"wins":bw,"hit_rate":br,"avg_confidence":avg})
     ece=ece_num/ece_den if ece_den else None
     brier=st["brier_sum"]/st["calibration_n"] if st["calibration_n"] else None
-    brier_multi=float(st.get("multiclass_brier_sum",0.0))/st["calibration_n"] if st["calibration_n"] else None
+    multi_n=int(st.get("multiclass_brier_n",0))
+    brier_multi=float(st.get("multiclass_brier_sum",0.0))/multi_n if multi_n else None
 
     current_reg,current_features=regime(hist)
     regime_rows=[]
@@ -256,7 +258,7 @@ def main():
         "mean_confidence":st["confidence_sum"]/n if n else None,
         "mean_expert_agreement":st["agreement_sum"]/n if n else None,
         "calibration":{"ece":ece,"brier_binary":brier,"brier_multiclass":brier_multi,
-                       "bins":cal_rows,"samples":int(st["calibration_n"])},
+                       "brier_multiclass_samples":multi_n,"bins":cal_rows,"samples":int(st["calibration_n"])},
         "placebo":{"random_10pct_p":placebo_random,"economic_break_even_p":placebo_econ,
                    "bootstrap_95_rate":boot_ci,"recent_samples":len(recent)},
         "economic":{"break_even_rate":break_even,"shadow_pnl":pnl,"shadow_staked":staked,
