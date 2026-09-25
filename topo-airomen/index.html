@@ -80,7 +80,7 @@ button:disabled{opacity:.45;cursor:not-allowed}
 </div>
 
 <div class="grid">
- <div class="card"><div class="lab">META</div><div class="big green">+$10 NETOS</div><div id="progressMeta" class="mini">0.0%</div></div>
+ <div class="card"><div class="lab">META</div><div class="big green">+$20 NETOS</div><div id="progressMeta" class="mini">0.0%</div></div>
  <div class="card"><div class="lab">P&L SESIÓN</div><div id="sessionPnl" class="big">+$0.00</div><div id="sessionWL" class="mini">0 WIN · 0 MATCH</div></div>
  <div class="card"><div class="lab">PRÓXIMO STAKE</div><div id="nextStake" class="big cyan">$1.00</div><div class="mini">Stake = base + P&L neto positivo · máximo $6</div></div>
 </div>
@@ -90,7 +90,7 @@ button:disabled{opacity:.45;cursor:not-allowed}
   <div><div class="mini">STAKE BASE</div><input id="baseStake" type="number" min="0.35" max="6" step="0.01" value="1.00"></div>
   <div><div class="mini">STAKE MÁXIMO</div><input id="maxStake" type="number" min="0.35" max="6" step="0.01" value="6.00"></div>
   <div><div class="mini">STOP LOSS SESIÓN</div><input id="stopLoss" type="number" min="1" max="20" step="0.50" value="5.00"></div>
-  <div><div class="mini">SESIÓN</div><button id="resetBtn" class="secondary">REINICIAR +$10</button></div>
+  <div><div class="mini">SESIÓN</div><button id="resetBtn" class="secondary">REINICIAR +$20</button></div>
  </div>
 </div>
 
@@ -103,10 +103,12 @@ button:disabled{opacity:.45;cursor:not-allowed}
 <script>
 'use strict';
 
-const BUILD='CLEAN-2.2-NO-DIGIT-FREEZE';
+const BUILD='CLEAN-2.3-FOUR-STAGE-20';
 const CADENCE_MIN=1,CADENCE_MAX=3;
 const SYMBOL='R_75';
-const TARGET=10;
+const STAGE_TARGET=5;
+const TOTAL_STAGES=4;
+const TARGET=STAGE_TARGET*TOTAL_STAGES;
 const HARD_MAX=6;
 const MARKET_URL='wss://api.derivws.com/trading/v1/options/ws/public';
 const RAW_BASE='https://raw.githubusercontent.com/quispillocharly-gif/Ia-bot-2.0/main/topo-airomen/memory/';
@@ -130,6 +132,7 @@ let activeContract=null,pendingOrder=null,req=1000,buyContexts=new Map();
 let proposalTimer=null,buyTimer=null;
 
 let sessionPnl=0,sessionWins=0,sessionMatches=0,currentStake=1;
+let completedStages=0;
 let antiMatchStreak=0,bestAntiMatchStreak=0;
 let consecutiveMatches=0,targetRecoveryShield=false;
 let currentDecision=null,stableDigit=null,stableTicks=0,lastStabilityEpoch=0;
@@ -172,6 +175,15 @@ function maxStake(){
 function stopLoss(){
   return Math.max(1,Number($('stopLoss').value)||5);
 }
+function nextStageTarget(){
+  return Math.min(TARGET,(completedStages+1)*STAGE_TARGET);
+}
+function stageNet(){
+  return Math.max(0,sessionPnl-completedStages*STAGE_TARGET);
+}
+function stageNumber(){
+  return Math.min(TOTAL_STAGES,completedStages+1);
+}
 
 function deriveCadenceWait(step,blocked,prevWait,tailOverride=null){
   const tail=Array.isArray(tailOverride)?tailOverride.slice(-6):seq.slice(-6);
@@ -189,11 +201,16 @@ function renderSession(){
   $('sessionPnl').className='big '+(sessionPnl>=0?'green':'red');
   $('sessionWL').textContent=sessionWins+' WIN · '+sessionMatches+' MATCH · RACHA '+antiMatchStreak+' · BEST '+bestAntiMatchStreak;
   $('nextStake').textContent='$'+money(currentStake).toFixed(2);
-  $('progressMeta').textContent=Math.max(0,Math.min(100,sessionPnl/TARGET*100)).toFixed(1)+'% de +$10';
+  const nextTarget=nextStageTarget();
+  const remain=Math.max(0,nextTarget-sessionPnl);
+  $('progressMeta').textContent=
+    'ETAPA '+stageNumber()+'/'+TOTAL_STAGES+
+    ' · faltan $'+remain.toFixed(2)+' para +$'+nextTarget.toFixed(0)+
+    ' · total '+Math.max(0,Math.min(100,sessionPnl/TARGET*100)).toFixed(1)+'% de +$'+TARGET;
 }
 
 function resetSession(){
-  sessionPnl=0;sessionWins=0;sessionMatches=0;sessionStopped=false;
+  sessionPnl=0;sessionWins=0;sessionMatches=0;sessionStopped=false;completedStages=0;
   antiMatchStreak=0;consecutiveMatches=0;targetRecoveryShield=false;
   currentStake=baseStake();pending=false;pendingOrder=null;
   stableDigit=null;stableTicks=0;recoveryTicks=0;
@@ -202,7 +219,7 @@ function resetSession(){
   renderSession();
   $('contractView').textContent='–';
   $('contractView').className='big';
-  log('SESIÓN NUEVA · meta +$10 · stake base $'+currentStake.toFixed(2));
+  log('SESIÓN NUEVA · 4 etapas de +$5 · meta final +$20 · stake base $'+currentStake.toFixed(2));
 }
 
 function applyResult(profit,snapshot){
@@ -226,9 +243,17 @@ function applyResult(profit,snapshot){
     recoveryTicks=0;
   }
 
-  // Reinvierte toda la ganancia NETA de la sesión, sin perseguir pérdidas.
+  // 4 ETAPAS: cada +$5 reinicia la progresión del stake.
   const b=baseStake();
-  currentStake=money(Math.min(HARD_MAX,maxStake(),Math.max(b,b+Math.max(0,sessionPnl))));
+  const reachedStages=Math.min(TOTAL_STAGES,Math.floor(Math.max(0,sessionPnl)/STAGE_TARGET));
+  if(reachedStages>completedStages){
+    completedStages=reachedStages;
+    currentStake=b;
+    log('CHECKPOINT '+completedStages+'/'+TOTAL_STAGES+' · +$'+(completedStages*STAGE_TARGET).toFixed(0)+' NETOS · stake reiniciado a $'+b.toFixed(2));
+  }else{
+    const blockProfit=Math.max(0,sessionPnl-completedStages*STAGE_TARGET);
+    currentStake=money(Math.min(HARD_MAX,maxStake(),Math.max(b,b+blockProfit)));
+  }
 
   if(snapshot){
     lastBoughtDigit=Number(snapshot.barrier);
@@ -260,9 +285,11 @@ function applyResult(profit,snapshot){
   renderSession();
 
   if(sessionPnl>=TARGET){
+    completedStages=TOTAL_STAGES;
+    currentStake=baseStake();
     sessionStopped=true;autoWanted=false;auto=false;syncAuto();
-    $('contractMeta').textContent='META +$10 ALCANZADA · sesión protegida';
-    log('META +$10 NETOS ALCANZADA');
+    $('contractMeta').textContent='META +$20 ALCANZADA · 4/4 etapas completas';
+    log('META +$20 NETOS ALCANZADA · 4 ETAPAS COMPLETAS');
   }else if(sessionPnl<=-stopLoss()){
     sessionStopped=true;autoWanted=false;auto=false;syncAuto();
     $('contractMeta').textContent='STOP LOSS alcanzado · sesión detenida';
@@ -511,7 +538,9 @@ function analyze(){
     matchVotes:mb.votes,
     differRank:differOrder.indexOf(predicted)+1,
     rankLimit,
-    remainingToTarget:Math.max(0,TARGET-sessionPnl),
+    remainingToTarget:Math.max(0,nextStageTarget()-sessionPnl),
+    stage:stageNumber(),
+    stageTarget:nextStageTarget(),
     cadenceWait:currentCadenceWait,
     cadenceStep,
     ticksIntoCadence,
@@ -540,7 +569,8 @@ function renderDecision(){
     (d.ok?'LISTO':'ESPERAR')+
     ' · CONTRARIAN'+
     ' · racha '+antiMatchStreak+
-    ' · faltan $'+d.remainingToTarget.toFixed(2)+
+    ' · etapa '+d.stage+'/'+TOTAL_STAGES+
+    ' · faltan $'+d.remainingToTarget.toFixed(2)+' para +$'+d.stageTarget.toFixed(0)+
     ' · top-'+d.rankLimit+
     ' · idle '+d.idleTradeTicks+
     ' · cadena '+d.cadenceStep+
