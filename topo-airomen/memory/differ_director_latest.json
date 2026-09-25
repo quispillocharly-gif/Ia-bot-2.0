@@ -1,6 +1,6 @@
 {
   "version": "2.0-differ-director",
-  "timestamp": 1790314375,
+  "timestamp": 1790314872,
   "decision": "COLLECT_V2_FORWARD_DATA",
   "baseline_random": 0.9,
   "payout_status": "OK",
@@ -9,37 +9,37 @@
   "v2_status": "RESEARCHING",
   "v1_leader": {
     "id": "neural_argmin",
-    "signals": 1799,
-    "wins": 1636,
-    "losses": 163,
-    "hit_rate": 0.9093941078376876,
-    "wilson_lower": 0.8952425827126234,
-    "raw_economic_p": 0.898725603619683,
+    "signals": 2372,
+    "wins": 2148,
+    "losses": 224,
+    "hit_rate": 0.9055649241146712,
+    "wilson_lower": 0.8931317854082385,
+    "raw_economic_p": 0.98224682581809,
     "bonferroni_p": 1.0,
-    "shadow_pnl": -15.760000000000133,
-    "shadow_roi": -0.008760422456920585,
+    "shadow_pnl": -30.680000000000206,
+    "shadow_roi": -0.012934232715008518,
     "temporal_blocks": [
       {
-        "n": 600,
-        "wins": 555,
-        "hit_rate": 0.925,
-        "wilson_lower": 0.9011143517797583
+        "n": 791,
+        "wins": 729,
+        "hit_rate": 0.9216182048040455,
+        "wilson_lower": 0.9007844186009372
       },
       {
-        "n": 600,
-        "wins": 545,
-        "hit_rate": 0.9083333333333333,
-        "wilson_lower": 0.8825737689213147
+        "n": 791,
+        "wins": 711,
+        "hit_rate": 0.8988621997471555,
+        "wilson_lower": 0.8758846315857376
       },
       {
-        "n": 599,
-        "wins": 536,
-        "hit_rate": 0.8948247078464107,
-        "wilson_lower": 0.8676902640539396
+        "n": 790,
+        "wins": 708,
+        "hit_rate": 0.8962025316455696,
+        "wilson_lower": 0.8729816725206131
       }
     ],
     "block_stable": false,
-    "status": "COLLECTING"
+    "status": "NOT_CONFIRMED"
   },
   "v2_leader": {
     "id": "vote2_margin005",
@@ -76,7 +76,7 @@
   "ensemble_id": "f81db252073342fe",
   "live_policy": {
     "version": "2.0-live-policy",
-    "timestamp": 1790314375,
+    "timestamp": 1790314872,
     "source": "v1",
     "rule": "neural_argmin",
     "candidate_id": "70e47ba5fe5f5191",
@@ -84,10 +84,10 @@
     "confirmed": false,
     "economic_qualified": false,
     "break_even_rate": 0.9174311926605504,
-    "leader_signals": 1799,
-    "leader_hit_rate": 0.9093941078376876,
-    "leader_wilson": 0.8952425827126234,
-    "leader_shadow_pnl": -15.760000000000133,
+    "leader_signals": 2372,
+    "leader_hit_rate": 0.9055649241146712,
+    "leader_wilson": 0.8931317854082385,
+    "leader_shadow_pnl": -30.680000000000206,
     "note": "Demo-only policy. Research continues in parallel. A session freezes its selected policy until reset."
   },
   "note": "High DIFFER hit rate alone is not enough. Director prioritizes economic forward evidence and keeps live execution demo-only."
