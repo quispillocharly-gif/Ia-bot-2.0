@@ -173,7 +173,7 @@ button:disabled{opacity:.55;cursor:not-allowed}
   <div><div class="mini">SESIÓN</div><button id="resetSession">REINICIAR META +$20</button></div>
  </div>
  <div id="ladderInfo" class="mini statusline">PROFIT LADDER: cada WIN suma su ganancia al siguiente stake; cada LOSS vuelve al stake base. Sin martingala.</div>
- <div id="autoDemoState" class="mini statusline">La IA aprende de cada tick y recalcula los 10 dígitos, pero opera a ritmo moderado: deja pasar 2 ticks completos entre compras. Solo demo.</div>
+ <div id="autoDemoState" class="mini statusline">La IA aprende de cada tick y recalcula los 10 dígitos, pero opera a ritmo moderado: deja pasar 1 tick completo entre compras. Solo demo.</div>
  <div id="tradeTrace" class="mini statusline">TRACE: esperando AUTO-DEMO…</div>
 </div>
 <div class="card"><div class="lab">TOURNAMENT · 6 VARIANTES PREDECLARADAS</div><div class="scroll"><table>
@@ -252,7 +252,7 @@ async function load(){
 
 let derivSocket=null,derivDemoAccount=null,publicSocket=null,liveModel=null,liveEnsemble=null,latestLiveModel=null,latestLiveEnsemble=null,liveSeq=[],livePip=4,liveBarrier=null,liveBarrierProb=null,liveRuleId='neural_argmin',autoDemo=false,pendingTrade=false,activeContractId=null,tradeReq=5000,lastProposalReq=null,lastSignalEpoch=0;
 let latestPublicTickEpoch=0,latestPublicTickDigit=null,latestPublicTickQuote=null,ticksWithoutSignal=0;
-const MODERATE_COOLDOWN_TICKS=2;
+const MODERATE_COOLDOWN_TICKS=1;
 let cooldownTicksRemaining=0;
 let lastAvoidDecision=null,pendingLearnSnapshot=null;
 const ONLINE_LEARNER_KEY='topo_airomen_avoidmatch_learner_v2';
@@ -373,8 +373,8 @@ function setAutoDemo(next){
      return false;
    }
    autoDemo=true;
-   $('autoDemoState').textContent='AUTO-DEMO activo · ritmo moderado · 2 ticks de pausa entre compras · solo demo.';
-   trace('AUTO-DEMO ARMADO · ritmo moderado · pausa 2 ticks',true);
+   $('autoDemoState').textContent='AUTO-DEMO activo · ritmo moderado · 1 tick de pausa entre compras · solo demo.';
+   trace('AUTO-DEMO ARMADO · ritmo moderado · pausa 1 tick',true);
  }else{
    autoDemo=false;
    $('autoDemoState').textContent='AUTO-DEMO apagado. La IA sigue analizando.';
