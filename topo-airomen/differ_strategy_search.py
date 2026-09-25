@@ -84,6 +84,15 @@ def metrics(outcomes,opportunities):
             if first_match is None:first_match=i+1
             runs.append(cur); cur=0
     runs.append(cur)
+    def survival(size):
+        den=max(0,n-size+1)
+        good=perfect_windows(outcomes,size)
+        return (good/den if den else None),good
+    s5,p5=survival(5)
+    s10,p10=survival(10)
+    s20,p20=survival(20)
+    s30,p30=survival(30)
+    s50,p50=survival(50)
     return {
         "signals":n,
         "wins":w,
@@ -94,7 +103,16 @@ def metrics(outcomes,opportunities):
         "first_match_at":first_match,
         "median_anti_match_run":float(np.median(runs)) if runs else 0.0,
         "longest_anti_match_streak":longest_streak(outcomes),
-        "perfect_windows_50":perfect_windows(outcomes,50),
+        "survival_5":s5,
+        "survival_10":s10,
+        "survival_20":s20,
+        "survival_30":s30,
+        "survival_50":s50,
+        "perfect_windows_5":p5,
+        "perfect_windows_10":p10,
+        "perfect_windows_20":p20,
+        "perfect_windows_30":p30,
+        "perfect_windows_50":p50,
         "perfect_windows_100":perfect_windows(outcomes,100),
         "perfect_windows_200":perfect_windows(outcomes,200),
     }
@@ -272,22 +290,24 @@ def main():
     for cfg in grid:
         m,_=eval_strategy(cfg,discovery)
         if m["signals"]<50 or not m.get("frequency_ok"):continue
-        ranked.append((m["longest_anti_match_streak"],m["wilson_lower"],m["hit_rate"] or 0,m["signal_rate"] or 0,m["signals"],cfg,m))
-    ranked.sort(reverse=True,key=lambda x:(x[0],x[1],x[2],x[3],x[4]))
-    top=[x[5] for x in ranked[:36]]
+        ranked.append((m["survival_10"] or 0,m["survival_20"] or 0,m["longest_anti_match_streak"],m["wilson_lower"],m["hit_rate"] or 0,m["signal_rate"] or 0,m["signals"],cfg,m))
+    ranked.sort(reverse=True,key=lambda x:(x[0],x[1],x[2],x[3],x[4],x[5],x[6]))
+    top=[x[7] for x in ranked[:60]]
 
     validated=[]
     for cfg in top:
         md,_=eval_strategy(cfg,discovery)
         mv,_=eval_strategy(cfg,validation)
         if mv["signals"]<40 or not mv.get("frequency_ok"):continue
+        stable_s10=min(md["survival_10"] or 0,mv["survival_10"] or 0)
+        stable_s20=min(md["survival_20"] or 0,mv["survival_20"] or 0)
         stable_streak=min(md["longest_anti_match_streak"],mv["longest_anti_match_streak"])
-        validated.append((stable_streak,mv["wilson_lower"],mv["hit_rate"] or 0,mv["signal_rate"] or 0,mv["signals"],cfg,md,mv))
-    validated.sort(reverse=True,key=lambda x:(x[0],x[1],x[2],x[3],x[4]))
-    finalists=validated[:18]
+        validated.append((stable_s10,stable_s20,stable_streak,mv["wilson_lower"],mv["hit_rate"] or 0,mv["signal_rate"] or 0,mv["signals"],cfg,md,mv))
+    validated.sort(reverse=True,key=lambda x:(x[0],x[1],x[2],x[3],x[4],x[5],x[6]))
+    finalists=validated[:24]
 
     results=[]
-    for _,_,_,_,_,cfg,md,mv in finalists:
+    for _,_,_,_,_,_,_,cfg,md,mv in finalists:
         mh,oh=eval_strategy(cfg,holdout)
         perfect=bool(
             mv["signals"]>=50 and mh["signals"]>=50 and
@@ -302,10 +322,11 @@ def main():
 
     results.sort(key=lambda x:(
         x["zero_match_validation_and_holdout"],
+        min(x["validation"]["survival_10"] or 0,x["holdout"]["survival_10"] or 0),
+        min(x["validation"]["survival_20"] or 0,x["holdout"]["survival_20"] or 0),
         min(x["validation"]["longest_anti_match_streak"],x["holdout"]["longest_anti_match_streak"]),
         x["holdout"]["wilson_lower"],
-        x["holdout"]["hit_rate"] or 0,
-        x["holdout"]["signals"]
+        x["holdout"]["hit_rate"] or 0
     ),reverse=True)
 
     perfect=[x["id"] for x in results if x["zero_match_validation_and_holdout"]]
@@ -322,8 +343,8 @@ def main():
         "leader":leader,
         "perfect_candidates":perfect,
         "status":"PERFECT_FORWARD_CANDIDATE" if perfect else "SEARCHING",
-        "target":"Maximize the minimum anti-MATCH streak across chronological validation and holdout while keeping signal_rate >= 30% and max idle <= 18 ticks; also search for 0-MATCH blocks.",
-        "note":"ZERO-MATCH SEEK tests weighted, consensus, minimax-veto and dynamic cadence families (including 1-4 and 1-5 no-repeat). Sparse/frozen strategies are rejected; finite 0-MATCH results are not a future guarantee."
+        "target":"Maximize survival probability for 5/10/20/30 consecutive DIFFER trades without MATCH across chronological validation and holdout, while keeping signal_rate >= 30% and max idle <= 18 ticks.",
+        "note":"ZERO-MATCH SEEK ranks strategies by repeated no-MATCH survival windows rather than one lucky streak. Sparse/frozen strategies are rejected; finite 0-MATCH windows are not a future guarantee."
     }
     OUT.write_text(json.dumps(out,indent=2)); print(json.dumps(out,indent=2))
 
