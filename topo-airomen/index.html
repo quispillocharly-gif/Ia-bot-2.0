@@ -1,23 +1,97 @@
 <!doctype html>
 <html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="theme-color" content="#050713"><title>TOPO AIROMEN</title>
+<meta name="theme-color" content="#fff7fc"><title>TOPO AIROMEN · Edición Especial</title>
 <style>
-:root{--bg:#050713;--panel:#0b1025;--blue:#4ddcff;--vio:#ad73ff;--g:#6affb6;--r:#ff6b82;--y:#ffe66d;--t:#eff7ff;--m:#8ca4c8}
-*{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(circle at 50% 0,#173467 0,transparent 33%),linear-gradient(#050713,#02040a);color:var(--t);font-family:ui-monospace,Consolas,monospace}
-.wrap{max-width:1120px;margin:auto;padding:14px}.head{text-align:center;padding:24px 6px}.logo{font-size:clamp(38px,10vw,70px);font-weight:1000;letter-spacing:3px;color:var(--blue);text-shadow:0 0 16px #4ddcff77,0 0 36px #ad73ff55}.sub{font-size:11px;letter-spacing:3px;color:var(--m)}
-.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.card{background:linear-gradient(180deg,#0b1228e8,#070b18e8);border:1px solid #25466c;border-radius:12px;padding:15px;margin-bottom:10px;box-shadow:0 0 24px #4ddcff12}
-.lab{font-size:10px;letter-spacing:1.4px;color:#79a7d7}.big{font-size:28px;font-weight:1000;margin:7px 0}.green{color:var(--g)}.red{color:var(--r)}.yellow{color:var(--y)}.cyan{color:var(--blue)}.vio{color:var(--vio)}
-.badge{display:inline-block;border:1px solid #355984;border-radius:6px;padding:6px 9px;font-size:11px;margin-top:7px}.mini{font-size:12px;color:var(--m);line-height:1.5}.scroll{overflow:auto}table{width:100%;border-collapse:collapse;min-width:760px;font-size:12px}th,td{padding:9px;border-bottom:1px solid #182b46;text-align:left}
-.footer{text-align:center;color:#60799c;font-size:11px;padding:10px}input,select,button{width:100%;padding:11px 12px;border-radius:8px;border:1px solid #355984;background:#071024;color:var(--t);font:inherit}
-button{cursor:pointer;background:linear-gradient(180deg,#123866,#0b2140);color:var(--blue);font-weight:900}
-button:disabled{opacity:.55;cursor:not-allowed}.formgrid{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end}.statusline{margin-top:10px}
-.signalbox{text-align:center;background:radial-gradient(circle at 50% 0,#123c6b55,transparent 55%),linear-gradient(180deg,#0b1228,#070b18)}
-.signalDigit{font-size:clamp(46px,13vw,82px);font-weight:1000;line-height:1;margin:10px 0;color:var(--blue);text-shadow:0 0 18px #4ddcff77}
+:root{
+  --bg:#fff7fc;--bg2:#f7efff;--panel:#fffafd;--panel2:#fcf6ff;
+  --pink:#ef77ad;--rose:#d95f9c;--vio:#a978e8;--lav:#d9c2f4;
+  --g:#42b889;--r:#e86a84;--y:#d99a46;--t:#513b58;--m:#8c7494;
+  --line:#ead8eb;--shadow:0 12px 32px rgba(158,103,180,.12);
+}
+*{box-sizing:border-box}
+body{
+  margin:0;min-height:100vh;color:var(--t);
+  background:
+    radial-gradient(circle at 10% 0,rgba(247,177,209,.42),transparent 30%),
+    radial-gradient(circle at 90% 4%,rgba(206,177,241,.40),transparent 32%),
+    linear-gradient(180deg,var(--bg),var(--bg2));
+  font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+.wrap{max-width:1120px;margin:auto;padding:16px}
+.head{text-align:center;padding:30px 8px 24px}
+.logo{
+  font-size:clamp(38px,10vw,68px);font-weight:950;letter-spacing:2px;
+  background:linear-gradient(90deg,var(--rose),var(--vio));
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+  filter:drop-shadow(0 7px 16px rgba(217,95,156,.15));
+}
+.sub{font-size:11px;letter-spacing:2.4px;color:var(--m);font-weight:700;margin-top:7px}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.card{
+  background:linear-gradient(180deg,rgba(255,255,255,.92),rgba(255,250,253,.82));
+  border:1px solid var(--line);border-radius:20px;padding:16px;margin-bottom:12px;
+  box-shadow:var(--shadow);backdrop-filter:blur(10px);
+  transition:transform .2s ease,box-shadow .2s ease;
+}
+.card:hover{transform:translateY(-2px);box-shadow:0 16px 38px rgba(158,103,180,.16)}
+.lab{font-size:10px;letter-spacing:1.5px;color:#aa7ba8;font-weight:800}
+.big{font-size:28px;font-weight:950;margin:7px 0}
+.green{color:var(--g)}.red{color:var(--r)}.yellow{color:var(--y)}.cyan{color:var(--pink)}.vio{color:var(--vio)}
+.badge{
+  display:inline-block;border:1px solid #dfc6e4;border-radius:999px;padding:6px 10px;
+  font-size:11px;margin-top:7px;background:#fff;color:var(--vio);font-weight:800;
+}
+.mini{font-size:12px;color:var(--m);line-height:1.55}
+.scroll{overflow:auto}
+table{width:100%;border-collapse:collapse;min-width:760px;font-size:12px;background:rgba(255,255,255,.72)}
+th,td{padding:10px;border-bottom:1px solid #efe1ef;text-align:left}
+th{color:#9766a0;font-weight:850;background:#fffafd}
+.footer{text-align:center;color:#9d7da1;font-size:11px;padding:14px}
+input,select,button{
+  width:100%;padding:12px 13px;border-radius:14px;border:1px solid #dfcae1;
+  background:#fff;color:var(--t);font:inherit;outline:none;
+}
+input:focus,select:focus{border-color:var(--pink);box-shadow:0 0 0 3px rgba(239,119,173,.13)}
+button{
+  cursor:pointer;border:none;color:white;font-weight:900;
+  background:linear-gradient(90deg,var(--pink),var(--vio));
+  box-shadow:0 8px 18px rgba(181,108,203,.20);
+}
+button:hover{filter:brightness(1.03);transform:translateY(-1px)}
+button:disabled{opacity:.55;cursor:not-allowed}
+.formgrid{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end}
+.statusline{margin-top:10px}
+.signalbox{
+  text-align:center;
+  background:
+    radial-gradient(circle at 50% 0,rgba(244,175,208,.24),transparent 54%),
+    linear-gradient(180deg,#fffafd,#fbf4ff);
+  border-color:#e6cde7;
+}
+.signalDigit{
+  font-size:clamp(46px,13vw,82px);font-weight:1000;line-height:1;margin:10px 0;
+  color:var(--pink);text-shadow:0 7px 20px rgba(239,119,173,.18);
+}
 .controls{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
-.chips{display:flex;flex-wrap:wrap;gap:7px;justify-content:center;margin-top:10px}.chip{border:1px solid #355984;border-radius:999px;padding:7px 10px;font-size:12px;background:#071024}.chip.best{border-color:#2f8d68;color:#6affb6;box-shadow:0 0 14px #6affb622}.chip.wait{color:#8ca4c8}
-@media(max-width:760px){.grid{grid-template-columns:1fr}.formgrid{grid-template-columns:1fr}}
+.chips{display:flex;flex-wrap:wrap;gap:7px;justify-content:center;margin-top:10px}
+.chip{
+  border:1px solid #e5d2e6;border-radius:999px;padding:7px 10px;font-size:12px;
+  background:#fff;color:#755d7c;
+}
+.chip.best{
+  border-color:#dca7cb;color:#b04f86;font-weight:900;
+  background:linear-gradient(90deg,#ffe9f3,#f3e8ff);
+  box-shadow:0 5px 14px rgba(239,119,173,.12);
+}
+.chip.wait{color:#9c869f}
+@media(max-width:760px){
+  .grid{grid-template-columns:1fr}
+  .formgrid{grid-template-columns:1fr}
+  .wrap{padding:11px}
+  .card{border-radius:17px}
+}
 </style></head><body><div class="wrap">
-<div class="head"><div class="logo">TOPO AIROMEN</div><div class="sub">DIFFER AI · R_75 · FORWARD RESEARCH CORE</div></div>
+<div class="head"><div class="logo">TOPO AIROMEN ♡</div><div class="sub">EDICIÓN ESPECIAL · DIFFER AI · R_75 · SOLO DEMO</div></div>
 <div class="grid">
  <div class="card"><div class="lab">DIRECTOR</div><div id="decision" class="big cyan">BOOTING…</div><div id="directorMeta" class="mini">Esperando memoria</div><span id="directorStatus" class="badge">WAITING</span></div>
  <div class="card"><div class="lab">PAYOUT / BREAK-EVEN</div><div id="breakEven" class="big yellow">–</div><div id="payoutMeta" class="mini">Actualizando propuestas DIGITDIFF</div></div>
@@ -110,10 +184,10 @@ button:disabled{opacity:.55;cursor:not-allowed}.formgrid{display:grid;grid-templ
  <div class="card"><div class="lab">CONFIRMED VARIANTS</div><div id="confirmed" class="big green">0</div><div class="mini">Requiere ≥2000 señales, Wilson sobre break-even, Bonferroni &lt;5%, P&L positivo y 3 bloques estables.</div></div>
  <div class="card"><div class="lab">SEGURIDAD</div><div class="big green">DEMO ONLY</div><div class="mini">Auto-compra limitada a la cuenta demo detectada. El laboratorio estadístico sigue forward-only.</div></div>
 </div>
-<div class="footer">TOPO AIROMEN · DIFERENCIADO DEL PROYECTO MATCH · 100% NO SE PRESUPONE NI SE GARANTIZA</div>
+<div class="footer">TOPO AIROMEN ♡ · EDICIÓN ESPECIAL · SOLO DEMO · 100% NO SE PRESUPONE NI SE GARANTIZA</div>
 </div><script>
 const $=x=>document.getElementById(x),pct=x=>x==null?'–':(100*x).toFixed(2)+'%';
-function badge(el,s){el.textContent=s;el.style.color=/CANDIDATE|CONFIRMED/.test(s)?'#6affb6':/NOT/.test(s)?'#ff6b82':'#ffe66d'}
+function badge(el,s){el.textContent=s;el.style.color=/CANDIDATE|CONFIRMED/.test(s)?'#42b889':/NOT/.test(s)?'#e86a84':'#a978e8'}
 async function load(){
  try{
   const base='https://raw.githubusercontent.com/quispillocharly-gif/Ia-bot-2.0/main/topo-airomen/memory/';
