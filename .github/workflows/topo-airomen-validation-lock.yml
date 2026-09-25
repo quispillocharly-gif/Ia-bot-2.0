@@ -1,0 +1,57 @@
+name: TOPO AIROMEN - Freeze Validation Strategy
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/topo-airomen-validation-lock.yml"
+permissions:
+  contents: write
+concurrency:
+  group: topo-airomen-validation-lock
+  cancel-in-progress: false
+jobs:
+  freeze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Freeze current live ensemble for validation
+        run: |
+          if [ -f topo-airomen/memory/differ_validation_ensemble.json ]; then
+            echo "Validation ensemble already frozen; leaving it unchanged."
+          else
+            cp topo-airomen/memory/differ_live_ensemble.json topo-airomen/memory/differ_validation_ensemble.json
+            python - <<'PY'
+          import json, time
+          from pathlib import Path
+          m=Path("topo-airomen/memory")
+          ens=json.loads((m/"differ_validation_ensemble.json").read_text())
+          meta={
+            "version":"1.0-forward-demo-validation",
+            "created_at":int(time.time()),
+            "ensemble_id":ens.get("ensemble_id"),
+            "rule":"agree2_margin002_tickclose",
+            "agreement_min":2,
+            "economic_margin":0.002,
+            "max_model_sd":0.025,
+            "target":20.0,
+            "stop_loss":5.0,
+            "minimum_sessions":50,
+            "session_break_even_rate":0.20,
+            "note":"Frozen before prospective validation. Research models may continue changing separately."
+          }
+          (m/"differ_validation_lock.json").write_text(json.dumps(meta,indent=2))
+          PY
+          fi
+      - name: Persist validation lock
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add topo-airomen/memory/differ_validation_ensemble.json topo-airomen/memory/differ_validation_lock.json
+          git diff --cached --quiet || git commit -m "Freeze TOPO prospective validation strategy"
+          git pull --rebase origin main
+          git push
