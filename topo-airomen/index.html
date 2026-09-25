@@ -54,6 +54,11 @@ button:disabled{opacity:.55;cursor:not-allowed}.formgrid{display:grid;grid-templ
  <div id="avoidMeta" class="mini">Calculando qué dígito tiene menor probabilidad de ser el siguiente…</div>
  <div id="avoidRanking" class="chips"><span class="chip wait">Esperando ensemble y ticks…</span></div>
 </div>
+<div class="grid">
+ <div class="card"><div class="lab">ANTI-MATCH SAFETY</div><div id="safetyStatus" class="big yellow">WAITING</div><div id="safetyMeta" class="mini">Gap · frecuencia reciente · transición</div></div>
+ <div class="card"><div class="lab">SEPARACIÓN 1° / 2°</div><div id="safetyGap" class="big cyan">–</div><div class="mini">Más separación = señal menos ambigua</div></div>
+ <div class="card"><div class="lab">RIESGO RECIENTE</div><div id="safetyRecent" class="big vio">–</div><div id="safetyTransition" class="mini">Transición –</div></div>
+</div>
 <div class="card">
  <div class="lab">DERIV DEMO / DBOT BRIDGE</div>
  <div class="formgrid">
@@ -465,6 +470,20 @@ function ensembleDecision(){
  else if(rule==='stable_vote2_calibrated'){score=consWin;ok=agree>=2&&consWin>=currentBreakEven+.002&&reg==='STABLE'}
  return {barrier:b,lossProb:1-score,winProb:score,agree,regime:reg,ok};
 }
+function recentDigitShare(digit,n=80){
+ const z=liveSeq.slice(-n);if(!z.length)return .10;
+ return z.filter(x=>x===digit).length/z.length;
+}
+function conditionalTransitionRisk(digit,n=500){
+ const z=liveSeq.slice(-n);if(z.length<2)return .10;
+ const last=z[z.length-1];let total=0,hits=0;
+ for(let i=1;i<z.length;i++){
+   if(z[i-1]!==last)continue;
+   total++;
+   if(z[i]===digit)hits++;
+ }
+ return (hits+2)/(total+20);
+}
 function scanAvoidMatchDigits(){
  const models=liveEnsemble?.models||[];
  if(models.length<3)return [];
@@ -490,8 +509,15 @@ function avoidMatchDecision(){
  const rows=scanAvoidMatchDigits();
  if(!rows.length)return null;
  const best=rows.find(x=>x.agree>=2)||rows[0];
- const ok=best.agree>=2 && best.avoidProb>=currentBreakEven+.002 && best.sd<=.025;
- return {...best,ok,rows};
+ const others=rows.filter(x=>x.digit!==best.digit).sort((a,b)=>a.matchProb-b.matchProb);
+ const second=others[0]||best;
+ const gap=Math.max(0,Number(second.matchProb)-Number(best.matchProb));
+ const recent=recentDigitShare(best.digit,80);
+ const transition=conditionalTransitionRisk(best.digit,500);
+ const coreOk=best.agree>=2 && best.avoidProb>=currentBreakEven+.002 && best.sd<=.025;
+ const safetyOk=gap>=.001 && recent<=.14 && transition<=.16;
+ const ok=coreOk && safetyOk;
+ return {...best,gap,recent,transition,coreOk,safetyOk,ok,rows};
 }
 function renderAvoidMatchScanner(){
  const d=avoidMatchDecision();
@@ -499,12 +525,19 @@ function renderAvoidMatchScanner(){
    $('avoidBest').textContent='DIFFER –';
    $('avoidMeta').textContent='Esperando ensemble y ticks suficientes…';
    $('avoidRanking').innerHTML='<span class="chip wait">Esperando datos…</span>';
+   if($('safetyStatus')){$('safetyStatus').textContent='WAITING';$('safetyGap').textContent='–';$('safetyRecent').textContent='–';$('safetyTransition').textContent='Transición –';}
    return null;
  }
  $('avoidBest').textContent='DIFFER '+d.digit;
  $('avoidBest').style.color=d.ok?'#6affb6':'#ffe66d';
- $('avoidMeta').textContent='Prob. MATCH '+pct(d.matchProb)+' · evitar MATCH '+pct(d.avoidProb)+' · acuerdo '+d.agree+'/3 · margen '+pct(d.margin)+' · '+(d.ok?'SEÑAL VÁLIDA':'ESPERAR');
+ $('avoidMeta').textContent='Prob. MATCH '+pct(d.matchProb)+' · evitar MATCH '+pct(d.avoidProb)+' · acuerdo '+d.agree+'/3 · '+(d.ok?'SEÑAL SEGURA':'ESPERAR');
  $('avoidRanking').innerHTML=d.rows.map(x=>'<span class="chip '+(x.digit===d.digit?'best':'')+'">D'+x.digit+' · MATCH '+pct(x.matchProb)+' · '+x.agree+'/3</span>').join('');
+ $('safetyStatus').textContent=d.ok?'PASS':'SKIP';
+ $('safetyStatus').className='big '+(d.ok?'green':'yellow');
+ $('safetyMeta').textContent=(d.coreOk?'core OK':'core débil')+' · '+(d.safetyOk?'safety OK':'riesgo extra detectado');
+ $('safetyGap').textContent=pct(d.gap);
+ $('safetyRecent').textContent=pct(d.recent);
+ $('safetyTransition').textContent='Transición al D'+d.digit+' '+pct(d.transition)+' · límites: gap ≥0.10pp · reciente ≤14% · transición ≤16%';
  return d;
 }
 function coldDigit(a,n){
@@ -534,7 +567,7 @@ function renderLiveDecision(){
    liveBarrier=a.digit;liveBarrierProb=a.matchProb;
    $('liveDiffer').textContent='DIFFER '+a.digit;
    $('liveProb').textContent=pct(a.matchProb);
-   $('liveReason').textContent='AVOID-MATCH · siguiente dígito menos probable · evitar MATCH '+pct(a.avoidProb)+' · '+(a.ok?'SEÑAL VÁLIDA':'ESPERAR');
+   $('liveReason').textContent='AVOID-MATCH · D'+a.digit+' · evitar MATCH '+pct(a.avoidProb)+' · acuerdo '+a.agree+'/3 · gap '+pct(a.gap)+' · '+(a.ok?'SAFETY PASS':'SAFETY SKIP');
    $('liveDiffer').style.color=a.ok?'#4ddcff':'#ffe66d';
    return a.ok;
  }
