@@ -301,7 +301,7 @@ async function load(){
  }catch(e){$('decision').textContent='MEMORY WAITING'}
 }
 
-let derivSocket=null,derivDemoAccount=null,publicSocket=null,liveModel=null,liveEnsemble=null,latestLiveModel=null,latestLiveEnsemble=null,liveSeq=[],livePip=4,liveBarrier=null,liveBarrierProb=null,liveRuleId='neural_argmin',autoDemo=false,pendingTrade=false,activeContractId=null,tradeReq=5000,lastProposalReq=null,lastSignalEpoch=0;
+let derivSocket=null,derivDemoAccount=null,publicSocket=null,liveModel=null,liveEnsemble=null,latestLiveModel=null,latestLiveEnsemble=null,offlineStats=null,latestOfflineStats=null,liveSeq=[],livePip=4,liveBarrier=null,liveBarrierProb=null,liveRuleId='neural_argmin',autoDemo=false,pendingTrade=false,activeContractId=null,tradeReq=5000,lastProposalReq=null,lastSignalEpoch=0;
 let proposalRetryTimer=null;
 let publicReconnectTimer=null,publicWatchdogTimer=null,lastPublicMessageAt=0,lastPublicConnectAt=0;
 let demoMarketActive=false,lastDemoMarketMessageAt=0;
@@ -526,7 +526,7 @@ function resetProfitSession(){
  if(latestLiveEnsemble)liveEnsemble=latestLiveEnsemble;
  liveRuleId='avoid_match_adaptive_all_digits';
  $('sessionPolicy').textContent='V3 · AVOID MATCH';
- $('policyMeta').textContent='ANTI-MATCH ESTADISTICO - 1 contrato a la vez - estadistica real prioritaria - neural solo apoyo - stake gradual - objetivo +20';
+ $('policyMeta').textContent='ANTI-MATCH ESTADISTICO - 1 contrato - memoria offline 24/7 + T1/T2/T3 + demo real - neural apoyo - objetivo +20';
  renderProfitSession();renderStreakLab();
  trace('SESIÓN NUEVA · meta +$20.00 · stop -$'+sessionStopLoss().toFixed(2)+' · '+$('sessionPolicy').textContent,true);
 }
@@ -1132,6 +1132,26 @@ function learnFromObservedDigit(actual){
  learnAdvancedRanker(actual,F.advancedSources);
  pendingLearnSnapshot=null;
 }
+function offlineStatRiskVector(){
+ const O=offlineStats;
+ if(!O)return Array(10).fill(.1);
+
+ const safeP=x=>Array.isArray(x)&&x.length===10?x.map(v=>Math.max(0,Number(v)||0)):null;
+ const g=safeP(O.global?.p)||Array(10).fill(.1);
+
+ const l1=liveSeq[liveSeq.length-1],l2=liveSeq[liveSeq.length-2],l3=liveSeq[liveSeq.length-3];
+ const a=l1==null?null:O.t1?.[String(l1)];
+ const b=(l2==null||l1==null)?null:O.t2?.[String(l2)+','+String(l1)];
+ const c=(l3==null||l2==null||l1==null)?null:O.t3?.[String(l3)+','+String(l2)+','+String(l1)];
+
+ const parts=[{p:g,w:.12}];
+ if(a&&safeP(a.p))parts.push({p:safeP(a.p),w:.20*Math.min(1,Number(a.n||0)/60)});
+ if(b&&safeP(b.p))parts.push({p:safeP(b.p),w:.28*Math.min(1,Number(b.n||0)/30)});
+ if(c&&safeP(c.p))parts.push({p:safeP(c.p),w:.40*Math.min(1,Number(c.n||0)/15)});
+
+ const total=parts.reduce((z,x)=>z+x.w,0)||1;
+ return normVec(Array.from({length:10},(_,d)=>parts.reduce((z,x)=>z+x.w*Number(x.p[d]||0),0)/total));
+}
 function scanAvoidMatchDigits(){
  if(liveSeq.length<1)return [];
  const transition=transitionRiskVector(800);
@@ -1143,6 +1163,7 @@ function scanAvoidMatchDigits(){
  const neural=neuralRiskVector();
  const execution=executionDigitRiskVector();
  const contextExecution=contextualExecutionRiskVector();
+ const offline=offlineStatRiskVector();
 
  const coreW=learnerWeights();
  const advW=advancedWeights();
@@ -1152,7 +1173,7 @@ function scanAvoidMatchDigits(){
  for(const p of modelPs){let b=0;for(let d=1;d<10;d++)if(p[d]<p[b])b=d;votes[b]++}
 
  const adaptiveSources=[transition,transition2,recent,micro,frequency,neural];
- const allSources=[transition,transition2,transition3,recent,micro,frequency,execution,contextExecution,neural];
+ const allSources=[transition,transition2,transition3,recent,micro,frequency,execution,contextExecution,offline,neural];
  const top2=allSources.map(v=>Array.from({length:10},(_,d)=>d).sort((a,b)=>v[a]-v[b]).slice(0,2));
  const rows=[];
  for(let d=0;d<10;d++){
@@ -1163,14 +1184,15 @@ function scanAvoidMatchDigits(){
    // transición 1/2, frecuencia, recencia y desempeño real pesan mucho más
    // que la red neural. La IA queda como desempate/apoyo.
    const statisticalRisk=
-     .14*Number(transition[d]||0)+
-     .17*Number(transition2[d]||0)+
-     .15*Number(transition3[d]||0)+
-     .14*Number(recent[d]||0)+
-     .08*Number(micro[d]||0)+
-     .16*Number(frequency[d]||0)+
-     .08*Number(execution[d]||0)+
-     .08*Number(contextExecution[d]||0);
+     .12*Number(transition[d]||0)+
+     .14*Number(transition2[d]||0)+
+     .13*Number(transition3[d]||0)+
+     .12*Number(recent[d]||0)+
+     .07*Number(micro[d]||0)+
+     .13*Number(frequency[d]||0)+
+     .07*Number(execution[d]||0)+
+     .07*Number(contextExecution[d]||0)+
+     .15*Number(offline[d]||0);
    const adaptiveStat=.65*legacyRisk+.35*learnedRisk;
    const baseRisk=.80*statisticalRisk+.15*adaptiveStat+.05*Number(neural[d]||0);
    const components=allSources.map(v=>Number(v[d]||0));
@@ -1181,7 +1203,7 @@ function scanAvoidMatchDigits(){
    rows.push({
      digit:d,matchProb:rankRisk,rawMatchProb:baseRisk,avoidProb:1-rankRisk,
      transition:transition[d],transition2:transition2[d],transition3:transition3[d],recent:recent[d],micro:micro[d],frequency:frequency[d],
-     neuralRisk:neural[d],executionRisk:execution[d],contextExecutionRisk:contextExecution[d],agree:votes[d]||0,
+     neuralRisk:neural[d],executionRisk:execution[d],contextExecutionRisk:contextExecution[d],offlineRisk:offline[d],agree:votes[d]||0,
      uncertainty,sourceConsensus
    });
  }
@@ -1275,7 +1297,7 @@ function renderAvoidMatchScanner(){
  $('safetyMeta').textContent='diversificacion suave · '+usedRecent+'/10 digitos usados recientemente · MATCH 100/250/500 '+(r100==null?'–':pct(r100))+' / '+(r250==null?'–':pct(r250))+' / '+(r500==null?'–':pct(r500))+' · HIT real '+(ec.hit==null?'–':pct(ec.hit))+' ('+ec.n+')';
  $('safetyGap').textContent=d.opportunityScore+' / '+d.opportunityThreshold;
  $('safetyRecent').textContent=r100==null?'–':pct(r100);
- $('safetyTransition').textContent='D'+d.digit+' · T1 '+pct(d.transition)+' · T2 '+pct(d.transition2)+' · T3 '+pct(d.transition3)+' · memoria contexto '+pct(d.contextExecutionRisk)+' · neural '+pct(d.neuralRisk);
+ $('safetyTransition').textContent='D'+d.digit+' · T1 '+pct(d.transition)+' · T2 '+pct(d.transition2)+' · T3 '+pct(d.transition3)+' · offline '+pct(d.offlineRisk)+' · contexto '+pct(d.contextExecutionRisk)+' · neural '+pct(d.neuralRisk);
  return d;
 }
 function coldDigit(a,n){
@@ -1391,14 +1413,17 @@ function maybeAutoBuy(signalOk,tickEpoch=Date.now()){
 async function loadLiveModel(){
  try{
   const base='https://raw.githubusercontent.com/quispillocharly-gif/Ia-bot-2.0/main/topo-airomen/memory/';
-  const [a,b]=await Promise.all([
+  const [a,b,c]=await Promise.all([
    fetch(base+'differ_live_model.json?t='+Date.now(),{cache:'no-store'}),
-   fetch(base+'differ_live_ensemble.json?t='+Date.now(),{cache:'no-store'})
+   fetch(base+'differ_live_ensemble.json?t='+Date.now(),{cache:'no-store'}),
+   fetch(base+'differ_offline_stats.json?t='+Date.now(),{cache:'no-store'})
   ]);
   if(a.ok)latestLiveModel=await a.json();
   if(b.ok)latestLiveEnsemble=await b.json();
+  if(c.ok)latestOfflineStats=await c.json();
   if(latestLiveModel)liveModel=latestLiveModel;
   if(latestLiveEnsemble)liveEnsemble=latestLiveEnsemble;
+  if(latestOfflineStats)offlineStats=latestOfflineStats;
   renderLiveDecision();
  }catch(_){}
 }
