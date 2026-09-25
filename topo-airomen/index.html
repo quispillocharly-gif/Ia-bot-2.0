@@ -254,7 +254,8 @@ function resetProfitSession(){
  activeMoneyPolicy=researchPolicy.money_policy?{...researchPolicy.money_policy}:{promoted:false,compound_fraction:1,pause_after_match:0,batch_size:5,stage_size:5};
  sessionBatchTrades=0;sessionBatchWins=0;sessionStage=1;sessionPauseLeft=0;
  if(latestLiveModel)liveModel=latestLiveModel;
- if(latestLiveEnsemble)liveEnsemble=latestLiveEnsemble;
+ if(validationEnsemble)liveEnsemble=validationEnsemble;
+ else if(latestLiveEnsemble)liveEnsemble=latestLiveEnsemble;
  liveRuleId='avoid_match_min_probability';
  $('sessionPolicy').textContent='V3 · AVOID MATCH';
  $('policyMeta').textContent='RESEARCH_DEMO · ensemble '+(sessionPolicy.candidate_id||'–')+' · '+(activeMoneyPolicy.promoted?('V4 '+activeMoneyPolicy.policy+' congelada'):'money policy actual · V4 aún en investigación');
