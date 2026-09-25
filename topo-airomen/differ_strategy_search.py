@@ -88,11 +88,22 @@ def metrics(outcomes,opportunities):
         den=max(0,n-size+1)
         good=perfect_windows(outcomes,size)
         return (good/den if den else None),good
+    def post_match_survival(size):
+        starts=[i+1 for i,x in enumerate(outcomes[:-1]) if x==0 and i+size < len(outcomes)]
+        if not starts:return None
+        good=0
+        for st in starts:
+            if all(outcomes[st:st+size]):good+=1
+        return good/len(starts)
     s5,p5=survival(5)
     s10,p10=survival(10)
     s20,p20=survival(20)
     s30,p30=survival(30)
     s50,p50=survival(50)
+    pm1=None
+    losses_idx=[i for i,x in enumerate(outcomes[:-1]) if x==0]
+    if losses_idx:
+        pm1=sum(1 for i in losses_idx if outcomes[i+1]==0)/len(losses_idx)
     return {
         "signals":n,
         "wins":w,
@@ -108,6 +119,10 @@ def metrics(outcomes,opportunities):
         "survival_20":s20,
         "survival_30":s30,
         "survival_50":s50,
+        "post_match_survival_5":post_match_survival(5),
+        "post_match_survival_10":post_match_survival(10),
+        "post_match_survival_20":post_match_survival(20),
+        "match_after_match_rate":pm1,
         "perfect_windows_5":p5,
         "perfect_windows_10":p10,
         "perfect_windows_20":p20,
@@ -344,7 +359,7 @@ def main():
         "perfect_candidates":perfect,
         "status":"PERFECT_FORWARD_CANDIDATE" if perfect else "SEARCHING",
         "target":"Maximize survival probability for 5/10/20/30 consecutive DIFFER trades without MATCH across chronological validation and holdout, while keeping signal_rate >= 30% and max idle <= 18 ticks.",
-        "note":"ZERO-MATCH SEEK ranks strategies by repeated no-MATCH survival windows rather than one lucky streak. Sparse/frozen strategies are rejected; finite 0-MATCH windows are not a future guarantee."
+        "note":"ZERO-MATCH SEEK also measures whether starting immediately after a shadow MATCH improves 5/10/20-trade survival; this tests session synchronization instead of assuming it helps."
     }
     OUT.write_text(json.dumps(out,indent=2)); print(json.dumps(out,indent=2))
 
