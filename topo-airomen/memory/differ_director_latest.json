@@ -1,6 +1,6 @@
 {
   "version": "2.0-differ-director",
-  "timestamp": 1790315495,
+  "timestamp": 1790315825,
   "decision": "COLLECT_V2_FORWARD_DATA",
   "baseline_random": 0.9,
   "payout_status": "OK",
@@ -10,37 +10,18 @@
   "v4_status": "COLLECTING",
   "v1_leader": {
     "id": "neural_argmin",
-    "signals": 2372,
-    "wins": 2148,
-    "losses": 224,
-    "hit_rate": 0.9055649241146712,
-    "wilson_lower": 0.8931317854082385,
-    "raw_economic_p": 0.98224682581809,
+    "signals": 0,
+    "wins": 0,
+    "losses": 0,
+    "hit_rate": null,
+    "wilson_lower": 0.0,
+    "raw_economic_p": 1.0,
     "bonferroni_p": 1.0,
-    "shadow_pnl": -30.680000000000206,
-    "shadow_roi": -0.012934232715008518,
-    "temporal_blocks": [
-      {
-        "n": 791,
-        "wins": 729,
-        "hit_rate": 0.9216182048040455,
-        "wilson_lower": 0.9007844186009372
-      },
-      {
-        "n": 791,
-        "wins": 711,
-        "hit_rate": 0.8988621997471555,
-        "wilson_lower": 0.8758846315857376
-      },
-      {
-        "n": 790,
-        "wins": 708,
-        "hit_rate": 0.8962025316455696,
-        "wilson_lower": 0.8729816725206131
-      }
-    ],
+    "shadow_pnl": 0.0,
+    "shadow_roi": null,
+    "temporal_blocks": [],
     "block_stable": false,
-    "status": "NOT_CONFIRMED"
+    "status": "COLLECTING"
   },
   "v2_leader": {
     "id": "vote2_margin005",
@@ -78,18 +59,18 @@
   "ensemble_id": "f81db252073342fe",
   "live_policy": {
     "version": "2.0-live-policy",
-    "timestamp": 1790315495,
+    "timestamp": 1790315825,
     "source": "v1",
     "rule": "neural_argmin",
-    "candidate_id": "70e47ba5fe5f5191",
+    "candidate_id": "41df350ce7fca84c",
     "mode": "RESEARCH_DEMO",
     "confirmed": false,
     "economic_qualified": false,
     "break_even_rate": 0.9174311926605504,
-    "leader_signals": 2372,
-    "leader_hit_rate": 0.9055649241146712,
-    "leader_wilson": 0.8931317854082385,
-    "leader_shadow_pnl": -30.680000000000206,
+    "leader_signals": 0,
+    "leader_hit_rate": null,
+    "leader_wilson": 0.0,
+    "leader_shadow_pnl": 0.0,
     "money_policy": null,
     "note": "Demo-only policy. Research continues in parallel. A session freezes its selected entry and money-management policy until reset."
   },
