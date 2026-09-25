@@ -302,6 +302,7 @@ async function load(){
 }
 
 let derivSocket=null,derivDemoAccount=null,publicSocket=null,liveModel=null,liveEnsemble=null,latestLiveModel=null,latestLiveEnsemble=null,liveSeq=[],livePip=4,liveBarrier=null,liveBarrierProb=null,liveRuleId='neural_argmin',autoDemo=false,pendingTrade=false,activeContractId=null,tradeReq=5000,lastProposalReq=null,lastSignalEpoch=0;
+let publicReconnectTimer=null,publicWatchdogTimer=null,lastPublicMessageAt=0,lastPublicConnectAt=0;
 let latestPublicTickEpoch=0,latestPublicTickDigit=null,latestPublicTickQuote=null,ticksWithoutSignal=0;
 let lastAvoidDecision=null,pendingLearnSnapshot=null;
 let pendingBuyBarrier=null,activeTradeBarrier=null;
@@ -1165,18 +1166,56 @@ async function loadLiveModel(){
   renderLiveDecision();
  }catch(_){}
 }
+function schedulePublicReconnect(reason){
+ if(publicReconnectTimer)return;
+ $('liveReason').textContent='STREAM R_75 '+reason+' · reconectando...';
+ publicReconnectTimer=setTimeout(()=>{
+   publicReconnectTimer=null;
+   startPublicDiffer();
+ },1500);
+}
 function startPublicDiffer(){
- try{publicSocket?.close()}catch(_){}
- publicSocket=new WebSocket('wss://api.derivws.com/trading/v1/options/ws/public');
- publicSocket.onopen=()=>publicSocket.send(JSON.stringify({ticks_history:'R_75',count:1000,end:'latest',style:'ticks',req_id:100}));
- publicSocket.onmessage=e=>{
+ if(publicReconnectTimer){clearTimeout(publicReconnectTimer);publicReconnectTimer=null}
+ const old=publicSocket;
+ publicSocket=null;
+ try{old?.close()}catch(_){}
+
+ lastPublicConnectAt=Date.now();
+ $('liveReason').textContent='Conectando stream R_75...';
+ let ws;
+ try{
+   ws=new WebSocket('wss://api.derivws.com/trading/v1/options/ws/public');
+ }catch(e){
+   schedulePublicReconnect('NO DISPONIBLE');
+   return;
+ }
+ publicSocket=ws;
+
+ ws.onopen=()=>{
+   if(publicSocket!==ws)return;
+   lastPublicMessageAt=Date.now();
+   $('liveReason').textContent='R_75 conectado · cargando 1000 ticks...';
+   try{ws.send(JSON.stringify({ticks_history:'R_75',count:1000,end:'latest',style:'ticks',req_id:100}))}
+   catch(_){schedulePublicReconnect('ERROR HISTORY')}
+ };
+
+ ws.onmessage=e=>{
+  if(publicSocket!==ws)return;
+  lastPublicMessageAt=Date.now();
   try{
-   const m=JSON.parse(e.data);if(m.error)return;
+   const m=JSON.parse(e.data);
+   if(m.error){
+     $('liveReason').textContent='R_75 error: '+(m.error.message||m.error.code||'desconocido');
+     schedulePublicReconnect('ERROR');
+     return;
+   }
    if(m.history?.prices){
     livePip=Number(m.pip_size??4);
     liveSeq=m.history.prices.map(q=>Number(Number(q).toFixed(livePip).slice(-1)));
     renderLiveDecision();
-    publicSocket.send(JSON.stringify({ticks:'R_75',subscribe:1,req_id:101}));
+    $('liveReason').textContent='Historial R_75 listo · esperando tick en vivo...';
+    try{ws.send(JSON.stringify({ticks:'R_75',subscribe:1,req_id:101}))}
+    catch(_){schedulePublicReconnect('ERROR SUBSCRIBE')}
    }else if(m.tick){
     livePip=Number(m.tick.pip_size??livePip);
     const q=Number(m.tick.quote).toFixed(livePip),d=Number(q.slice(-1));
@@ -1188,8 +1227,34 @@ function startPublicDiffer(){
     trace('TICK '+latestPublicTickEpoch+' CERRADO · recalculando DIFFER para el siguiente');
     tryNextTickTrade();
    }
-  }catch(_){}
+  }catch(err){
+    $('liveReason').textContent='STREAM R_75: respuesta no valida · reconectando...';
+    schedulePublicReconnect('RESPUESTA INVALIDA');
+  }
  };
+
+ ws.onerror=()=>{
+   if(publicSocket!==ws)return;
+   $('liveReason').textContent='STREAM R_75 con error · reconectando...';
+ };
+
+ ws.onclose=()=>{
+   if(publicSocket!==ws)return;
+   publicSocket=null;
+   schedulePublicReconnect('DESCONECTADO');
+ };
+}
+function ensurePublicWatchdog(){
+ if(publicWatchdogTimer)return;
+ publicWatchdogTimer=setInterval(()=>{
+   const now=Date.now();
+   const stale=!lastPublicMessageAt || now-lastPublicMessageAt>12000;
+   const connecting=publicSocket&&publicSocket.readyState===WebSocket.CONNECTING&&now-lastPublicConnectAt<12000;
+   if(!connecting && (!publicSocket || publicSocket.readyState!==WebSocket.OPEN || stale)){
+     trace('WATCHDOG R_75 · reiniciando stream');
+     startPublicDiffer();
+   }
+ },5000);
 }
 $('autoDemoToggle').onclick=()=>setAutoDemo(!autoDemo);
 $('bridgeAutoDemo').onclick=()=>setAutoDemo(!autoDemo);
@@ -1200,9 +1265,15 @@ $('sessionStopLoss').addEventListener('change',()=>{renderProfitSession()});
 
 $('derivConnect').onclick=connectDerivDemo;
 
-async function bootstrap(){
+function bootstrap(){
  loadStreakLab();renderStreakLab();
- await load();await loadLiveModel();renderSessionStats();resetProfitSession();startPublicDiffer();
+ renderSessionStats();resetProfitSession();
+
+ // El stream R_75 arranca primero; la memoria/modelos no pueden bloquearlo.
+ startPublicDiffer();
+ ensurePublicWatchdog();
+
+ Promise.allSettled([load(),loadLiveModel()]);
  setInterval(()=>{load();loadLiveModel()},30000);
 }
 bootstrap();
