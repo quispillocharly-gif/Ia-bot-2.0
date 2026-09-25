@@ -173,7 +173,7 @@ button:disabled{opacity:.55;cursor:not-allowed}
   <div><div class="mini">SESIÓN</div><button id="resetSession">REINICIAR META +$20</button></div>
  </div>
  <div id="ladderInfo" class="mini statusline">PROFIT LADDER: cada WIN suma su ganancia al siguiente stake; cada LOSS vuelve al stake base. Sin martingala.</div>
- <div id="autoDemoState" class="mini statusline">La IA aprende de cada tick, recalcula los 10 dígitos y compra el DIFFER con menor riesgo estimado de MATCH. Solo demo.</div>
+ <div id="autoDemoState" class="mini statusline">La IA aprende de cada tick y recalcula los 10 dígitos, pero opera a ritmo moderado: deja pasar 2 ticks completos entre compras. Solo demo.</div>
  <div id="tradeTrace" class="mini statusline">TRACE: esperando AUTO-DEMO…</div>
 </div>
 <div class="card"><div class="lab">TOURNAMENT · 6 VARIANTES PREDECLARADAS</div><div class="scroll"><table>
@@ -252,6 +252,8 @@ async function load(){
 
 let derivSocket=null,derivDemoAccount=null,publicSocket=null,liveModel=null,liveEnsemble=null,latestLiveModel=null,latestLiveEnsemble=null,liveSeq=[],livePip=4,liveBarrier=null,liveBarrierProb=null,liveRuleId='neural_argmin',autoDemo=false,pendingTrade=false,activeContractId=null,tradeReq=5000,lastProposalReq=null,lastSignalEpoch=0;
 let latestPublicTickEpoch=0,latestPublicTickDigit=null,latestPublicTickQuote=null,ticksWithoutSignal=0;
+const MODERATE_COOLDOWN_TICKS=2;
+let cooldownTicksRemaining=0;
 let lastAvoidDecision=null,pendingLearnSnapshot=null;
 const ONLINE_LEARNER_KEY='topo_airomen_avoidmatch_learner_v2';
 let researchPolicy={source:'v1',rule:'neural_argmin',mode:'RESEARCH_DEMO'},sessionPolicy={source:'v1',rule:'neural_argmin',mode:'RESEARCH_DEMO'},currentBreakEven=.9174311926605504;
@@ -299,7 +301,7 @@ function resetProfitSession(){
  currentStake=baseStake();lastSettledContractId=null;
  sessionPolicy={source:'v3',rule:'avoid_match_adaptive_all_digits',mode:'RESEARCH_DEMO',candidate_id:(latestLiveEnsemble?.ensemble_id||researchPolicy.candidate_id||'–')};
  activeMoneyPolicy=researchPolicy.money_policy?{...researchPolicy.money_policy}:{promoted:false,compound_fraction:1,pause_after_match:0,batch_size:5,stage_size:5};
- sessionBatchTrades=0;sessionBatchWins=0;sessionStage=1;sessionPauseLeft=0;
+ sessionBatchTrades=0;sessionBatchWins=0;sessionStage=1;sessionPauseLeft=0;cooldownTicksRemaining=0;
  if(latestLiveModel)liveModel=latestLiveModel;
  if(latestLiveEnsemble)liveEnsemble=latestLiveEnsemble;
  liveRuleId='avoid_match_adaptive_all_digits';
@@ -371,8 +373,8 @@ function setAutoDemo(next){
      return false;
    }
    autoDemo=true;
-   $('autoDemoState').textContent='AUTO-DEMO activo · una operación a la vez · solo cuenta demo.';
-   trace('AUTO-DEMO ARMADO · esperando señal válida',true);
+   $('autoDemoState').textContent='AUTO-DEMO activo · ritmo moderado · 2 ticks de pausa entre compras · solo demo.';
+   trace('AUTO-DEMO ARMADO · ritmo moderado · pausa 2 ticks',true);
  }else{
    autoDemo=false;
    $('autoDemoState').textContent='AUTO-DEMO apagado. La IA sigue analizando.';
@@ -466,10 +468,343 @@ async function connectDerivDemo(){
         $('lastDemoBuy').className='big '+(profit>=0?'green':'red');
         activeContractId=null; pendingTrade=false;
         applyProfitLadder(profit);
-        if(!sessionStopped)$('autoDemoState').textContent='Contrato demo cerrado · profit '+profit.toFixed(2)+' · próximo stake $'+currentStake.toFixed(2);
-        trace('CONTRATO CERRADO · '+(profit>=0?'WIN ':'LOSS ')+profit.toFixed(2)+' · P&L sesión '+sessionPnl.toFixed(2),profit>=0);
+        if(!sessionStopped)cooldownTicksRemaining=MODERATE_COOLDOWN_TICKS;
+        if(!sessionStopped)$('autoDemoState').textContent='Contrato demo cerrado · profit '+profit.toFixed(2)+' · pausa moderada de '+cooldownTicksRemaining+' ticks · próximo stake 
+      }
+    }
+   }catch(_){}
+  };
+ }catch(e){
+  derivMsg('ERROR: '+e.message); btn.disabled=false;
+ }
+}
+
+function relu(x){return x>0?x:0}
+function softmax(a){
+ const m=Math.max(...a),e=a.map(x=>Math.exp(x-m)),z=e.reduce((x,y)=>x+y,0);
+ return e.map(x=>x/z);
+}
+function denseLayer(input,W,b,activation){
+ const out=Array(b.length).fill(0);
+ for(let j=0;j<b.length;j++){
+  let z=Number(b[j]);
+  for(let i=0;i<input.length;i++)z+=input[i]*Number(W[i][j]);
+  out[j]=activation==='relu'?relu(z):z;
+ }
+ return out;
+}
+function modelProbs(model,seq){
+ if(!model||seq.length<model.window)return null;
+ const w=model.window,x=Array(w*10).fill(0),tail=seq.slice(-w);
+ tail.forEach((d,i)=>{x[i*10+d]=1});
+ let a=x;
+ for(let k=0;k<model.coefs.length;k++){
+  const last=k===model.coefs.length-1;
+  a=denseLayer(a,model.coefs[k],model.intercepts[k],last?'identity':(model.activation||'relu'));
+ }
+ const out=(model.out_activation==='softmax'||a.length>1)?softmax(a):a;
+ const full=Array(10).fill(1);
+ (model.classes||[]).forEach((c,i)=>full[Number(c)]=Number(out[i]));
+ return full;
+}
+function neuralProbs(seq){return modelProbs(liveModel,seq)}
+function calUpper(model,p){
+ for(const r of (model?.calibration||[]))if(Number(r.lo)<=p&&p<Number(r.hi))return Number(r.upper95_loss??1);
+ return 1;
+}
+function entropyNorm(a,n=200){
+ const z=a.slice(-n);if(!z.length)return 1;
+ const c=Array(10).fill(0);z.forEach(d=>c[d]++);
+ let h=0;for(const x of c){if(!x)continue;const p=x/z.length;h-=p*Math.log(p)}return h/Math.log(10);
+}
+function repeatRate(a,n=200){const z=a.slice(-n);if(z.length<2)return 0;let k=0;for(let i=1;i<z.length;i++)if(z[i]===z[i-1])k++;return k/(z.length-1)}
+function transitionPeak(a,n=500){
+ const z=a.slice(-n);if(z.length<20)return .1;
+ const m=Array.from({length:10},()=>Array(10).fill(0));for(let i=1;i<z.length;i++)m[z[i-1]][z[i]]++;
+ const vals=[];for(const r of m){const sum=r.reduce((x,y)=>x+y,0);if(sum)vals.push(Math.max(...r)/sum)}
+ return vals.length?vals.reduce((x,y)=>x+y,0)/vals.length:.1;
+}
+function liveRegime(){return repeatRate(liveSeq)>.13||transitionPeak(liveSeq)>.18||entropyNorm(liveSeq)<.955?'CHAOTIC':'STABLE'}
+function ensembleDecision(){
+ const models=liveEnsemble?.models||[];if(models.length<3)return null;
+ const outs=models.map(m=>{const p=modelProbs(m,liveSeq);if(!p)return null;let b=0;for(let d=1;d<10;d++)if(p[d]<p[b])b=d;return {m,p,b,pmin:Number(p[b])}});if(outs.some(x=>!x))return null;
+ const votes=Array(10).fill(0);outs.forEach(x=>votes[x.b]++);let b=0;for(let d=1;d<10;d++)if(votes[d]>votes[b])b=d;
+ const agree=votes[b],avgLoss=outs.reduce((z,x)=>z+Number(x.p[b]),0)/outs.length;
+ const uc=outs.filter(x=>x.b===b).map(x=>calUpper(x.m,x.pmin));const consLoss=Math.max(avgLoss,uc.length?Math.max(...uc):1);
+ const predWin=1-avgLoss,consWin=1-consLoss,rule=liveRuleId||'vote2_margin005',reg=liveRegime();
+ let ok=false,score=predWin;
+ if(rule==='vote2_margin005')ok=agree>=2&&predWin>=currentBreakEven+.005;
+ else if(rule==='vote2_margin010')ok=agree>=2&&predWin>=currentBreakEven+.010;
+ else if(rule==='vote3_margin005')ok=agree>=3&&predWin>=currentBreakEven+.005;
+ else if(rule==='vote2_calibrated'){score=consWin;ok=agree>=2&&consWin>=currentBreakEven+.002}
+ else if(rule==='vote3_calibrated'){score=consWin;ok=agree>=3&&consWin>=currentBreakEven+.002}
+ else if(rule==='stable_vote2_calibrated'){score=consWin;ok=agree>=2&&consWin>=currentBreakEven+.002&&reg==='STABLE'}
+ return {barrier:b,lossProb:1-score,winProb:score,agree,regime:reg,ok};
+}
+function loadOnlineLearner(){
+ try{
+   const x=JSON.parse(localStorage.getItem(ONLINE_LEARNER_KEY)||'null');
+   if(x&&Array.isArray(x.weights)&&x.weights.length===3)return x;
+ }catch(_){}
+ return {weights:[.40,.35,.25],ticks:0,matches:0,avoids:0};
+}
+let onlineLearner=loadOnlineLearner();
+function saveOnlineLearner(){try{localStorage.setItem(ONLINE_LEARNER_KEY,JSON.stringify(onlineLearner))}catch(_){}}
+function normVec(a){
+ const z=a.reduce((x,y)=>x+Math.max(0,Number(y)||0),0);
+ return z>0?a.map(x=>Math.max(0,Number(x)||0)/z):Array(10).fill(.1);
+}
+function smoothShareVector(n,prior=2){
+ const z=liveSeq.slice(-n),c=Array(10).fill(prior);
+ z.forEach(d=>{if(d>=0&&d<=9)c[d]++});
+ return normVec(c);
+}
+function transitionRiskVector(n=800){
+ const z=liveSeq.slice(-n),c=Array(10).fill(2);
+ if(z.length<2)return normVec(c);
+ const last=z[z.length-1];
+ for(let i=1;i<z.length;i++)if(z[i-1]===last)c[z[i]]++;
+ return normVec(c);
+}
+function recentBehaviorVector(){
+ const a=smoothShareVector(20,2),b=smoothShareVector(60,2);
+ return normVec(a.map((x,d)=>.65*x+.35*b[d]));
+}
+function frequencyRecencyVector(n=240){
+ const z=liveSeq.slice(-n),base=smoothShareVector(n,2),ew=Array(10).fill(2);
+ let w=1,total=20;
+ for(let i=z.length-1;i>=0;i--){ew[z[i]]+=w;total+=w;w*=.975}
+ const e=ew.map(x=>x/total);
+ return normVec(base.map((x,d)=>.55*x+.45*e[d]));
+}
+function neuralRiskVector(){
+ const models=liveEnsemble?.models||[];
+ if(!models.length)return Array(10).fill(.1);
+ const ps=models.map(m=>modelProbs(m,liveSeq)).filter(Boolean);
+ if(!ps.length)return Array(10).fill(.1);
+ return normVec(Array.from({length:10},(_,d)=>ps.reduce((z,p)=>z+Number(p[d]||0),0)/ps.length));
+}
+function learnerWeights(){
+ let w=Array.isArray(onlineLearner.weights)?onlineLearner.weights.slice(0,3):[.40,.35,.25];
+ w=w.map((x,i)=>Math.max(i===2?.10:.15,Math.min(.60,Number(x)||0)));
+ const z=w.reduce((a,b)=>a+b,0)||1;
+ return w.map(x=>x/z);
+}
+function learnFromObservedDigit(actual){
+ if(!pendingLearnSnapshot||actual==null)return;
+ const F=pendingLearnSnapshot.features||{};
+ const fs=[F.transition,F.recent,F.frequency];
+ if(fs.some(v=>!Array.isArray(v)||v.length!==10)){pendingLearnSnapshot=null;return}
+ let w=learnerWeights(),loss=fs.map(v=>-Math.log(Math.max(1e-6,Number(v[actual])||1e-6)));
+ const mean=loss.reduce((a,b)=>a+b,0)/loss.length,eta=.08;
+ w=w.map((x,i)=>x*Math.exp(-eta*(loss[i]-mean)));
+ const floors=[.15,.15,.10];
+ w=w.map((x,i)=>Math.max(floors[i],Math.min(.60,x)));
+ const z=w.reduce((a,b)=>a+b,0)||1;
+ onlineLearner.weights=w.map(x=>x/z);
+ onlineLearner.ticks=Number(onlineLearner.ticks||0)+1;
+ if(Number(pendingLearnSnapshot.selectedDigit)===Number(actual))onlineLearner.matches=Number(onlineLearner.matches||0)+1;
+ else onlineLearner.avoids=Number(onlineLearner.avoids||0)+1;
+ saveOnlineLearner();
+ pendingLearnSnapshot=null;
+}
+function scanAvoidMatchDigits(){
+ if(liveSeq.length<20)return [];
+ const transition=transitionRiskVector(800);
+ const recent=recentBehaviorVector();
+ const frequency=frequencyRecencyVector(240);
+ const neural=neuralRiskVector();
+ const w=learnerWeights();
+ const models=liveEnsemble?.models||[];
+ const modelPs=models.map(m=>modelProbs(m,liveSeq)).filter(Boolean);
+ const votes=Array(10).fill(0);
+ for(const p of modelPs){let b=0;for(let d=1;d<10;d++)if(p[d]<p[b])b=d;votes[b]++}
+ const rows=[];
+ for(let d=0;d<10;d++){
+   const risk=w[0]*transition[d]+w[1]*recent[d]+w[2]*frequency[d];
+   rows.push({
+     digit:d,matchProb:risk,avoidProb:1-risk,
+     transition:transition[d],recent:recent[d],frequency:frequency[d],
+     neuralRisk:neural[d],agree:votes[d]||0
+   });
+ }
+ rows.sort((a,b)=>a.matchProb-b.matchProb||a.neuralRisk-b.neuralRisk||b.agree-a.agree||a.digit-b.digit);
+ return {rows,features:{transition,recent,frequency},weights:w};
+}
+function avoidMatchDecision(){
+ const pack=scanAvoidMatchDigits();
+ if(!pack||!pack.rows.length)return null;
+ const best=pack.rows[0],second=pack.rows[1]||best;
+ const gap=Math.max(0,Number(second.matchProb)-Number(best.matchProb));
+ const ok=liveSeq.length>=40;
+ return {...best,gap,ok,rows:pack.rows,features:pack.features,weights:pack.weights};
+}
+function renderAvoidMatchScanner(){
+ const d=avoidMatchDecision();
+ lastAvoidDecision=d;
+ if(!d){
+   $('avoidBest').textContent='DIFFER –';
+   $('avoidMeta').textContent='Construyendo historial para evaluar los 10 dígitos…';
+   $('avoidRanking').innerHTML='<span class="chip wait">Esperando datos…</span>';
+   if($('safetyStatus')){$('safetyStatus').textContent='LEARNING';$('safetyGap').textContent='–';$('safetyRecent').textContent='–';$('safetyTransition').textContent='Transición –';}
+   return null;
+ }
+ const w=d.weights;
+ $('avoidBest').textContent='DIFFER '+d.digit;
+ $('avoidBest').style.color=d.ok?'#6affb6':'#ffe66d';
+ $('avoidMeta').textContent='Riesgo MATCH estimado '+pct(d.matchProb)+' · evitar '+pct(d.avoidProb)+' · pesos T/R/F '+pct(w[0])+'/'+pct(w[1])+'/'+pct(w[2])+' · aprende '+(onlineLearner.ticks||0)+' ticks';
+ $('avoidRanking').innerHTML=d.rows.map(x=>'<span class="chip '+(x.digit===d.digit?'best':'')+'">D'+x.digit+' · riesgo '+pct(x.matchProb)+'</span>').join('');
+ $('safetyStatus').textContent=d.ok?'DYNAMIC':'LEARNING';
+ $('safetyStatus').className='big '+(d.ok?'green':'yellow');
+ $('safetyMeta').textContent='0–9 recalculados cada tick · ningún número congelado · '+(onlineLearner.matches||0)+' MATCH / '+(onlineLearner.avoids||0)+' evitados';
+ $('safetyGap').textContent=pct(d.gap);
+ $('safetyRecent').textContent=pct(d.recent);
+ $('safetyTransition').textContent='D'+d.digit+' · transición '+pct(d.transition)+' · reciente '+pct(d.recent)+' · frecuencia/recencia '+pct(d.frequency);
+ return d;
+}
+function coldDigit(a,n){
+ const z=a.slice(-n),c=Array(10).fill(0);z.forEach(d=>c[d]++);
+ let best=0;for(let d=1;d<10;d++)if(c[d]<c[best])best=d;return best;
+}
+function transitionCold(a){
+ if(a.length<40)return coldDigit(a,40);
+ const last=a[a.length-1],c=Array(10).fill(0);
+ for(let i=1;i<a.length;i++)if(a[i-1]===last)c[a[i]]++;
+ if(!c.reduce((x,y)=>x+y,0))return coldDigit(a,40);
+ let best=0;for(let d=1;d<10;d++)if(c[d]<c[best])best=d;return best;
+}
+function liveGate(barrier,pmin){
+ const c20=coldDigit(liveSeq,20),c40=coldDigit(liveSeq,40),t1=transitionCold(liveSeq);
+ const agree=[c20,c40,t1].filter(x=>x===barrier).length;
+ if(liveRuleId==='neural_p09')return {ok:pmin<=.09,agree};
+ if(liveRuleId==='neural_p08')return {ok:pmin<=.08,agree};
+ if(liveRuleId==='neural_p07')return {ok:pmin<=.07,agree};
+ if(liveRuleId==='cold_consensus')return {ok:pmin<=.09&&agree>=1,agree};
+ if(liveRuleId==='strict_consensus')return {ok:pmin<=.08&&agree>=2,agree};
+ return {ok:true,agree};
+}
+function renderLiveDecision(){
+ const a=renderAvoidMatchScanner();
+ if(a){
+   liveBarrier=a.digit;liveBarrierProb=a.matchProb;
+   $('liveDiffer').textContent='DIFFER '+a.digit;
+   $('liveProb').textContent=pct(a.matchProb);
+   $('liveReason').textContent='AVOID-MATCH ADAPTATIVO · D'+a.digit+' · riesgo '+pct(a.matchProb)+' · gap '+pct(a.gap)+' · 10 dígitos recalculados · '+(a.ok?'LISTO':'APRENDIENDO');
+   $('liveDiffer').style.color=a.ok?'#4ddcff':'#ffe66d';
+   return a.ok;
+ }
+ const p=neuralProbs(liveSeq);
+ if(!p){$('liveReason').textContent='Esperando suficientes ticks/modelo neural…';return false}
+ let barrier=0;for(let d=1;d<10;d++)if(p[d]<p[barrier])barrier=d;
+ const pmin=Number(p[barrier]),gate=liveGate(barrier,pmin);
+ liveBarrier=barrier;liveBarrierProb=pmin;
+ $('liveDiffer').textContent='DIFFER '+barrier;$('liveProb').textContent=pct(pmin);
+ $('liveReason').textContent='V1 · '+(liveModel?.model_id||'–')+' · '+liveRuleId+' · prob. DIFFER '+pct(1-pmin)+' · consenso '+gate.agree+'/3 · '+(gate.ok?'SEÑAL VÁLIDA':'ESPERAR');
+ $('liveDiffer').style.color=gate.ok?'#4ddcff':'#ffe66d';return gate.ok;
+}
+function tryNextTickTrade(){
+ if(!latestPublicTickEpoch)return;
+ const ok=renderLiveDecision();
+ if(lastAvoidDecision&&lastAvoidDecision.features&&(!pendingLearnSnapshot||pendingLearnSnapshot.epoch!==latestPublicTickEpoch)){
+   pendingLearnSnapshot={
+     epoch:latestPublicTickEpoch,
+     selectedDigit:lastAvoidDecision.digit,
+     features:lastAvoidDecision.features
+   };
+ }
+ ticksWithoutSignal=0;
+ maybeAutoBuy(ok,latestPublicTickEpoch);
+}
+function maybeAutoBuy(signalOk,tickEpoch=Date.now()){
+ if(sessionStopped){trace('META +$20 YA ALCANZADA');return}
+ if(!autoDemo){trace('AUTO-DEMO OFF');return}
+ if(cooldownTicksRemaining>0){
+   trace('RITMO MODERADO · analizando tick · faltan '+cooldownTicksRemaining+' antes de comprar');
+   cooldownTicksRemaining--;
+   $('autoDemoState').textContent='IA analizando los 10 dígitos · pausa moderada · '+cooldownTicksRemaining+' ticks restantes antes de otra compra.';
+   return;
+ }
+ if(!signalOk){trace('SEÑAL FILTRADA · '+liveRuleId);return}
+ if(activeMoneyPolicy.promoted && sessionPauseLeft>0){
+   sessionPauseLeft--;
+   trace('V4 PAUSA POST-MATCH · señal omitida · faltan '+sessionPauseLeft);
+   return;
+ }
+ if(pendingTrade){trace('ESPERANDO RESPUESTA DE PROPUESTA/BUY');return}
+ if(activeContractId){trace('CONTRATO '+activeContractId+' AÚN ABIERTO');return}
+ if(!derivSocket||derivSocket.readyState!==WebSocket.OPEN){trace('WEBSOCKET DEMO NO LISTO');return}
+ if(liveBarrier==null){trace('SIN DÍGITO DIFFER');return}
+ if(tickEpoch===lastSignalEpoch){trace('TICK YA PROCESADO');return}
+ lastSignalEpoch=tickEpoch;
+ const stake=Math.max(.35,currentStake||baseStake());
+ const currency=derivDemoAccount?.currency||derivDemoAccount?.currency_code||'USD';
+ pendingTrade=true;
+ const req=++tradeReq;lastProposalReq={req,stake,barrier:liveBarrier};
+ $('lastDemoBuy').textContent='PROPUESTA '+liveBarrier;
+ trace('SEÑAL VÁLIDA DIFFER '+liveBarrier+' · solicitando propuesta',true);
+ derivSocket.send(JSON.stringify({
+   proposal:1,amount:stake,basis:'stake',contract_type:'DIGITDIFF',
+   currency,duration:1,duration_unit:'t',barrier:String(liveBarrier),
+   underlying_symbol:'R_75',req_id:req
+ }));
+}
+async function loadLiveModel(){
+ try{
+  const base='https://raw.githubusercontent.com/quispillocharly-gif/Ia-bot-2.0/main/topo-airomen/memory/';
+  const [a,b]=await Promise.all([
+   fetch(base+'differ_live_model.json?t='+Date.now(),{cache:'no-store'}),
+   fetch(base+'differ_live_ensemble.json?t='+Date.now(),{cache:'no-store'})
+  ]);
+  if(a.ok)latestLiveModel=await a.json();
+  if(b.ok)latestLiveEnsemble=await b.json();
+  if(latestLiveModel)liveModel=latestLiveModel;
+  if(latestLiveEnsemble)liveEnsemble=latestLiveEnsemble;
+  renderLiveDecision();
+ }catch(_){}
+}
+function startPublicDiffer(){
+ try{publicSocket?.close()}catch(_){}
+ publicSocket=new WebSocket('wss://api.derivws.com/trading/v1/options/ws/public');
+ publicSocket.onopen=()=>publicSocket.send(JSON.stringify({ticks_history:'R_75',count:1000,end:'latest',style:'ticks',req_id:100}));
+ publicSocket.onmessage=e=>{
+  try{
+   const m=JSON.parse(e.data);if(m.error)return;
+   if(m.history?.prices){
+    livePip=Number(m.pip_size??4);
+    liveSeq=m.history.prices.map(q=>Number(Number(q).toFixed(livePip).slice(-1)));
+    renderLiveDecision();
+    publicSocket.send(JSON.stringify({ticks:'R_75',subscribe:1,req_id:101}));
+   }else if(m.tick){
+    livePip=Number(m.tick.pip_size??livePip);
+    const q=Number(m.tick.quote).toFixed(livePip),d=Number(q.slice(-1));
+    latestPublicTickEpoch=Number(m.tick.epoch??Date.now());
+    latestPublicTickDigit=d;latestPublicTickQuote=q;
+    learnFromObservedDigit(d);
+    liveSeq.push(d);if(liveSeq.length>1500)liveSeq.shift();
+    $('liveTick').textContent=q+' · '+d;
+    trace('TICK '+latestPublicTickEpoch+' CERRADO · recalculando DIFFER para el siguiente');
+    tryNextTickTrade();
+   }
+  }catch(_){}
+ };
+}
+$('autoDemoToggle').onclick=()=>setAutoDemo(!autoDemo);
+$('bridgeAutoDemo').onclick=()=>setAutoDemo(!autoDemo);
+$('resetSession').onclick=()=>{resetProfitSession();if(derivSocket&&derivSocket.readyState===WebSocket.OPEN)setAutoDemo(true)};
+$('demoStake').addEventListener('change',()=>{if(sessionWins===0&&sessionLosses===0){currentStake=baseStake();renderProfitSession()}});
+$('maxStake').addEventListener('change',()=>{currentStake=Math.min(currentStake,maxSessionStake());renderProfitSession()});
+$('sessionStopLoss').addEventListener('change',()=>{renderProfitSession()});
+
+$('derivConnect').onclick=connectDerivDemo;
+
+async function bootstrap(){
+ await load();await loadLiveModel();renderSessionStats();resetProfitSession();startPublicDiffer();
+ setInterval(()=>{load();loadLiveModel()},30000);
+}
+bootstrap();
+</script></body></html>+currentStake.toFixed(2);
+        trace('CONTRATO CERRADO · '+(profit>=0?'WIN ':'LOSS ')+profit.toFixed(2)+' · pausa '+cooldownTicksRemaining+' ticks · P&L sesión '+sessionPnl.toFixed(2),profit>=0);
         if(m.subscription?.id)derivSocket.send(JSON.stringify({forget:m.subscription.id}));
-        if(!sessionStopped && autoDemo)setTimeout(tryNextTickTrade,25);
       }
     }
    }catch(_){}
