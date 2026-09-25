@@ -1,0 +1,55 @@
+name: TOPO AIROMEN - DIFFER V3 Multi Lab
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "topo-airomen/differ_v3_multidiffer.py"
+      - ".github/workflows/topo-airomen-v3.yml"
+      - "topo-airomen/requirements-ai.txt"
+  schedule:
+    - cron: "14,34,54 * * * *"
+permissions:
+  contents: write
+concurrency:
+  group: topo-airomen-v3
+  cancel-in-progress: false
+jobs:
+  v3:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - run: pip install -r topo-airomen/requirements-ai.txt
+      - name: Sync latest ensemble candidate
+        run: |
+          for attempt in 1 2 3 4 5 6; do
+            git pull --rebase origin main
+            if [ -f topo-airomen/memory/differ_ensemble_candidate.joblib ] && [ -f topo-airomen/memory/differ_ensemble_candidate.json ]; then break; fi
+            if [ "$attempt" -eq 6 ]; then exit 1; fi
+            sleep 10
+          done
+      - name: Refresh DIFFER payout
+        run: python topo-airomen/payout_probe_differ.py
+      - name: Collect 10000 paginated ticks
+        env:
+          TICK_COUNT: "10000"
+        run: python topo-airomen/collect_ticks.py
+      - name: Run V3 multi-DIFFER portfolio lab
+        run: python topo-airomen/differ_v3_multidiffer.py
+      - name: Persist V3 state
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add topo-airomen/memory/differ_payout_snapshot.json topo-airomen/memory/differ_v3_latest.json topo-airomen/memory/differ_v3_state.json topo-airomen/memory/differ_v3_frozen.json topo-airomen/memory/differ_v3_frozen.joblib
+          git diff --cached --quiet || git commit -m "TOPO AIROMEN V3 multi-DIFFER research"
+          rm -f topo-airomen/ticks.json topo-airomen/audit.json
+          for attempt in 1 2 3; do
+            git pull --rebase origin main
+            if git push; then break; fi
+            if [ "$attempt" -eq 3 ]; then exit 1; fi
+            sleep 3
+          done
