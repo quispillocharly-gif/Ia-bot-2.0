@@ -173,12 +173,12 @@ function renderProfitSession(){
 function resetProfitSession(){
  sessionPnl=0;sessionWins=0;sessionLosses=0;sessionStopped=false;
  currentStake=baseStake();lastSettledContractId=null;
- sessionPolicy={...researchPolicy};
+ sessionPolicy={source:'v3',rule:'avoid_match_min_probability',mode:'RESEARCH_DEMO',candidate_id:(latestLiveEnsemble?.ensemble_id||researchPolicy.candidate_id||'–')};
  if(latestLiveModel)liveModel=latestLiveModel;
  if(latestLiveEnsemble)liveEnsemble=latestLiveEnsemble;
- liveRuleId=sessionPolicy.rule||'neural_argmin';
- $('sessionPolicy').textContent=(sessionPolicy.source||'v1').toUpperCase()+' · '+(liveRuleId||'–').replaceAll('_',' ');
- $('policyMeta').textContent=(sessionPolicy.mode||'RESEARCH_DEMO')+' · '+(sessionPolicy.candidate_id||'–')+' · congelada hasta reset';
+ liveRuleId='avoid_match_min_probability';
+ $('sessionPolicy').textContent='V3 · AVOID MATCH';
+ $('policyMeta').textContent='RESEARCH_DEMO · ensemble '+(sessionPolicy.candidate_id||'–')+' · scanner congelado hasta reset';
  renderProfitSession();
  trace('SESIÓN NUEVA · meta +$20.00 · stop -$'+sessionStopLoss().toFixed(2)+' · '+$('sessionPolicy').textContent,true);
 }
