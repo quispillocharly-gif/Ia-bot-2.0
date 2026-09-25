@@ -1,62 +1,62 @@
 {
   "version": "1.0-differ-forward-lab",
-  "timestamp": 1790348311,
-  "runs": 3,
+  "timestamp": 1790349554,
+  "runs": 4,
   "model_id": "52117d13795680a4",
   "start_epoch": 1790346262,
-  "new_ticks_this_run": 486,
-  "opportunities": 1021,
+  "new_ticks_this_run": 620,
+  "opportunities": 1641,
   "baseline_random": 0.9,
   "tests": 6,
   "break_even_rate": 0.9174311926605504,
   "payout_fresh": true,
-  "payout_age_seconds": 3,
+  "payout_age_seconds": 4,
   "data_quality": {
-    "forward_ticks": 1021,
+    "forward_ticks": 1641,
     "digit_counts": [
-      100,
-      78,
-      106,
-      118,
-      99,
-      110,
-      103,
-      87,
-      119,
-      101
+      152,
+      132,
+      175,
+      179,
+      173,
+      166,
+      167,
+      156,
+      173,
+      168
     ],
-    "uniformity_chi_square_p": 0.11837462702950732,
-    "max_digit_share_deviation": 0.023604309500489723
+    "uniformity_chi_square_p": 0.29113340270218535,
+    "max_digit_share_deviation": 0.01956124314442413
   },
   "leader": {
     "id": "neural_argmin",
-    "signals": 1021,
-    "wins": 915,
-    "losses": 106,
-    "hit_rate": 0.8961802154750245,
-    "wilson_lower": 0.8759609793116551,
-    "raw_economic_p": 0.9928224414319381,
+    "signals": 1641,
+    "wins": 1479,
+    "losses": 162,
+    "hit_rate": 0.9012797074954296,
+    "wilson_lower": 0.8858966558371291,
+    "raw_economic_p": 0.9910222411876753,
     "bonferroni_p": 1.0,
-    "shadow_pnl": -23.650000000000087,
-    "shadow_roi": -0.023163565132223396,
+    "shadow_pnl": -28.890000000000168,
+    "shadow_roi": -0.01760511882998182,
     "temporal_blocks": [
       {
-        "n": 341,
-        "wins": 307,
-        "hit_rate": 0.9002932551319648,
-        "wilson_lower": 0.86389822650911
+        "n": 547,
+        "wins": 490,
+        "hit_rate": 0.8957952468007313,
+        "wilson_lower": 0.8673713498916804
       },
       {
-        "n": 340,
-        "wins": 304,
-        "hit_rate": 0.8941176470588236,
-        "wilson_lower": 0.8568949455182594
+        "n": 547,
+        "wins": 495,
+        "hit_rate": 0.9049360146252285,
+        "wilson_lower": 0.8774557094588649
       },
       {
-        "n": 340,
-        "wins": 304,
-        "hit_rate": 0.8941176470588236,
-        "wilson_lower": 0.8568949455182594
+        "n": 547,
+        "wins": 494,
+        "hit_rate": 0.903107861060329,
+        "wilson_lower": 0.8754337100826346
       }
     ],
     "block_stable": false,
@@ -65,33 +65,67 @@
   "variants": [
     {
       "id": "neural_argmin",
-      "signals": 1021,
-      "wins": 915,
-      "losses": 106,
-      "hit_rate": 0.8961802154750245,
-      "wilson_lower": 0.8759609793116551,
-      "raw_economic_p": 0.9928224414319381,
+      "signals": 1641,
+      "wins": 1479,
+      "losses": 162,
+      "hit_rate": 0.9012797074954296,
+      "wilson_lower": 0.8858966558371291,
+      "raw_economic_p": 0.9910222411876753,
       "bonferroni_p": 1.0,
-      "shadow_pnl": -23.650000000000087,
-      "shadow_roi": -0.023163565132223396,
+      "shadow_pnl": -28.890000000000168,
+      "shadow_roi": -0.01760511882998182,
       "temporal_blocks": [
         {
-          "n": 341,
-          "wins": 307,
-          "hit_rate": 0.9002932551319648,
-          "wilson_lower": 0.86389822650911
+          "n": 547,
+          "wins": 490,
+          "hit_rate": 0.8957952468007313,
+          "wilson_lower": 0.8673713498916804
         },
         {
-          "n": 340,
-          "wins": 304,
-          "hit_rate": 0.8941176470588236,
-          "wilson_lower": 0.8568949455182594
+          "n": 547,
+          "wins": 495,
+          "hit_rate": 0.9049360146252285,
+          "wilson_lower": 0.8774557094588649
         },
         {
-          "n": 340,
-          "wins": 304,
-          "hit_rate": 0.8941176470588236,
-          "wilson_lower": 0.8568949455182594
+          "n": 547,
+          "wins": 494,
+          "hit_rate": 0.903107861060329,
+          "wilson_lower": 0.8754337100826346
+        }
+      ],
+      "block_stable": false,
+      "status": "COLLECTING"
+    },
+    {
+      "id": "neural_p09",
+      "signals": 1630,
+      "wins": 1469,
+      "losses": 161,
+      "hit_rate": 0.9012269938650307,
+      "wilson_lower": 0.8857855808205681,
+      "raw_economic_p": 0.9910158508970616,
+      "bonferroni_p": 1.0,
+      "shadow_pnl": -28.79000000000017,
+      "shadow_roi": -0.01766257668711667,
+      "temporal_blocks": [
+        {
+          "n": 544,
+          "wins": 487,
+          "hit_rate": 0.8952205882352942,
+          "wilson_lower": 0.8666531959432511
+        },
+        {
+          "n": 543,
+          "wins": 491,
+          "hit_rate": 0.9042357274401474,
+          "wilson_lower": 0.8765687502752298
+        },
+        {
+          "n": 543,
+          "wins": 491,
+          "hit_rate": 0.9042357274401474,
+          "wilson_lower": 0.8765687502752298
         }
       ],
       "block_stable": false,
@@ -99,82 +133,48 @@
     },
     {
       "id": "cold_consensus",
-      "signals": 250,
-      "wins": 229,
-      "losses": 21,
-      "hit_rate": 0.916,
-      "wilson_lower": 0.875004257077684,
-      "raw_economic_p": 0.5900957499790939,
+      "signals": 428,
+      "wins": 391,
+      "losses": 37,
+      "hit_rate": 0.9135514018691588,
+      "wilson_lower": 0.8831127167099256,
+      "raw_economic_p": 0.655510040627527,
       "bonferroni_p": 1.0,
-      "shadow_pnl": -0.3899999999999828,
-      "shadow_roi": -0.0015599999999999312,
+      "shadow_pnl": -1.8099999999999918,
+      "shadow_roi": -0.004228971962616804,
       "temporal_blocks": [],
       "block_stable": false,
       "status": "COLLECTING"
     },
     {
-      "id": "neural_p09",
-      "signals": 1013,
-      "wins": 907,
-      "losses": 106,
-      "hit_rate": 0.8953603158933859,
-      "wilson_lower": 0.8749936551634667,
-      "raw_economic_p": 0.9942538400758747,
-      "bonferroni_p": 1.0,
-      "shadow_pnl": -24.37000000000009,
-      "shadow_roi": -0.02405725567620937,
-      "temporal_blocks": [
-        {
-          "n": 338,
-          "wins": 304,
-          "hit_rate": 0.8994082840236687,
-          "wilson_lower": 0.8627191539082849
-        },
-        {
-          "n": 338,
-          "wins": 302,
-          "hit_rate": 0.893491124260355,
-          "wilson_lower": 0.8560689187053523
-        },
-        {
-          "n": 337,
-          "wins": 301,
-          "hit_rate": 0.8931750741839762,
-          "wilson_lower": 0.8556523216601444
-        }
-      ],
-      "block_stable": false,
-      "status": "COLLECTING"
-    },
-    {
       "id": "neural_p08",
-      "signals": 675,
-      "wins": 599,
-      "losses": 76,
-      "hit_rate": 0.8874074074074074,
-      "wilson_lower": 0.8613354870708854,
-      "raw_economic_p": 0.9972821037019346,
+      "signals": 1079,
+      "wins": 965,
+      "losses": 114,
+      "hit_rate": 0.8943466172381835,
+      "wilson_lower": 0.874585067372669,
+      "raw_economic_p": 0.9966995025843909,
       "bonferroni_p": 1.0,
-      "shadow_pnl": -22.090000000000057,
-      "shadow_roi": -0.03272592592592601,
+      "shadow_pnl": -27.15000000000011,
+      "shadow_roi": -0.025162187210380084,
       "temporal_blocks": [
         {
-          "n": 225,
-          "wins": 203,
-          "hit_rate": 0.9022222222222223,
-          "wilson_lower": 0.8563994872473608
+          "n": 360,
+          "wins": 320,
+          "hit_rate": 0.8888888888888888,
+          "wilson_lower": 0.852230275663811
         },
         {
-          "n": 225,
-          "wins": 199,
-          "hit_rate": 0.8844444444444445,
-          "wilson_lower": 0.8360700806943049
+          "n": 360,
+          "wins": 324,
+          "hit_rate": 0.9,
+          "wilson_lower": 0.8646623732240906
         },
         {
-          "n": 225,
-          "wins": 197,
-          "hit_rate": 0.8755555555555555,
-          "wilson_lower": 0.8260209356176185
+          "n": 359,
+          "wins": 321,
+          "hit_rate": 0.8941504178272981,
+          "wilson_lower": 0.8580480829094862
         }
       ],
       "block_stable": false,
@@ -182,30 +182,30 @@
     },
     {
       "id": "neural_p07",
-      "signals": 172,
-      "wins": 147,
-      "losses": 25,
-      "hit_rate": 0.8546511627906976,
-      "wilson_lower": 0.7942351603983512,
-      "raw_economic_p": 0.9979931550865441,
+      "signals": 285,
+      "wins": 249,
+      "losses": 36,
+      "hit_rate": 0.8736842105263158,
+      "wilson_lower": 0.8300814045266645,
+      "raw_economic_p": 0.9957001253097332,
       "bonferroni_p": 1.0,
-      "shadow_pnl": -11.770000000000014,
-      "shadow_roi": -0.06843023255813961,
+      "shadow_pnl": -13.590000000000028,
+      "shadow_roi": -0.04768421052631589,
       "temporal_blocks": [],
       "block_stable": false,
       "status": "COLLECTING"
     },
     {
       "id": "strict_consensus",
-      "signals": 41,
-      "wins": 36,
-      "losses": 5,
-      "hit_rate": 0.8780487804878049,
-      "wilson_lower": 0.7445549235115514,
-      "raw_economic_p": 0.8813047343418872,
+      "signals": 77,
+      "wins": 70,
+      "losses": 7,
+      "hit_rate": 0.9090909090909091,
+      "wilson_lower": 0.8240368875294818,
+      "raw_economic_p": 0.6976064644414501,
       "bonferroni_p": 1.0,
-      "shadow_pnl": -1.7599999999999982,
-      "shadow_roi": -0.04292682926829264,
+      "shadow_pnl": -0.6999999999999955,
+      "shadow_roi": -0.009090909090909033,
       "temporal_blocks": [],
       "block_stable": false,
       "status": "COLLECTING"
