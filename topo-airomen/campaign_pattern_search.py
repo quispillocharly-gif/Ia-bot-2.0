@@ -1,17 +1,20 @@
 #!/usr/bin/env python3
 from pathlib import Path
-import json, math, time
+import json, math, time, os
 import numpy as np
 
 R=Path(__file__).resolve().parent
 TICKS=R/"ticks.json"
-OUT=R/"memory"/"differ_campaign_21_latest.json"
+QUICK=os.environ.get("QUICK_MODE","0")=="1"
+OUT=R/"memory"/("differ_campaign_21_quick.json" if QUICK else "differ_campaign_21_latest.json")
 CAMPAIGN_WINS=21
 MIN_HISTORY=220
 
 def load_ticks():
     j=json.loads(TICKS.read_text())
-    return np.asarray([int(x["digit"]) for x in sorted(j["ticks"],key=lambda z:int(z["epoch"]))],dtype=np.int16)
+    a=[int(x["digit"]) for x in sorted(j["ticks"],key=lambda z:int(z["epoch"]))]
+    if QUICK and len(a)>3200:a=a[-3200:]
+    return np.asarray(a,dtype=np.int16)
 
 def probs_recent(hist,n):
     a=hist[-n:]
@@ -74,13 +77,26 @@ def candidate_grid():
       ("t23",(0.05,0.10,0.10,0.30,0.45)),
     ]
     triggers=["no_repeat","uniform","very_uniform","balanced_gap","gap3","gap5"]
+    if QUICK:
+      bottom_values=[3,4]
+      recent_values=[0.0,.0030]
+      age_values=[0.0005]
+      triggers=["no_repeat","uniform","balanced_gap"]
+      shadow_values=[2,3,5]
+      score_values=[.100,.105]
+    else:
+      bottom_values=[3,4,5]
+      recent_values=[0.0,.0015,.0030]
+      age_values=[0.0,.0005]
+      shadow_values=[2,3,4,5,8]
+      score_values=[.095,.100,.105,.110]
     for name,w in weights:
-      for bottom_need in [3,4,5]:
-        for recent_penalty in [0.0,.0015,.0030]:
-          for age_bonus in [0.0,.0005]:
+      for bottom_need in bottom_values:
+        for recent_penalty in recent_values:
+          for age_bonus in age_values:
             for trigger in triggers:
-              for shadow_need in [2,3,4,5,8]:
-                for max_score in [.095,.100,.105,.110]:
+              for shadow_need in shadow_values:
+                for max_score in score_values:
                   out.append({
                     "id":f"{name}_b{bottom_need}_rp{recent_penalty:.4f}_ab{age_bonus:.5f}_trg-{trigger}_sh{shadow_need}_mx{max_score:.3f}",
                     "weights":w,"bottom_need":bottom_need,
@@ -226,7 +242,8 @@ def main():
     ),reverse=True)
 
     out={
-      "version":"2.0-shadow-confirmed-campaign-21",
+      "version":"2.1-shadow-confirmed-campaign-21",
+      "mode":"QUICK" if QUICK else "FULL",
       "timestamp":int(time.time()),
       "ticks":len(digits),"examples":len(ex),
       "split":{"discovery":len(discovery),"validation":len(validation),"holdout":len(holdout)},
