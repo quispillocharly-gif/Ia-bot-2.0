@@ -103,7 +103,7 @@ button:disabled{opacity:.45;cursor:not-allowed}
 <script>
 'use strict';
 
-const BUILD='CLEAN-2.8-EVERY-TICK';
+const BUILD='CLEAN-2.9-CLOSE-TO-NEXT';
 const CADENCE_MIN=1,CADENCE_MAX=3;
 const SYMBOL='R_75';
 const STAGE_TARGET=5;
@@ -226,7 +226,7 @@ function resetSession(){
   renderSession();
   $('contractView').textContent='–';
   $('contractView').className='big';
-  log('SESIÓN NUEVA · EVERY-TICK · 4 etapas de +$5 · meta final +$20 · stake base $'+currentStake.toFixed(2));
+  log('SESIÓN NUEVA · SECUENCIAL ANTI-MATCH · 4 etapas de +$5 · meta final +$20 · stake base $'+currentStake.toFixed(2));
 }
 
 function applyResult(profit,snapshot){
@@ -265,7 +265,7 @@ function applyResult(profit,snapshot){
     stageCooldownRemaining=0;
     ticksIntoCadence=0;
     idleTradeTicks=0;
-    log('CHECKPOINT '+completedStages+'/'+TOTAL_STAGES+' · +$'+(completedStages*STAGE_TARGET).toFixed(0)+' NETOS · stake reiniciado a $'+b.toFixed(2)+' · CONTINÚA EVERY-TICK');
+    log('CHECKPOINT '+completedStages+'/'+TOTAL_STAGES+' · +$'+(completedStages*STAGE_TARGET).toFixed(0)+' NETOS · stake reiniciado a $'+b.toFixed(2)+' · CONTINÚA SECUENCIAL');
   }else{
     const blockProfit=Math.max(0,sessionPnl-completedStages*STAGE_TARGET);
     currentStake=money(Math.min(HARD_MAX,maxStake(),Math.max(b,b+blockProfit)));
@@ -547,14 +547,25 @@ function analyze(){
     };
   });
 
-  // SIEMPRE hay candidato. Ningún dígito se bloquea y puede repetirse.
+  // Anti-MATCH sin pausas: evita primero los dígitos que varias fuentes
+  // consideran "calientes". Si todos quedan vetados, usa el menor riesgo global.
+  const hotSources=[t2,t3,neural,context];
+  const hotCounts=Array(10).fill(0);
+  for(const src of hotSources){
+    const hot2=[...digits].sort((x,y)=>Number(src[y]||.1)-Number(src[x]||.1)||x-y).slice(0,2);
+    hot2.forEach(d=>hotCounts[d]++);
+  }
+  rows.forEach(x=>x.hotVotes=hotCounts[x.digit]);
+
   const sorted=[...rows].sort((x,y)=>
+    x.hotVotes-y.hotVotes ||
     y.leastVotes-x.leastVotes ||
     x.score-y.score ||
     y.age-x.age ||
     x.digit-y.digit
   );
-  const best=sorted[0];
+  const safePool=sorted.filter(x=>x.hotVotes===0);
+  const best=(safePool.length?safePool:sorted)[0];
 
   return {
     best,
@@ -562,7 +573,7 @@ function analyze(){
     ok:stageCooldownRemaining<=0 && !sessionStopped,
     gap:sorted[1]?Math.max(0,Number(sorted[1].score)-Number(best.score)):0,
     mr:actualMatchRate(50),
-    strategyId:'EVERY-TICK LEAST-PROBABLE',
+    strategyId:'CLOSE-TO-NEXT ANTI-MATCH',
     remainingToTarget:Math.max(0,nextStageTarget()-sessionPnl),
     stage:stageNumber(),
     stageTarget:nextStageTarget(),
@@ -584,12 +595,13 @@ function renderDecision(){
   $('bestDigit').textContent='DIFFER '+d.best.digit;
   $('riskView').textContent=pct(d.best.score);
   $('riskMeta').textContent=
-    'EVERY-TICK · menos probable '+d.best.leastVotes+'/9'+
+    'SECUENCIAL · menos probable '+d.best.leastVotes+'/9'+
+    ' · hot '+d.best.hotVotes+'/4'+
     ' · edad '+d.best.age+'t'+
     ' · riesgo '+pct(d.best.score);
 
   $('signalMeta').textContent=
-    'COMPRA CADA TICK'+
+    'CIERRA → RECALCULA → COMPRA'+
     ' · etapa '+d.stage+'/'+TOTAL_STAGES+
     ' · faltan $'+d.remainingToTarget.toFixed(2)+' para +$'+d.stageTarget.toFixed(0)+
     ' · puede repetir D'+d.best.digit+
@@ -597,7 +609,7 @@ function renderDecision(){
 
   $('ranking').innerHTML=d.rows.map(x=>
     '<span class="chip '+(x.digit===d.best.digit?'best':'')+'">D'+x.digit+
-    ' LP'+x.leastVotes+'/9 '+pct(x.score)+
+    ' LP'+x.leastVotes+'/9 · H'+x.hotVotes+'/4 · '+pct(x.score)+
     '</span>'
   ).join('');
   return d;
@@ -612,6 +624,14 @@ function syncAuto(){
 
 function canTrade(){
   return auto && !sessionStopped && tradeSocket && tradeSocket.readyState===WebSocket.OPEN && tradeAccount;
+}
+
+function kickSequential(reason=''){
+  if(!canTrade()||pending||activeContract)return false;
+  const d=renderDecision();
+  if(!d?.ok)return false;
+  log('SECUENCIAL'+(reason?' · '+reason:'')+' · siguiente D'+d.best.digit);
+  return requestProposal(d);
 }
 
 function nextReq(kind,ctx){
@@ -639,8 +659,6 @@ function requestProposal(decision){
     return false;
   }
   // Si el ranking cambió por memoria/settlement, usa el candidato más reciente.
-  decision=confirm;
-
   decision=confirm;
   pending=true;
   idleTradeTicks=0;
@@ -775,18 +793,9 @@ function onContract(m){
   log((profit>=0?'WIN ':'MATCH ')+profit.toFixed(2)+' · D'+ctx.barrier);
   applyResult(profit,ctx.snapshot);
 
-  // EVERY-TICK: al cerrar un contrato, prepara el siguiente de inmediato
-  // con el último tick que ya está en seq, sin esperar otro patrón.
+  // SECUENCIAL: el cierre del contrato es el único disparador de la siguiente compra.
   if(autoWanted&&!sessionStopped&&!pending&&!activeContract){
-    const next=renderDecision();
-    if(next?.ok){
-      setTimeout(()=>{
-        if(autoWanted&&!sessionStopped&&!pending&&!activeContract){
-          const fresh=renderDecision();
-          if(fresh?.ok)requestProposal(fresh);
-        }
-      },0);
-    }
+    setTimeout(()=>kickSequential('CIERRE → SIGUIENTE'),0);
   }
 
   if(m.subscription?.id){
@@ -916,7 +925,11 @@ async function connectDemo(isReconnect=false){
       log('DEMO CONECTADA · '+accountId+(isReconnect?' · RECUPERADA':''));
       startTradeHeartbeat(ws);
       syncAuto();
-      if(activeContract)recoverActiveContract();
+      if(activeContract){
+        recoverActiveContract();
+      }else if(autoWanted){
+        setTimeout(()=>kickSequential('INICIO'),0);
+      }
     };
 
     ws.onmessage=e=>{
@@ -984,25 +997,15 @@ function handleMarket(m){
     $('lastTick').textContent=quote+' · '+digit;
     $('tickMeta').textContent='epoch '+epoch;
 
+    // Los ticks solo actualizan el análisis. NO disparan compras.
+    // La siguiente compra nace exclusivamente del cierre del contrato anterior.
     if(auto&&!sessionStopped&&!pending&&!activeContract){
       idleTradeTicks=Math.min(999,idleTradeTicks+1);
     }
 
-    const d=renderDecision();
+    renderDecision();
 
-    // Si la operación anterior aún está cerrando, onContract lanzará
-    // la siguiente inmediatamente usando este tick como contexto.
-    if(activeContract){
-      querySettlement();
-      return;
-    }
-
-    // Una propuesta/compra ya está en vuelo para este tick.
-    if(pending)return;
-
-    if(auto&&!sessionStopped&&d?.ok){
-      requestProposal(d);
-    }
+    if(activeContract)querySettlement();
   }
 }
 
@@ -1085,9 +1088,20 @@ $('autoBtn').onclick=()=>{
   log('AUTO-DEMO '+(autoWanted?'ON':'OFF'));
   if(autoWanted&&(!tradeSocket||tradeSocket.readyState!==WebSocket.OPEN)){
     scheduleTradeReconnect('AUTO activado');
+  }else if(autoWanted){
+    setTimeout(()=>kickSequential('AUTO ON'),0);
   }
 };
-$('resetBtn').onclick=()=>{resetSession();if(savedAppId&&savedPat)autoWanted=true;syncAuto();if(autoWanted&&(!tradeSocket||tradeSocket.readyState!==WebSocket.OPEN))scheduleTradeReconnect('sesión reiniciada')};
+$('resetBtn').onclick=()=>{
+  resetSession();
+  if(savedAppId&&savedPat)autoWanted=true;
+  syncAuto();
+  if(autoWanted&&(!tradeSocket||tradeSocket.readyState!==WebSocket.OPEN)){
+    scheduleTradeReconnect('sesión reiniciada');
+  }else if(autoWanted){
+    setTimeout(()=>kickSequential('SESIÓN NUEVA'),0);
+  }
+};
 $('baseStake').onchange=()=>{if(sessionWins===0&&sessionMatches===0){currentStake=baseStake();renderSession()}};
 $('maxStake').onchange=()=>{currentStake=Math.min(currentStake,maxStake(),HARD_MAX);renderSession()};
 
