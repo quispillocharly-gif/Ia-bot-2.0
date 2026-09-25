@@ -983,7 +983,7 @@ function learnFromObservedDigit(actual){
  pendingLearnSnapshot=null;
 }
 function scanAvoidMatchDigits(){
- if(liveSeq.length<20)return [];
+ if(liveSeq.length<1)return [];
  const transition=transitionRiskVector(800);
  const transition2=secondOrderTransitionRiskVector(1200);
  const recent=recentBehaviorVector();
@@ -1067,7 +1067,7 @@ function avoidMatchDecision(){
  const economicMatchLimit=Math.max(.04,1-currentBreakEven-minEdge);
  const maxMatchRisk=Math.min(.085,economicMatchLimit);
  const minGap=.0008;
- const historyOk=liveSeq.length>=40;
+ const historyOk=liveSeq.length>=1;
  const riskOk=Number(best.matchProb)<=maxMatchRisk;
  const edgeOk=conservativeEdge>=minEdge;
  const consensusOk=Number(best.sourceConsensus||0)>=phase.consensus;
@@ -1091,7 +1091,7 @@ function renderAvoidMatchScanner(){
  lastAvoidDecision=d;
  if(!d){
    $('avoidBest').textContent='DIFFER –';
-   $('avoidMeta').textContent='Construyendo historial para evaluar los 10 dígitos…';
+   $('avoidMeta').textContent='Esperando el primer tick R_75…';
    $('avoidRanking').innerHTML='<span class="chip wait">Esperando datos…</span>';
    if($('safetyStatus')){$('safetyStatus').textContent='LEARNING';$('safetyGap').textContent='–';$('safetyRecent').textContent='–';$('safetyTransition').textContent='Transición –';}
    return null;
@@ -1105,7 +1105,8 @@ function renderAvoidMatchScanner(){
  $('safetyStatus').textContent=d.ok?'DYNAMIC':'LEARNING';
  $('safetyStatus').className='big '+(d.ok?'green':'yellow');
  const ec=executionCalibration();
- $('safetyMeta').textContent='ciclo 0-9 completo · usados '+coverageUsedDigits.length+'/10 · MATCH 100/250/500 '+(r100==null?'–':pct(r100))+' / '+(r250==null?'–':pct(r250))+' / '+(r500==null?'–':pct(r500))+' · HIT real '+(ec.hit==null?'–':pct(ec.hit))+' ('+ec.n+')';
+ const usedRecent=new Set(recentBarrierHistory.slice(-30)).size;
+ $('safetyMeta').textContent='diversificacion suave · '+usedRecent+'/10 digitos usados recientemente · MATCH 100/250/500 '+(r100==null?'–':pct(r100))+' / '+(r250==null?'–':pct(r250))+' / '+(r500==null?'–':pct(r500))+' · HIT real '+(ec.hit==null?'–':pct(ec.hit))+' ('+ec.n+')';
  $('safetyGap').textContent=d.opportunityScore+' / '+d.opportunityThreshold;
  $('safetyRecent').textContent=r100==null?'–':pct(r100);
  $('safetyTransition').textContent='D'+d.digit+' · T1 '+pct(d.transition)+' · T2 '+pct(d.transition2)+' · micro '+pct(d.micro)+' · neural '+pct(d.neuralRisk)+' · memoria MATCH '+pct(d.executionRisk);
