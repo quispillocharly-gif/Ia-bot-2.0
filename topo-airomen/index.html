@@ -88,8 +88,8 @@ button:disabled{opacity:.55;cursor:not-allowed}.formgrid{display:grid;grid-templ
   <div><div class="mini">STOP-LOSS SESIÓN</div><input id="sessionStopLoss" type="number" inputmode="decimal" min="1" step="0.50" value="5.00"></div>
   <div><div class="mini">SESIÓN</div><button id="resetSession">REINICIAR META +$20</button></div>
  </div>
- <div id="ladderInfo" class="mini statusline">PROFIT LADDER: cada WIN suma su ganancia al siguiente stake; cada LOSS vuelve al stake base. Sin martingala.</div>
- <div id="autoDemoState" class="mini statusline">La IA recalcula DIFFER X en cada tick. Las compras solo se ejecutan en la cuenta demo conectada.</div>
+ <div id="ladderInfo" class="mini statusline">META +$20 · cada WIN suma su ganancia al siguiente stake; MATCH vuelve al stake base. Motor nuevo 1-5 ticks.</div>
+ <div id="autoDemoState" class="mini statusline">Cada tick recalcula los 10 dígitos. La espera cambia dinámicamente entre 1 y 5 ticks; compra el menos probable.</div>
  <div id="tradeTrace" class="mini statusline">TRACE: esperando AUTO-DEMO…</div>
 </div>
 <div class="card"><div class="lab">TOURNAMENT · 6 VARIANTES PREDECLARADAS</div><div class="scroll"><table>
@@ -102,6 +102,56 @@ button:disabled{opacity:.55;cursor:not-allowed}.formgrid{display:grid;grid-templ
 </div>
 <div class="footer">TOPO AIROMEN · DIFERENCIADO DEL PROYECTO MATCH · 100% NO SE PRESUPONE NI SE GARANTIZA</div>
 </div><script>
+const BUILD='CLEAN-4.0-DYNAMIC-LEAST';
+const DYNAMIC_WAIT_MIN=1;
+const DYNAMIC_WAIT_MAX=5;
+let dlCounts=Array(10).fill(1);
+let dlTransitions=Array.from({length:10},()=>Array(10).fill(1));
+let dlSamples=0;
+let dlTicksSinceClose=0;
+let dlReadyForNext=true;
+
+function dlReset(){
+  dlCounts=Array(10).fill(1);
+  dlTransitions=Array.from({length:10},()=>Array(10).fill(1));
+  dlSamples=0;
+  dlTicksSinceClose=0;
+  dlReadyForNext=true;
+}
+function dlObserve(prev,d){
+  // Aprendizaje nuevo, local y con decaimiento. No usa modelos anteriores.
+  for(let i=0;i<10;i++)dlCounts[i]=Math.max(.05,dlCounts[i]*.992);
+  dlCounts[d]+=1;
+  if(Number.isInteger(prev)&&prev>=0&&prev<=9){
+    for(let j=0;j<10;j++)dlTransitions[prev][j]=Math.max(.05,dlTransitions[prev][j]*.985);
+    dlTransitions[prev][d]+=1;
+  }
+  dlSamples++;
+}
+function dlDecision(){
+  const total=dlCounts.reduce((a,b)=>a+b,0)||1;
+  const global=dlCounts.map(x=>x/total);
+  const last=liveSeq.length?Number(liveSeq[liveSeq.length-1]):-1;
+  let trans=Array(10).fill(.1);
+  if(last>=0&&last<=9){
+    const row=dlTransitions[last],z=row.reduce((a,b)=>a+b,0)||1;
+    trans=row.map(x=>x/z);
+  }
+  const rows=Array.from({length:10},(_,d)=>{
+    // Probabilidad simple y nueva: frecuencia adaptativa + transición del último tick.
+    const p=.68*global[d]+.32*trans[d];
+    return {digit:d,prob:p,global:global[d],transition:trans[d]};
+  }).sort((a,b)=>a.prob-b.prob||a.digit-b.digit);
+  const best=rows[0],second=rows[1]||best;
+  const gap=Math.max(0,second.prob-best.prob);
+  // Espera dinámica 1..5. No sigue un orden fijo y nunca supera 5.
+  let wait=5;
+  if(gap>=.020)wait=1;
+  else if(gap>=.012)wait=2;
+  else if(gap>=.007)wait=3;
+  else if(gap>=.0035)wait=4;
+  return {best,rows,gap,wait};
+}
 const $=x=>document.getElementById(x),pct=x=>x==null?'–':(100*x).toFixed(2)+'%';
 function badge(el,s){el.textContent=s;el.style.color=/CANDIDATE|CONFIRMED/.test(s)?'#6affb6':/NOT/.test(s)?'#ff6b82':'#ffe66d'}
 async function load(){
@@ -191,52 +241,31 @@ function renderProfitSession(){
 function resetProfitSession(){
  sessionPnl=0;sessionWins=0;sessionLosses=0;sessionStopped=false;
  currentStake=baseStake();lastSettledContractId=null;
- sessionPolicy={source:'v3',rule:'avoid_match_min_probability',mode:'RESEARCH_DEMO',candidate_id:(latestLiveEnsemble?.ensemble_id||researchPolicy.candidate_id||'–')};
- activeMoneyPolicy=researchPolicy.money_policy?{...researchPolicy.money_policy}:{promoted:false,compound_fraction:1,pause_after_match:0,batch_size:5,stage_size:5};
+ dlReset();
  sessionBatchTrades=0;sessionBatchWins=0;sessionStage=1;sessionPauseLeft=0;
- if(latestLiveModel)liveModel=latestLiveModel;
- if(latestLiveEnsemble)liveEnsemble=latestLiveEnsemble;
- liveRuleId='avoid_match_min_probability';
- $('sessionPolicy').textContent='V3 · AVOID MATCH';
- $('policyMeta').textContent='RESEARCH_DEMO · ensemble '+(sessionPolicy.candidate_id||'–')+' · '+(activeMoneyPolicy.promoted?('V4 '+activeMoneyPolicy.policy+' congelada'):'money policy actual · V4 aún en investigación');
+ $('sessionPolicy').textContent='DYNAMIC LEAST · 1-5 TICKS';
+ $('policyMeta').textContent='Motor nuevo · recalcula 10 dígitos cada tick · sin modelos anteriores';
  renderProfitSession();
- trace('SESIÓN NUEVA · meta +$20.00 · stop -$'+sessionStopLoss().toFixed(2)+' · '+$('sessionPolicy').textContent,true);
+ trace('SESIÓN NUEVA · motor dinámico 1-5 ticks · meta +$20.00',true);
 }
 function applyProfitLadder(profit){
  sessionPnl+=profit;
  if(profit>=0){
    sessionWins++;
-   const frac=activeMoneyPolicy.promoted?Number(activeMoneyPolicy.compound_fraction??0):1;
-   currentStake=Math.min(maxSessionStake(),Math.max(baseStake(),currentStake+profit*frac));
-   if(activeMoneyPolicy.promoted)sessionBatchWins++;
+   currentStake=Math.min(maxSessionStake(),Math.max(baseStake(),currentStake+profit));
  }else{
    sessionLosses++;
    currentStake=baseStake();
-   if(activeMoneyPolicy.promoted)sessionPauseLeft=Math.max(0,Number(activeMoneyPolicy.pause_after_match??0));
- }
- if(activeMoneyPolicy.promoted){
-   sessionBatchTrades++;
-   const bs=Math.max(1,Number(activeMoneyPolicy.batch_size??5));
-   if(sessionBatchTrades>=bs){
-     if(sessionBatchWins<bs)currentStake=baseStake();
-     sessionBatchTrades=0;sessionBatchWins=0;
-   }
-   const stageSize=Math.max(1,Number(activeMoneyPolicy.stage_size??5));
-   if(sessionStage<4 && sessionPnl>=sessionStage*stageSize){
-     sessionStage++;
-     currentStake=baseStake();
-     sessionBatchTrades=0;sessionBatchWins=0;sessionPauseLeft=0;
-   }
  }
  renderProfitSession();
  if(sessionPnl>=SESSION_TARGET){
    sessionStopped=true;autoDemo=false;syncAutoDemoUI();
    $('autoDemoState').textContent='META ALCANZADA: +$'+sessionPnl.toFixed(2)+' netos · AUTO-DEMO detenido.';
-   trace('OBJETIVO +$20 NETOS ALCANZADO · sesión detenida',true);
+   trace('OBJETIVO +$20 NETOS ALCANZADO',true);
  }else if(sessionPnl<=-sessionStopLoss()){
    sessionStopped=true;autoDemo=false;syncAutoDemoUI();
-   $('autoDemoState').textContent='STOP-LOSS DE SESIÓN alcanzado: $'+sessionPnl.toFixed(2)+' · sesión detenida.';
-   trace('STOP-LOSS -$'+sessionStopLoss().toFixed(2)+' ALCANZADO · no perseguir pérdidas');
+   $('autoDemoState').textContent='STOP-LOSS alcanzado: $'+sessionPnl.toFixed(2);
+   trace('STOP-LOSS -$'+sessionStopLoss().toFixed(2)+' ALCANZADO');
  }
 }
 function syncAutoDemoUI(){
@@ -260,11 +289,6 @@ function setAutoDemo(next){
    if(!derivSocket||derivSocket.readyState!==WebSocket.OPEN||!derivDemoAccount){
      $('autoDemoState').textContent='Primero conecta una cuenta DERIV DEMO con App ID + PAT.';
      trace('NO HAY CUENTA DEMO CONECTADA');
-     return false;
-   }
-   if(!liveModel){
-     $('autoDemoState').textContent='Modelo neural live todavía no disponible.';
-     trace('MODELO LIVE NO DISPONIBLE');
      return false;
    }
    autoDemo=true;
@@ -366,7 +390,12 @@ async function connectDerivDemo(){
         if(!sessionStopped)$('autoDemoState').textContent='Contrato demo cerrado · profit '+profit.toFixed(2)+' · próximo stake $'+currentStake.toFixed(2);
         trace('CONTRATO CERRADO · '+(profit>=0?'WIN ':'LOSS ')+profit.toFixed(2)+' · P&L sesión '+sessionPnl.toFixed(2),profit>=0);
         if(m.subscription?.id)derivSocket.send(JSON.stringify({forget:m.subscription.id}));
-        if(!sessionStopped && autoDemo)setTimeout(tryNextTickTrade,25);
+        dlTicksSinceClose=0;
+        dlReadyForNext=true;
+        if(!sessionStopped && autoDemo){
+          const q=dlDecision();
+          trace('CERRÓ · próxima entrada dinámica en '+q.wait+' tick(s) máximo 5');
+        }
       }
     }
    }catch(_){}
@@ -439,153 +468,123 @@ function ensembleDecision(){
  return {barrier:b,lossProb:1-score,winProb:score,agree,regime:reg,ok};
 }
 function scanAvoidMatchDigits(){
- const models=liveEnsemble?.models||[];
- if(models.length<3)return [];
- const ps=models.map(m=>modelProbs(m,liveSeq));
- if(ps.some(x=>!x))return [];
- const votes=Array(10).fill(0);
- for(const p of ps){
-   let b=0;for(let d=1;d<10;d++)if(p[d]<p[b])b=d;
-   votes[b]++;
- }
- const rows=[];
- for(let d=0;d<10;d++){
-   const vals=ps.map(p=>Number(p[d]));
-   const avg=vals.reduce((a,b)=>a+b,0)/vals.length;
-   const variance=vals.reduce((z,x)=>z+(x-avg)*(x-avg),0)/vals.length;
-   const sd=Math.sqrt(variance);
-   rows.push({digit:d,matchProb:avg,avoidProb:1-avg,sd,agree:votes[d],margin:(1-avg)-currentBreakEven});
- }
- rows.sort((a,b)=>a.matchProb-b.matchProb||b.agree-a.agree||a.sd-b.sd||a.digit-b.digit);
- return rows;
+  const d=dlDecision();
+  return d.rows.map(x=>({
+    digit:x.digit,
+    matchProb:x.prob,
+    avoidProb:1-x.prob,
+    agree:0,
+    sd:0,
+    margin:0
+  }));
 }
 function avoidMatchDecision(){
- const rows=scanAvoidMatchDigits();
- if(!rows.length)return null;
- const best=rows.find(x=>x.agree>=2)||rows[0];
- const ok=best.agree>=2 && best.avoidProb>=currentBreakEven+.002 && best.sd<=.025;
- return {...best,ok,rows};
+  const d=dlDecision();
+  return {
+    digit:d.best.digit,
+    matchProb:d.best.prob,
+    avoidProb:1-d.best.prob,
+    gap:d.gap,
+    wait:d.wait,
+    ok:true,
+    rows:d.rows
+  };
 }
 function renderAvoidMatchScanner(){
- const d=avoidMatchDecision();
- if(!d){
-   $('avoidBest').textContent='DIFFER –';
-   $('avoidMeta').textContent='Esperando ensemble y ticks suficientes…';
-   $('avoidRanking').innerHTML='<span class="chip wait">Esperando datos…</span>';
-   return null;
- }
- $('avoidBest').textContent='DIFFER '+d.digit;
- $('avoidBest').style.color=d.ok?'#6affb6':'#ffe66d';
- $('avoidMeta').textContent='Prob. MATCH '+pct(d.matchProb)+' · evitar MATCH '+pct(d.avoidProb)+' · acuerdo '+d.agree+'/3 · margen '+pct(d.margin)+' · '+(d.ok?'SEÑAL VÁLIDA':'ESPERAR');
- $('avoidRanking').innerHTML=d.rows.map(x=>'<span class="chip '+(x.digit===d.digit?'best':'')+'">D'+x.digit+' · MATCH '+pct(x.matchProb)+' · '+x.agree+'/3</span>').join('');
- return d;
-}
-function coldDigit(a,n){
- const z=a.slice(-n),c=Array(10).fill(0);z.forEach(d=>c[d]++);
- let best=0;for(let d=1;d<10;d++)if(c[d]<c[best])best=d;return best;
-}
-function transitionCold(a){
- if(a.length<40)return coldDigit(a,40);
- const last=a[a.length-1],c=Array(10).fill(0);
- for(let i=1;i<a.length;i++)if(a[i-1]===last)c[a[i]]++;
- if(!c.reduce((x,y)=>x+y,0))return coldDigit(a,40);
- let best=0;for(let d=1;d<10;d++)if(c[d]<c[best])best=d;return best;
-}
-function liveGate(barrier,pmin){
- const c20=coldDigit(liveSeq,20),c40=coldDigit(liveSeq,40),t1=transitionCold(liveSeq);
- const agree=[c20,c40,t1].filter(x=>x===barrier).length;
- if(liveRuleId==='neural_p09')return {ok:pmin<=.09,agree};
- if(liveRuleId==='neural_p08')return {ok:pmin<=.08,agree};
- if(liveRuleId==='neural_p07')return {ok:pmin<=.07,agree};
- if(liveRuleId==='cold_consensus')return {ok:pmin<=.09&&agree>=1,agree};
- if(liveRuleId==='strict_consensus')return {ok:pmin<=.08&&agree>=2,agree};
- return {ok:true,agree};
+  const d=avoidMatchDecision();
+  if(!d)return null;
+  $('avoidBest').textContent='DIFFER '+d.digit;
+  $('avoidBest').style.color='#6affb6';
+  $('avoidMeta').textContent=
+    'MENOS PROBABLE D'+d.digit+
+    ' · '+pct(d.matchProb)+
+    ' · gap '+pct(d.gap)+
+    ' · espera dinámica '+d.wait+' tick(s)';
+  $('avoidRanking').innerHTML=d.rows.map(x=>
+    '<span class="chip '+(x.digit===d.digit?'best':'')+'">D'+x.digit+' · '+pct(x.prob)+'</span>'
+  ).join('');
+  return d;
 }
 function renderLiveDecision(){
- const a=renderAvoidMatchScanner();
- if(a){
-   liveBarrier=a.digit;liveBarrierProb=a.matchProb;
-   $('liveDiffer').textContent='DIFFER '+a.digit;
-   $('liveProb').textContent=pct(a.matchProb);
-   $('liveReason').textContent='AVOID-MATCH · siguiente dígito menos probable · evitar MATCH '+pct(a.avoidProb)+' · '+(a.ok?'SEÑAL VÁLIDA':'ESPERAR');
-   $('liveDiffer').style.color=a.ok?'#4ddcff':'#ffe66d';
-   return a.ok;
- }
- const p=neuralProbs(liveSeq);
- if(!p){$('liveReason').textContent='Esperando suficientes ticks/modelo neural…';return false}
- let barrier=0;for(let d=1;d<10;d++)if(p[d]<p[barrier])barrier=d;
- const pmin=Number(p[barrier]),gate=liveGate(barrier,pmin);
- liveBarrier=barrier;liveBarrierProb=pmin;
- $('liveDiffer').textContent='DIFFER '+barrier;$('liveProb').textContent=pct(pmin);
- $('liveReason').textContent='V1 · '+(liveModel?.model_id||'–')+' · '+liveRuleId+' · prob. DIFFER '+pct(1-pmin)+' · consenso '+gate.agree+'/3 · '+(gate.ok?'SEÑAL VÁLIDA':'ESPERAR');
- $('liveDiffer').style.color=gate.ok?'#4ddcff':'#ffe66d';return gate.ok;
+  const d=renderAvoidMatchScanner();
+  if(!d)return false;
+  liveBarrier=d.digit;
+  liveBarrierProb=d.matchProb;
+  $('liveDiffer').textContent='DIFFER '+d.digit;
+  $('liveProb').textContent=pct(d.matchProb);
+  $('liveReason').textContent=
+    'NUEVO MOTOR · 10 dígitos recalculados · espera '+d.wait+
+    ' · transcurridos '+dlTicksSinceClose+
+    ' · repetición permitida';
+  $('liveDiffer').style.color='#4ddcff';
+  return true;
 }
 function tryNextTickTrade(){
- if(!latestPublicTickEpoch)return;
- const ok=renderLiveDecision();
- maybeAutoBuy(ok,latestPublicTickEpoch);
+  if(!latestPublicTickEpoch||!autoDemo||sessionStopped)return;
+  if(pendingTrade||activeContractId)return;
+  const d=dlDecision();
+  renderLiveDecision();
+  if(!dlReadyForNext)return;
+  if(dlTicksSinceClose<d.wait){
+    trace('ANALIZANDO · '+dlTicksSinceClose+'/'+d.wait+' ticks · D'+d.best.digit+' menos probable');
+    return;
+  }
+  liveBarrier=d.best.digit;
+  liveBarrierProb=d.best.prob;
+  maybeAutoBuy(true,latestPublicTickEpoch);
 }
 function maybeAutoBuy(signalOk,tickEpoch=Date.now()){
- if(sessionStopped){trace('META +$20 YA ALCANZADA');return}
- if(!autoDemo){trace('AUTO-DEMO OFF');return}
- if(!signalOk){trace('SEÑAL FILTRADA · '+liveRuleId);return}
- if(activeMoneyPolicy.promoted && sessionPauseLeft>0){
-   sessionPauseLeft--;
-   trace('V4 PAUSA POST-MATCH · señal omitida · faltan '+sessionPauseLeft);
-   return;
- }
- if(pendingTrade){trace('ESPERANDO RESPUESTA DE PROPUESTA/BUY');return}
- if(activeContractId){trace('CONTRATO '+activeContractId+' AÚN ABIERTO');return}
+ if(sessionStopped||!autoDemo||!signalOk)return;
+ if(pendingTrade||activeContractId)return;
  if(!derivSocket||derivSocket.readyState!==WebSocket.OPEN){trace('WEBSOCKET DEMO NO LISTO');return}
- if(liveBarrier==null){trace('SIN DÍGITO DIFFER');return}
- if(tickEpoch===lastSignalEpoch){trace('TICK YA PROCESADO');return}
+ if(liveBarrier==null)return;
+ if(tickEpoch===lastSignalEpoch)return;
  lastSignalEpoch=tickEpoch;
  const stake=Math.max(.35,currentStake||baseStake());
  const currency=derivDemoAccount?.currency||derivDemoAccount?.currency_code||'USD';
  pendingTrade=true;
- const req=++tradeReq;lastProposalReq={req,stake,barrier:liveBarrier};
+ dlReadyForNext=false;
+ const req=++tradeReq;
+ lastProposalReq={req,stake,barrier:liveBarrier};
  $('lastDemoBuy').textContent='PROPUESTA '+liveBarrier;
- trace('SEÑAL VÁLIDA DIFFER '+liveBarrier+' · solicitando propuesta',true);
+ trace('COMPRA DIFFER '+liveBarrier+' · menos probable · espera usada '+dlTicksSinceClose+' tick(s)',true);
  derivSocket.send(JSON.stringify({
    proposal:1,amount:stake,basis:'stake',contract_type:'DIGITDIFF',
    currency,duration:1,duration_unit:'t',barrier:String(liveBarrier),
    underlying_symbol:'R_75',req_id:req
  }));
 }
-async function loadLiveModel(){
- try{
-  const base='https://raw.githubusercontent.com/quispillocharly-gif/Ia-bot-2.0/main/topo-airomen/memory/';
-  const [a,b]=await Promise.all([
-   fetch(base+'differ_live_model.json?t='+Date.now(),{cache:'no-store'}),
-   fetch(base+'differ_live_ensemble.json?t='+Date.now(),{cache:'no-store'})
-  ]);
-  if(a.ok)latestLiveModel=await a.json();
-  if(b.ok)latestLiveEnsemble=await b.json();
-  if(!liveModel&&latestLiveModel)liveModel=latestLiveModel;
-  if(!liveEnsemble&&latestLiveEnsemble)liveEnsemble=latestLiveEnsemble;
-  renderLiveDecision();
- }catch(_){}
-}
+
+async function loadLiveModel(){ /* CLEAN 4.0: no modelos anteriores */ }
 function startPublicDiffer(){
  try{publicSocket?.close()}catch(_){}
  publicSocket=new WebSocket('wss://api.derivws.com/trading/v1/options/ws/public');
- publicSocket.onopen=()=>publicSocket.send(JSON.stringify({ticks_history:'R_75',count:1000,end:'latest',style:'ticks',req_id:100}));
+ publicSocket.onopen=()=>publicSocket.send(JSON.stringify({
+   ticks_history:'R_75',count:220,end:'latest',style:'ticks',req_id:100
+ }));
  publicSocket.onmessage=e=>{
   try{
    const m=JSON.parse(e.data);if(m.error)return;
    if(m.history?.prices){
     livePip=Number(m.pip_size??4);
-    liveSeq=m.history.prices.map(q=>Number(Number(q).toFixed(livePip).slice(-1)));
+    liveSeq=m.history.prices.map(q=>Number(Number(q).toFixed(livePip).slice(-1))).slice(-220);
+    dlReset();
+    for(let i=0;i<liveSeq.length;i++)dlObserve(i?liveSeq[i-1]:null,liveSeq[i]);
     renderLiveDecision();
     publicSocket.send(JSON.stringify({ticks:'R_75',subscribe:1,req_id:101}));
    }else if(m.tick){
     livePip=Number(m.tick.pip_size??livePip);
-    const q=Number(m.tick.quote).toFixed(livePip),d=Number(q.slice(-1));
+    const q=Number(m.tick.quote).toFixed(livePip),digit=Number(q.slice(-1));
+    const prev=liveSeq.length?Number(liveSeq[liveSeq.length-1]):null;
     latestPublicTickEpoch=Number(m.tick.epoch??Date.now());
-    latestPublicTickDigit=d;latestPublicTickQuote=q;
-    liveSeq.push(d);if(liveSeq.length>1500)liveSeq.shift();
-    $('liveTick').textContent=q+' · '+d;
-    trace('TICK '+latestPublicTickEpoch+' CERRADO · recalculando DIFFER para el siguiente');
+    latestPublicTickDigit=digit;latestPublicTickQuote=q;
+    liveSeq.push(digit);if(liveSeq.length>500)liveSeq.shift();
+    dlObserve(prev,digit);
+    if(autoDemo&&!sessionStopped&&!pendingTrade&&!activeContractId&&dlReadyForNext){
+      dlTicksSinceClose=Math.min(5,dlTicksSinceClose+1);
+    }
+    $('liveTick').textContent=q+' · '+digit;
+    renderLiveDecision();
     tryNextTickTrade();
    }
   }catch(_){}
@@ -601,8 +600,8 @@ $('sessionStopLoss').addEventListener('change',()=>{renderProfitSession()});
 $('derivConnect').onclick=connectDerivDemo;
 
 async function bootstrap(){
- await load();await loadLiveModel();resetProfitSession();startPublicDiffer();
- setInterval(()=>{load();loadLiveModel()},30000);
+ resetProfitSession();
+ startPublicDiffer();
 }
 bootstrap();
 </script></body></html>
