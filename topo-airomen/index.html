@@ -103,12 +103,12 @@ button:disabled{opacity:.45;cursor:not-allowed}
 <script>
 'use strict';
 
-const BUILD='CLEAN-2.7-SHADOW-TO-LIVE';
+const BUILD='CLEAN-2.8-EVERY-TICK';
 const CADENCE_MIN=1,CADENCE_MAX=3;
 const SYMBOL='R_75';
 const STAGE_TARGET=5;
 const TOTAL_STAGES=4;
-const STAGE_COOLDOWN_TICKS=5;
+const STAGE_COOLDOWN_TICKS=0;
 const CAMPAIGN_WINS_REQUIRED=21;
 const SHADOW_WINS_REQUIRED=2;
 const TARGET=STAGE_TARGET*TOTAL_STAGES;
@@ -210,9 +210,7 @@ function renderSession(){
   const nextTarget=nextStageTarget();
   const remain=Math.max(0,nextTarget-sessionPnl);
   $('progressMeta').textContent=
-    (stageCooldownRemaining>0
-      ?'DESCANSO '+stageCooldownRemaining+' TICK'+(stageCooldownRemaining===1?'':'S')+' · '
-      :'')+
+    
     'ETAPA '+stageNumber()+'/'+TOTAL_STAGES+
     ' · faltan $'+remain.toFixed(2)+' para +$'+nextTarget.toFixed(0)+
     ' · total '+Math.max(0,Math.min(100,sessionPnl/TARGET*100)).toFixed(1)+'% de +$'+TARGET;
@@ -228,7 +226,7 @@ function resetSession(){
   renderSession();
   $('contractView').textContent='–';
   $('contractView').className='big';
-  log('SESIÓN NUEVA · 4 etapas de +$5 · meta final +$20 · stake base $'+currentStake.toFixed(2));
+  log('SESIÓN NUEVA · EVERY-TICK · 4 etapas de +$5 · meta final +$20 · stake base $'+currentStake.toFixed(2));
 }
 
 function applyResult(profit,snapshot){
@@ -252,24 +250,6 @@ function applyResult(profit,snapshot){
     recoveryTicks=0;
   }
 
-  if(campaignActive){
-    campaignAttempts++;
-    if(profit>=0){
-      campaignWins++;
-      log('CAMPAÑA 21 · WIN '+campaignWins+'/'+CAMPAIGN_WINS_REQUIRED);
-    }else{
-      log('CAMPAÑA FALLIDA · MATCH en '+campaignWins+'/'+CAMPAIGN_WINS_REQUIRED+' · buscando nuevo patrón');
-      campaignActive=false;
-      campaignWins=0;
-      campaignAttempts=0;
-      shadowWins=0;
-      shadowPending=null;
-      shadowAttempts=0;
-      ticksIntoCadence=0;
-      idleTradeTicks=0;
-    }
-  }
-
   // 4 ETAPAS: cada +$5 reinicia la progresión del stake.
   const b=baseStake();
   const reachedStages=Math.min(TOTAL_STAGES,Math.floor(Math.max(0,sessionPnl)/STAGE_TARGET));
@@ -282,15 +262,10 @@ function applyResult(profit,snapshot){
     shadowWins=0;
     shadowPending=null;
     shadowAttempts=0;
-    if(completedStages<TOTAL_STAGES){
-      stageCooldownRemaining=STAGE_COOLDOWN_TICKS;
-      ticksIntoCadence=0;
-      idleTradeTicks=0;
-      log('CHECKPOINT '+completedStages+'/'+TOTAL_STAGES+' · +$'+(completedStages*STAGE_TARGET).toFixed(0)+' NETOS · DESCANSO '+STAGE_COOLDOWN_TICKS+' TICKS · stake base $'+b.toFixed(2));
-    }else{
-      stageCooldownRemaining=0;
-      log('CHECKPOINT '+completedStages+'/'+TOTAL_STAGES+' · +$'+(completedStages*STAGE_TARGET).toFixed(0)+' NETOS · stake base $'+b.toFixed(2));
-    }
+    stageCooldownRemaining=0;
+    ticksIntoCadence=0;
+    idleTradeTicks=0;
+    log('CHECKPOINT '+completedStages+'/'+TOTAL_STAGES+' · +$'+(completedStages*STAGE_TARGET).toFixed(0)+' NETOS · stake reiniciado a $'+b.toFixed(2)+' · CONTINÚA EVERY-TICK');
   }else{
     const blockProfit=Math.max(0,sessionPnl-completedStages*STAGE_TARGET);
     currentStake=money(Math.min(HARD_MAX,maxStake(),Math.max(b,b+blockProfit)));
@@ -526,105 +501,74 @@ function lastSeenDistance(d,maxLook=40){
 }
 
 function analyze(){
-  if(seq.length<220)return null;
+  if(seq.length<40)return null;
 
   const recent40=distRecent(40);
   const recent80=distRecent(80);
   const t1=transitionVector(1,1000);
   const t2=transitionVector(2,1200);
   const t3=transitionVector(3,1500);
+  const neural=neuralVector();
+  const off=offlineVector();
+  const context=contextualMatchVector();
+  const exec=execRiskVector();
   const digits=[0,1,2,3,4,5,6,7,8,9];
 
-  // Patrón líder del buscador de campañas de 21:
-  // T3 55% · T2 22% · T1 10% · reciente40 5% · reciente80 8%.
-  const sources=[recent40,recent80,t1,t2,t3];
-  const bottom3=sources.map(v=>[...digits].sort((x,y)=>Number(v[x])-Number(v[y])||x-y).slice(0,3));
+  const sources=[recent40,recent80,t1,t2,t3,neural,off,context,exec];
+  const bottom3=sources.map(v=>
+    [...digits].sort((x,y)=>Number(v[x]||.1)-Number(v[y]||.1)||x-y).slice(0,3)
+  );
 
   const rows=digits.map(d=>{
     const leastVotes=bottom3.reduce((n,set)=>n+(set.includes(d)?1:0),0);
     const age=lastSeenDistance(d,60);
-    const seenLast3=seq.slice(-3).some(x=>Number(x)===d);
-    const raw=
-      .05*Number(recent40[d]||.1)+
-      .08*Number(recent80[d]||.1)+
-      .10*Number(t1[d]||.1)+
-      .22*Number(t2[d]||.1)+
-      .55*Number(t3[d]||.1);
-    const campaignRisk=
-      raw+
-      (seenLast3?.0015:0)-
-      Math.min(40,age)*.0005;
+    const score=
+      .06*Number(recent40[d]||.1)+
+      .07*Number(recent80[d]||.1)+
+      .08*Number(t1[d]||.1)+
+      .17*Number(t2[d]||.1)+
+      .27*Number(t3[d]||.1)+
+      .15*Number(neural[d]||.1)+
+      .07*Number(off[d]||.1)+
+      .07*Number(context[d]||.1)+
+      .06*Number(exec[d]||.1)+
+      recentBarrierLossPenalty(d)-
+      Math.min(30,age)*.00015;
+
     return {
       digit:d,
-      score:campaignRisk,
-      combined:campaignRisk,
-      campaignRisk,
+      score,
+      combined:score,
+      campaignRisk:score,
       leastVotes,
       age,
-      seenLast3,
-      neural:Number(t3[d]||.1),
-      calibratedNeural:Number(t3[d]||.1)
+      neural:Number(neural[d]||.1),
+      calibratedNeural:Number(neural[d]||.1)
     };
   });
 
-  const eligible=rows.filter(x=>x.leastVotes>=3);
+  // SIEMPRE hay candidato. Ningún dígito se bloquea y puede repetirse.
   const sorted=[...rows].sort((x,y)=>
-    (y.leastVotes-x.leastVotes) ||
-    (x.campaignRisk-y.campaignRisk) ||
-    (y.age-x.age) ||
-    (x.digit-y.digit)
+    y.leastVotes-x.leastVotes ||
+    x.score-y.score ||
+    y.age-x.age ||
+    x.digit-y.digit
   );
-  const best=(eligible.length
-    ?eligible.sort((x,y)=>x.campaignRisk-y.campaignRisk||y.leastVotes-x.leastVotes||y.age-x.age||x.digit-y.digit)[0]
-    :sorted[0]);
-
-  const tail20=seq.slice(-20);
-  let repeats20=0;
-  for(let i=1;i<tail20.length;i++)if(Number(tail20[i])===Number(tail20[i-1]))repeats20++;
-  const repeatRate20=tail20.length>1?repeats20/(tail20.length-1):1;
-
-  // Señal que se prueba en sombra. Ya no esperamos a que el patrón sea perfecto:
-  // 2 WIN virtuales consecutivos activan la campaña real.
-  const shadowEligible=
-    best.leastVotes>=3 &&
-    best.campaignRisk<=.105;
-
-  const startPatternReady=shadowEligible;
-  const campaignStart=false;
-  const campaignContinue=campaignActive && shadowEligible;
-  const cooldownClear=stageCooldownRemaining<=0;
-  const ok=cooldownClear&&campaignContinue;
+  const best=sorted[0];
 
   return {
     best,
     rows:sorted,
-    ok,
-    gap:0,
+    ok:stageCooldownRemaining<=0 && !sessionStopped,
+    gap:sorted[1]?Math.max(0,Number(sorted[1].score)-Number(best.score)):0,
     mr:actualMatchRate(50),
-    strategyId:'T3 CAMPAIGN 21',
-    campaignStart,
-    campaignActive,
-    campaignWins,
-    campaignAttempts,
-    shadowEligible,
-    shadowWins,
-    shadowAttempts,
-    shadowPending:!!shadowPending,
-    campaignLeft:Math.max(0,CAMPAIGN_WINS_REQUIRED-campaignWins),
-    repeatRate20,
-    repeats20,
-    startPatternReady,
-    patternPhase:campaignActive?'CAMPAIGN REAL':'SHADOW CONFIRM',
+    strategyId:'EVERY-TICK LEAST-PROBABLE',
     remainingToTarget:Math.max(0,nextStageTarget()-sessionPnl),
     stage:stageNumber(),
     stageTarget:nextStageTarget(),
-    cadenceWait:currentCadenceWait,
-    cadenceStep,
-    ticksIntoCadence,
-    lastBoughtDigit,
     idleTradeTicks,
     stageCooldownRemaining,
-    differRank:sorted.findIndex(x=>x.digit===best.digit)+1,
+    differRank:1,
     matchVotes:0
   };
 }
@@ -633,45 +577,27 @@ function renderDecision(){
   currentDecision=d;
   if(!d){
     $('bestDigit').textContent='DIFFER –';
-    $('signalMeta').textContent='Cargando contexto…';
+    $('signalMeta').textContent='Cargando historial…';
     return null;
   }
 
   $('bestDigit').textContent='DIFFER '+d.best.digit;
-  $('riskView').textContent=pct(d.best.campaignRisk);
+  $('riskView').textContent=pct(d.best.score);
   $('riskMeta').textContent=
-    'T3 CAMPAIGN · LP '+d.best.leastVotes+'/5'+
+    'EVERY-TICK · menos probable '+d.best.leastVotes+'/9'+
     ' · edad '+d.best.age+'t'+
-    ' · rep20 '+d.repeats20+
-    ' · riesgo '+pct(d.best.campaignRisk);
-
-  let state;
-  if(d.stageCooldownRemaining>0){
-    state='DESCANSO '+d.stageCooldownRemaining+' TICK'+(d.stageCooldownRemaining===1?'':'S');
-  }else if(d.campaignActive){
-    state='CAMPAÑA REAL '+d.campaignWins+'/'+CAMPAIGN_WINS_REQUIRED;
-  }else if(d.shadowPending){
-    state='SOMBRA '+d.shadowWins+'/'+SHADOW_WINS_REQUIRED+' · esperando resultado';
-  }else if(d.shadowEligible){
-    state='SOMBRA '+d.shadowWins+'/'+SHADOW_WINS_REQUIRED+' · señal lista';
-  }else{
-    state='BUSCANDO SEÑAL SOMBRA';
-  }
+    ' · riesgo '+pct(d.best.score);
 
   $('signalMeta').textContent=
-    state+
-    ' · T3 55% / T2 22%'+
-    ' · LP '+d.best.leastVotes+'/5'+
-    ' · SHADOW '+d.shadowWins+'/'+SHADOW_WINS_REQUIRED+
+    'COMPRA CADA TICK'+
     ' · etapa '+d.stage+'/'+TOTAL_STAGES+
     ' · faltan $'+d.remainingToTarget.toFixed(2)+' para +$'+d.stageTarget.toFixed(0)+
+    ' · puede repetir D'+d.best.digit+
     ' · 10/10 DÍGITOS LIBRES';
 
   $('ranking').innerHTML=d.rows.map(x=>
     '<span class="chip '+(x.digit===d.best.digit?'best':'')+'">D'+x.digit+
-    ' LP'+x.leastVotes+'/5'+
-    ' '+pct(x.campaignRisk)+
-    ' age'+x.age+
+    ' LP'+x.leastVotes+'/9 '+pct(x.score)+
     '</span>'
   ).join('');
   return d;
@@ -706,12 +632,14 @@ function sendTrade(payload){
 function requestProposal(decision){
   if(!canTrade()||pending||activeContract||!decision?.ok)return false;
 
-  // Revalidación inmediata del patrón de campaña.
+  // Revalidación inmediata con el mismo último tick.
   const confirm=analyze();
-  if(!confirm?.ok || Number(confirm.best.digit)!==Number(decision.best.digit)){
-    log('CANCEL BUY · patrón de campaña cambió');
+  if(!confirm?.ok){
+    log('CANCEL BUY · sesión no disponible');
     return false;
   }
+  // Si el ranking cambió por memoria/settlement, usa el candidato más reciente.
+  decision=confirm;
 
   decision=confirm;
   pending=true;
@@ -813,12 +741,6 @@ function onBuy(m){
   }
 
   activeContract={id:cid,barrier:Number(ctx?.barrier),snapshot:ctx?.snapshot||null};
-  if(ctx?.snapshot?.campaignStart && !campaignActive){
-    campaignActive=true;
-    campaignWins=0;
-    campaignAttempts=0;
-    log('CAMPAÑA 21 INICIADA · patrón T3 confirmado');
-  }
   pending=false;pendingOrder=null;
   $('contractView').textContent='DIFFER '+activeContract.barrier;
   $('contractView').className='big cyan';
@@ -852,6 +774,20 @@ function onContract(m){
 
   log((profit>=0?'WIN ':'MATCH ')+profit.toFixed(2)+' · D'+ctx.barrier);
   applyResult(profit,ctx.snapshot);
+
+  // EVERY-TICK: al cerrar un contrato, prepara el siguiente de inmediato
+  // con el último tick que ya está en seq, sin esperar otro patrón.
+  if(autoWanted&&!sessionStopped&&!pending&&!activeContract){
+    const next=renderDecision();
+    if(next?.ok){
+      setTimeout(()=>{
+        if(autoWanted&&!sessionStopped&&!pending&&!activeContract){
+          const fresh=renderDecision();
+          if(fresh?.ok)requestProposal(fresh);
+        }
+      },0);
+    }
+  }
 
   if(m.subscription?.id){
     try{sendTrade({forget:m.subscription.id,req_id:++req})}catch(_){}
@@ -1042,95 +978,30 @@ function handleMarket(m){
     const epoch=Number(m.tick.epoch??Date.now());
     if(epoch===lastEpoch)return;
 
-    // Resuelve la señal virtual con el tick NUEVO antes de incorporarlo al contexto.
-    if(
-      shadowPending && !campaignActive &&
-      stageCooldownRemaining<=0 && !sessionStopped
-    ){
-      const virtualWin=Number(digit)!==Number(shadowPending.barrier);
-      shadowAttempts++;
-      if(virtualWin){
-        shadowWins++;
-        log('SOMBRA WIN '+shadowWins+'/'+SHADOW_WINS_REQUIRED+
-          ' · D'+shadowPending.barrier+' → '+digit);
-        if(shadowWins>=SHADOW_WINS_REQUIRED){
-          campaignActive=true;
-          campaignWins=0;
-          campaignAttempts=0;
-          shadowWins=0;
-          log('🔥 CADENA CONFIRMADA · CAMPAÑA REAL ACTIVADA');
-          $('contractMeta').textContent='2 WIN sombra confirmados · campaña real activa';
-        }
-      }else{
-        log('SOMBRA MATCH · D'+shadowPending.barrier+' → '+digit+' · reiniciando');
-        shadowWins=0;
-      }
-      shadowPending=null;
-    }
-
     lastEpoch=epoch;lastDigit=digit;lastQuote=quote;
     seq.push(digit);if(seq.length>1500)seq.shift();
 
     $('lastTick').textContent=quote+' · '+digit;
     $('tickMeta').textContent='epoch '+epoch;
 
-    // DESCANSO ENTRE ETAPAS: sigue analizando cada tick, pero no compra.
-    if(stageCooldownRemaining>0 && auto&&!sessionStopped&&!pending&&!activeContract){
-      shadowPending=null;
-      shadowWins=0;
-      stageCooldownRemaining--;
-      ticksIntoCadence=0;
-      idleTradeTicks=0;
-      renderSession();
-      const d=renderDecision();
-      if(stageCooldownRemaining>0){
-        $('contractMeta').textContent='DESCANSO ENTRE ETAPAS · '+stageCooldownRemaining+' tick(s) restantes';
-        log('DESCANSO ETAPA · '+stageCooldownRemaining+' tick(s) restantes');
-      }else{
-        $('contractMeta').textContent='DESCANSO TERMINADO · reanudando etapa '+stageNumber()+'/'+TOTAL_STAGES;
-        log('DESCANSO TERMINADO · AUTO continúa · etapa '+stageNumber()+'/'+TOTAL_STAGES);
-      }
-      return;
-    }
-
     if(auto&&!sessionStopped&&!pending&&!activeContract){
-      ticksIntoCadence=Math.min(999,ticksIntoCadence+1);
       idleTradeTicks=Math.min(999,idleTradeTicks+1);
     }
 
     const d=renderDecision();
 
-    if(activeContract)querySettlement();
-
-    if(recoveryTicks>0){
-      recoveryTicks--;
-      log('POST-MATCH · observando '+recoveryTicks+' tick(s)');
+    // Si la operación anterior aún está cerrando, onContract lanzará
+    // la siguiente inmediatamente usando este tick como contexto.
+    if(activeContract){
+      querySettlement();
       return;
     }
 
-    const cadenceNeed=campaignActive?1:currentCadenceWait;
-    if(auto&&!sessionStopped&&!pending&&!activeContract&&ticksIntoCadence<cadenceNeed){
-      log('CADENCIA '+cadenceNeed+' · esperando '+ticksIntoCadence+'/'+cadenceNeed+' ticks');
-      return;
-    }
+    // Una propuesta/compra ya está en vuelo para este tick.
+    if(pending)return;
 
-    if(d?.ok){
+    if(auto&&!sessionStopped&&d?.ok){
       requestProposal(d);
-    }else if(
-      auto && !sessionStopped && !pending && !activeContract &&
-      !campaignActive && stageCooldownRemaining<=0 &&
-      d?.shadowEligible && !shadowPending
-    ){
-      shadowPending={
-        barrier:Number(d.best.digit),
-        epoch:lastEpoch,
-        leastVotes:Number(d.best.leastVotes||0),
-        risk:Number(d.best.campaignRisk||0)
-      };
-      log('SOMBRA ARMADA · D'+shadowPending.barrier+
-        ' · LP '+shadowPending.leastVotes+'/5'+
-        ' · '+pct(shadowPending.risk));
-      renderDecision();
     }
   }
 }
