@@ -168,8 +168,10 @@ async function load(){
 
 let derivSocket=null,derivDemoAccount=null,publicSocket=null,liveModel=null,liveEnsemble=null,latestLiveModel=null,latestLiveEnsemble=null,liveSeq=[],livePip=4,liveBarrier=null,liveBarrierProb=null,liveRuleId='neural_argmin',autoDemo=false,pendingTrade=false,activeContractId=null,tradeReq=5000,lastProposalReq=null,lastSignalEpoch=0;
 let researchPolicy={source:'v1',rule:'neural_argmin',mode:'RESEARCH_DEMO'},sessionPolicy={source:'v1',rule:'neural_argmin',mode:'RESEARCH_DEMO'},currentBreakEven=.9174311926605504;
+let activeMoneyPolicy={promoted:false,compound_fraction:1,pause_after_match:0,batch_size:5,stage_size:5};
 const SESSION_TARGET=20;
 let sessionPnl=0,sessionWins=0,sessionLosses=0,currentStake=1,sessionStopped=false,lastSettledContractId=null;
+let sessionBatchTrades=0,sessionBatchWins=0,sessionStage=1,sessionPauseLeft=0;
 function trace(msg,good=false){
  const el=$('tradeTrace'); if(!el)return;
  el.textContent='TRACE: '+msg; el.style.color=good?'#6affb6':'#8ca4c8';
@@ -189,11 +191,13 @@ function resetProfitSession(){
  sessionPnl=0;sessionWins=0;sessionLosses=0;sessionStopped=false;
  currentStake=baseStake();lastSettledContractId=null;
  sessionPolicy={source:'v3',rule:'avoid_match_min_probability',mode:'RESEARCH_DEMO',candidate_id:(latestLiveEnsemble?.ensemble_id||researchPolicy.candidate_id||'–')};
+ activeMoneyPolicy=researchPolicy.money_policy?{...researchPolicy.money_policy}:{promoted:false,compound_fraction:1,pause_after_match:0,batch_size:5,stage_size:5};
+ sessionBatchTrades=0;sessionBatchWins=0;sessionStage=1;sessionPauseLeft=0;
  if(latestLiveModel)liveModel=latestLiveModel;
  if(latestLiveEnsemble)liveEnsemble=latestLiveEnsemble;
  liveRuleId='avoid_match_min_probability';
  $('sessionPolicy').textContent='V3 · AVOID MATCH';
- $('policyMeta').textContent='RESEARCH_DEMO · ensemble '+(sessionPolicy.candidate_id||'–')+' · scanner congelado hasta reset';
+ $('policyMeta').textContent='RESEARCH_DEMO · ensemble '+(sessionPolicy.candidate_id||'–')+' · '+(activeMoneyPolicy.promoted?('V4 '+activeMoneyPolicy.policy+' congelada'):'money policy actual · V4 aún en investigación');
  renderProfitSession();
  trace('SESIÓN NUEVA · meta +$20.00 · stop -$'+sessionStopLoss().toFixed(2)+' · '+$('sessionPolicy').textContent,true);
 }
@@ -201,10 +205,27 @@ function applyProfitLadder(profit){
  sessionPnl+=profit;
  if(profit>=0){
    sessionWins++;
-   currentStake=Math.min(maxSessionStake(),Math.max(baseStake(),currentStake+profit));
+   const frac=activeMoneyPolicy.promoted?Number(activeMoneyPolicy.compound_fraction??0):1;
+   currentStake=Math.min(maxSessionStake(),Math.max(baseStake(),currentStake+profit*frac));
+   if(activeMoneyPolicy.promoted)sessionBatchWins++;
  }else{
    sessionLosses++;
    currentStake=baseStake();
+   if(activeMoneyPolicy.promoted)sessionPauseLeft=Math.max(0,Number(activeMoneyPolicy.pause_after_match??0));
+ }
+ if(activeMoneyPolicy.promoted){
+   sessionBatchTrades++;
+   const bs=Math.max(1,Number(activeMoneyPolicy.batch_size??5));
+   if(sessionBatchTrades>=bs){
+     if(sessionBatchWins<bs)currentStake=baseStake();
+     sessionBatchTrades=0;sessionBatchWins=0;
+   }
+   const stageSize=Math.max(1,Number(activeMoneyPolicy.stage_size??5));
+   if(sessionStage<4 && sessionPnl>=sessionStage*stageSize){
+     sessionStage++;
+     currentStake=baseStake();
+     sessionBatchTrades=0;sessionBatchWins=0;sessionPauseLeft=0;
+   }
  }
  renderProfitSession();
  if(sessionPnl>=SESSION_TARGET){
@@ -496,6 +517,11 @@ function maybeAutoBuy(signalOk,tickEpoch=Date.now()){
  if(sessionStopped){trace('META +$20 YA ALCANZADA');return}
  if(!autoDemo){trace('AUTO-DEMO OFF');return}
  if(!signalOk){trace('SEÑAL FILTRADA · '+liveRuleId);return}
+ if(activeMoneyPolicy.promoted && sessionPauseLeft>0){
+   sessionPauseLeft--;
+   trace('V4 PAUSA POST-MATCH · señal omitida · faltan '+sessionPauseLeft);
+   return;
+ }
  if(pendingTrade){trace('ESPERANDO RESPUESTA DE PROPUESTA/BUY');return}
  if(activeContractId){trace('CONTRATO '+activeContractId+' AÚN ABIERTO');return}
  if(!derivSocket||derivSocket.readyState!==WebSocket.OPEN){trace('WEBSOCKET DEMO NO LISTO');return}
