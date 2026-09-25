@@ -263,6 +263,7 @@ let lastBoughtBarrier=null,sameBarrierBuyStreak=0;
 const MAX_SAME_BARRIER_BUYS=2;
 const ALT_RISK_TOLERANCE=.0075;
 const ONLINE_LEARNER_KEY='topo_airomen_avoidmatch_learner_v2';
+const ADV_RANKER_KEY='topo_airomen_adv_ranker_v1';
 const SELECTOR_STATS_KEY='topo_airomen_selector_stats_v3';
 let recentTradeResults=[],consecutiveDemoLosses=0;
 let researchPolicy={source:'v1',rule:'neural_argmin',mode:'RESEARCH_DEMO'},sessionPolicy={source:'v1',rule:'neural_argmin',mode:'RESEARCH_DEMO'},currentBreakEven=.9174311926605504;
@@ -399,7 +400,7 @@ function resetProfitSession(){
  if(latestLiveEnsemble)liveEnsemble=latestLiveEnsemble;
  liveRuleId='avoid_match_adaptive_all_digits';
  $('sessionPolicy').textContent='V3 · AVOID MATCH';
- $('policyMeta').textContent='MODO MENOS PROBABLE · ordena 0-9 cada tick · compra el menor riesgo MATCH · max 2 seguidas/numero · stake max USD 6';
+ $('policyMeta').textContent='MENOS PROBABLE PRO · compra continua · 7 señales adaptativas · aprende MATCH reales · max 2 seguidas/numero · stake max USD 6';
  renderProfitSession();renderStreakLab();
  trace('SESIÓN NUEVA · meta +$20.00 · stop -$'+sessionStopLoss().toFixed(2)+' · '+$('sessionPolicy').textContent,true);
 }
@@ -688,9 +689,40 @@ function transitionRiskVector(n=800){
  for(let i=1;i<z.length;i++)if(z[i-1]===last)c[z[i]]++;
  return normVec(c);
 }
+function secondOrderTransitionRiskVector(n=1200){
+ const z=liveSeq.slice(-n);
+ if(z.length<3)return transitionRiskVector(Math.min(n,800));
+ const a=z[z.length-2],b=z[z.length-1],c=Array(10).fill(1.5);
+ let support=0;
+ for(let i=2;i<z.length;i++){
+   if(z[i-2]===a&&z[i-1]===b){c[z[i]]++;support++}
+ }
+ const order2=normVec(c);
+ const order1=transitionRiskVector(Math.min(n,800));
+ const blend=Math.max(.20,Math.min(.80,support/20));
+ return normVec(order2.map((x,d)=>blend*x+(1-blend)*order1[d]));
+}
 function recentBehaviorVector(){
  const a=smoothShareVector(20,2),b=smoothShareVector(60,2);
  return normVec(a.map((x,d)=>.65*x+.35*b[d]));
+}
+function microBehaviorVector(){
+ const a=smoothShareVector(8,1.5),b=smoothShareVector(20,2),ew=Array(10).fill(1.2);
+ const z=liveSeq.slice(-40);
+ let w=1,total=12;
+ for(let i=z.length-1;i>=0;i--){ew[z[i]]+=w;total+=w;w*=.90}
+ const e=ew.map(x=>x/total);
+ return normVec(a.map((x,d)=>.45*x+.30*b[d]+.25*e[d]));
+}
+function executionDigitRiskVector(){
+ const rows=(Array.isArray(execHistory)?execHistory:[]).slice(-300);
+ const out=Array(10).fill(.10);
+ for(let d=0;d<10;d++){
+   const z=rows.filter(x=>Number(x.barrier)===d);
+   const matches=z.reduce((n,x)=>n+(Number(x.win||0)===0?1:0),0);
+   out[d]=(2+matches)/(20+z.length);
+ }
+ return normVec(out);
 }
 function frequencyRecencyVector(n=240){
  const z=liveSeq.slice(-n),base=smoothShareVector(n,2),ew=Array(10).fill(2);
@@ -712,6 +744,33 @@ function learnerWeights(){
  const z=w.reduce((a,b)=>a+b,0)||1;
  return w.map(x=>x/z);
 }
+function loadAdvancedRanker(){
+ try{
+   const x=JSON.parse(localStorage.getItem(ADV_RANKER_KEY)||'null');
+   if(x&&Array.isArray(x.weights)&&x.weights.length===6)return x;
+ }catch(_){}
+ return {weights:[.20,.20,.15,.15,.10,.20],ticks:0};
+}
+let advancedRanker=loadAdvancedRanker();
+function advancedWeights(){
+ let w=Array.isArray(advancedRanker.weights)?advancedRanker.weights.slice(0,6):[.20,.20,.15,.15,.10,.20];
+ w=w.map(x=>Math.max(.06,Math.min(.35,Number(x)||0)));
+ const z=w.reduce((a,b)=>a+b,0)||1;
+ return w.map(x=>x/z);
+}
+function saveAdvancedRanker(){try{localStorage.setItem(ADV_RANKER_KEY,JSON.stringify(advancedRanker))}catch(_){}}
+function learnAdvancedRanker(actual,sources){
+ if(!Array.isArray(sources)||sources.length!==6||sources.some(v=>!Array.isArray(v)||v.length!==10))return;
+ let w=advancedWeights();
+ const losses=sources.map(v=>-Math.log(Math.max(1e-6,Number(v[actual])||1e-6)));
+ const mean=losses.reduce((a,b)=>a+b,0)/losses.length,eta=.06;
+ w=w.map((x,i)=>x*Math.exp(-eta*(losses[i]-mean)));
+ w=w.map(x=>Math.max(.06,Math.min(.35,x)));
+ const z=w.reduce((a,b)=>a+b,0)||1;
+ advancedRanker.weights=w.map(x=>x/z);
+ advancedRanker.ticks=Number(advancedRanker.ticks||0)+1;
+ saveAdvancedRanker();
+}
 function learnFromObservedDigit(actual){
  if(!pendingLearnSnapshot||actual==null)return;
  const F=pendingLearnSnapshot.features||{};
@@ -730,36 +789,52 @@ function learnFromObservedDigit(actual){
  if(wasMatch)onlineLearner.matches=Number(onlineLearner.matches||0)+1;
  else onlineLearner.avoids=Number(onlineLearner.avoids||0)+1;
  saveOnlineLearner();
+ learnAdvancedRanker(actual,F.advancedSources);
  pendingLearnSnapshot=null;
 }
 function scanAvoidMatchDigits(){
  if(liveSeq.length<20)return [];
  const transition=transitionRiskVector(800);
+ const transition2=secondOrderTransitionRiskVector(1200);
  const recent=recentBehaviorVector();
+ const micro=microBehaviorVector();
  const frequency=frequencyRecencyVector(240);
  const neural=neuralRiskVector();
- const w=learnerWeights();
+ const execution=executionDigitRiskVector();
+
+ const coreW=learnerWeights();
+ const advW=advancedWeights();
  const models=liveEnsemble?.models||[];
  const modelPs=models.map(m=>modelProbs(m,liveSeq)).filter(Boolean);
  const votes=Array(10).fill(0);
  for(const p of modelPs){let b=0;for(let d=1;d<10;d++)if(p[d]<p[b])b=d;votes[b]++}
- const sources=[transition,recent,frequency,neural];
- const top2=sources.map(v=>Array.from({length:10},(_,d)=>d).sort((a,b)=>v[a]-v[b]).slice(0,2));
+
+ const adaptiveSources=[transition,transition2,recent,micro,frequency,neural];
+ const allSources=[transition,transition2,recent,micro,frequency,neural,execution];
+ const top2=allSources.map(v=>Array.from({length:10},(_,d)=>d).sort((a,b)=>v[a]-v[b]).slice(0,2));
  const rows=[];
  for(let d=0;d<10;d++){
-   const risk=w[0]*transition[d]+w[1]*recent[d]+w[2]*frequency[d];
-   const components=[transition[d],recent[d],frequency[d],neural[d]].map(Number);
+   const learnedRisk=adaptiveSources.reduce((z,v,i)=>z+advW[i]*Number(v[d]||0),0);
+   const legacyRisk=coreW[0]*transition[d]+coreW[1]*recent[d]+coreW[2]*frequency[d];
+   const baseRisk=.70*learnedRisk+.18*legacyRisk+.12*execution[d];
+   const components=allSources.map(v=>Number(v[d]||0));
    const uncertainty=Math.max(...components)-Math.min(...components);
+   // Conservative ranking only: uncertainty slightly penalizes a digit, but never blocks a trade.
+   const rankRisk=Math.min(.30,Math.max(.001,baseRisk+.06*uncertainty));
    const sourceConsensus=top2.reduce((n,a)=>n+(a.includes(d)?1:0),0);
    rows.push({
-     digit:d,matchProb:risk,avoidProb:1-risk,
-     transition:transition[d],recent:recent[d],frequency:frequency[d],
-     neuralRisk:neural[d],agree:votes[d]||0,
+     digit:d,matchProb:rankRisk,rawMatchProb:baseRisk,avoidProb:1-rankRisk,
+     transition:transition[d],transition2:transition2[d],recent:recent[d],micro:micro[d],frequency:frequency[d],
+     neuralRisk:neural[d],executionRisk:execution[d],agree:votes[d]||0,
      uncertainty,sourceConsensus
    });
  }
- rows.sort((a,b)=>a.matchProb-b.matchProb||a.neuralRisk-b.neuralRisk||b.agree-a.agree||a.digit-b.digit);
- return {rows,features:{transition,recent,frequency},weights:w};
+ rows.sort((a,b)=>a.matchProb-b.matchProb||b.sourceConsensus-a.sourceConsensus||a.neuralRisk-b.neuralRisk||a.digit-b.digit);
+ return {
+   rows,
+   features:{transition,recent,frequency,advancedSources:adaptiveSources},
+   weights:{core:coreW,advanced:advW}
+ };
 }
 function candidateOpportunityScore(x,gap,maxMatchRisk){
  const risk=Number(x.matchProb);
@@ -835,7 +910,7 @@ function renderAvoidMatchScanner(){
  $('avoidBest').textContent='DIFFER '+d.digit;
  $('avoidBest').style.color=d.ok?'#6affb6':'#ffe66d';
  const r100=rollingMatchRate(100),r250=rollingMatchRate(250),r500=rollingMatchRate(500);
- $('avoidMeta').textContent='MENOS PROBABLE: D'+d.digit+' · MATCH '+pct(d.matchProb)+' · EDGE '+(d.conservativeEdge>=0?'+':'')+pct(d.conservativeEdge)+' · '+(d.ok?'LISTO PARA DIFFER':'CARGANDO HISTORIAL');
+ $('avoidMeta').textContent='MENOS PROBABLE: D'+d.digit+' · riesgo MATCH '+pct(d.matchProb)+' · 7 señales aprendiendo · '+(d.ok?'COMPRA CONTINUA':'CARGANDO HISTORIAL');
  $('avoidRanking').innerHTML=d.rows.map(x=>'<span class="chip '+(x.digit===d.digit?'best':'')+'">D'+x.digit+' · riesgo '+pct(x.matchProb)+'</span>').join('');
  $('safetyStatus').textContent=d.ok?'DYNAMIC':'LEARNING';
  $('safetyStatus').className='big '+(d.ok?'green':'yellow');
@@ -843,7 +918,7 @@ function renderAvoidMatchScanner(){
  $('safetyMeta').textContent='0-9 siempre · max 2 seguidas · MATCH 100/250/500 '+(r100==null?'–':pct(r100))+' / '+(r250==null?'–':pct(r250))+' / '+(r500==null?'–':pct(r500))+' · HIT real '+(ec.hit==null?'–':pct(ec.hit))+' ('+ec.n+')';
  $('safetyGap').textContent=d.opportunityScore+' / '+d.opportunityThreshold;
  $('safetyRecent').textContent=r100==null?'–':pct(r100);
- $('safetyTransition').textContent='D'+d.digit+' · transicion '+pct(d.transition)+' · reciente '+pct(d.recent)+' · frecuencia '+pct(d.frequency)+' · incertidumbre '+pct(d.uncertainty);
+ $('safetyTransition').textContent='D'+d.digit+' · T1 '+pct(d.transition)+' · T2 '+pct(d.transition2)+' · micro '+pct(d.micro)+' · neural '+pct(d.neuralRisk)+' · memoria MATCH '+pct(d.executionRisk);
  return d;
 }
 function coldDigit(a,n){
