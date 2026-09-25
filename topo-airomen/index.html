@@ -27,6 +27,11 @@ button:disabled{opacity:.55;cursor:not-allowed}.formgrid{display:grid;grid-templ
  <div class="card"><div class="lab">FORWARD LEADER</div><div id="rate" class="big cyan">–</div><div id="leaderMeta" class="mini">Sin datos</div><span id="forwardStatus" class="badge">WAITING</span></div>
  <div class="card"><div class="lab">SHADOW ECONOMY</div><div id="pnl" class="big">–</div><div id="econMeta" class="mini">Sin dinero real</div></div>
 </div>
+<div class="grid">
+ <div class="card"><div class="lab">V2 ECONOMIC ENSEMBLE</div><div id="v2Rate" class="big cyan">–</div><div id="v2Meta" class="mini">Esperando laboratorio V2</div><span id="v2Status" class="badge">WAITING</span></div>
+ <div class="card"><div class="lab">V2 SHADOW / DRAWDOWN</div><div id="v2Pnl" class="big">–</div><div id="v2Risk" class="mini">Sin datos</div></div>
+ <div class="card"><div class="lab">POLÍTICA DE SESIÓN</div><div id="sessionPolicy" class="big vio">–</div><div id="policyMeta" class="mini">Se congela hasta reiniciar la sesión</div></div>
+</div>
 <div class="card">
  <div class="lab">DERIV DEMO / DBOT BRIDGE</div>
  <div class="formgrid">
@@ -56,8 +61,9 @@ button:disabled{opacity:.55;cursor:not-allowed}.formgrid{display:grid;grid-templ
   <div><div class="lab">P&L SESIÓN</div><div id="sessionPnl" class="big">+$0.00</div><div id="sessionProgress" class="mini">0.0% de la meta</div></div>
   <div><div class="lab">PRÓXIMO STAKE</div><div id="nextStake" class="big">$1.00</div><div id="sessionWL" class="mini">0 WIN · 0 LOSS</div></div>
  </div>
- <div class="controls">
+ <div class="grid" style="margin-top:10px">
   <div><div class="mini">STAKE MÁXIMO DEMO</div><input id="maxStake" type="number" inputmode="decimal" min="0.35" step="0.01" value="5.00"></div>
+  <div><div class="mini">STOP-LOSS SESIÓN</div><input id="sessionStopLoss" type="number" inputmode="decimal" min="1" step="0.50" value="5.00"></div>
   <div><div class="mini">SESIÓN</div><button id="resetSession">REINICIAR META +$20</button></div>
  </div>
  <div id="ladderInfo" class="mini statusline">PROFIT LADDER: cada WIN suma su ganancia al siguiente stake; cada LOSS vuelve al stake base. Sin martingala.</div>
@@ -79,14 +85,16 @@ function badge(el,s){el.textContent=s;el.style.color=/CANDIDATE|CONFIRMED/.test(
 async function load(){
  try{
   const base='https://raw.githubusercontent.com/quispillocharly-gif/Ia-bot-2.0/main/topo-airomen/memory/';
-  const [a,b,c,d]=await Promise.all([
+  const [a,b,c,d,e]=await Promise.all([
    fetch(base+'differ_director_latest.json?t='+Date.now(),{cache:'no-store'}),
    fetch(base+'differ_forward_latest.json?t='+Date.now(),{cache:'no-store'}),
    fetch(base+'differ_train_latest.json?t='+Date.now(),{cache:'no-store'}),
-   fetch(base+'differ_payout_snapshot.json?t='+Date.now(),{cache:'no-store'})
+   fetch(base+'differ_payout_snapshot.json?t='+Date.now(),{cache:'no-store'}),
+   fetch(base+'differ_v2_latest.json?t='+Date.now(),{cache:'no-store'})
   ]);
-  const director=a.ok?await a.json():{},f=b.ok?await b.json():{},t=c.ok?await c.json():{},p=d.ok?await d.json():{},L=f.leader||{};
-  liveRuleId=L.id||'neural_argmin';
+  const director=a.ok?await a.json():{},f=b.ok?await b.json():{},t=c.ok?await c.json():{},p=d.ok?await d.json():{},v2=e.ok?await e.json():{},L=f.leader||{},L2=v2.leader||{};
+  currentBreakEven=Number(p.max_break_even??director.break_even_rate??.9174311926605504);
+  researchPolicy=director.live_policy||{source:'v1',rule:L.id||'neural_argmin',mode:'RESEARCH_DEMO',candidate_id:f.model_id};
   $('decision').textContent=(director.decision||'WAITING').replaceAll('_',' ');
   badge($('directorStatus'),director.decision||'WAITING');
   $('directorMeta').textContent='forward '+(director.forward_status||'–')+' · candidate '+(director.candidate_model_id||'–')+' · graveyard '+(f.graveyard_size??0);
@@ -99,12 +107,18 @@ async function load(){
   $('econMeta').textContent='ROI '+pct(L.shadow_roi)+' · adj-p '+((L.bonferroni_p??1).toFixed(4));
   $('ticks').textContent=f.data_quality?.forward_ticks??0;
   $('quality').textContent='chi-square p '+(f.data_quality?.uniformity_chi_square_p==null?'–':f.data_quality.uniformity_chi_square_p.toFixed(4))+' · max dev '+pct(f.data_quality?.max_digit_share_deviation);
-  $('confirmed').textContent=(f.confirmed_variants||[]).length;
+  $('confirmed').textContent=(f.confirmed_variants||[]).length+(v2.confirmed_variants||[]).length;
   $('rows').innerHTML=(f.variants||[]).map(x=>'<tr><td><b>'+x.id+'</b></td><td>'+x.signals+'</td><td>'+x.wins+'</td><td>'+pct(x.hit_rate)+'</td><td>'+pct(x.wilson_lower)+'</td><td>'+(x.bonferroni_p??1).toFixed(4)+'</td><td>'+((x.shadow_pnl??0)>=0?'+':'')+(x.shadow_pnl??0).toFixed(2)+'</td><td>'+x.status+'</td></tr>').join('');
+  $('v2Rate').textContent=pct(L2.hit_rate);badge($('v2Status'),L2.status||v2.status||'WAITING');
+  $('v2Meta').textContent=(L2.id||'–')+' · '+(L2.signals||0)+' señales · Wilson '+pct(L2.wilson_lower);
+  $('v2Pnl').textContent=L2.shadow_pnl==null?'–':(L2.shadow_pnl>=0?'+':'')+L2.shadow_pnl.toFixed(2);
+  $('v2Pnl').className='big '+((L2.shadow_pnl??0)>=0?'green':'red');
+  $('v2Risk').textContent='max DD '+((L2.max_drawdown_flat_stake??0).toFixed(2))+' · adj-p '+((L2.bonferroni_p??1).toFixed(4));
  }catch(e){$('decision').textContent='MEMORY WAITING'}
 }
 
-let derivSocket=null,derivDemoAccount=null,publicSocket=null,liveModel=null,liveSeq=[],livePip=4,liveBarrier=null,liveBarrierProb=null,liveRuleId='neural_argmin',autoDemo=false,pendingTrade=false,activeContractId=null,tradeReq=5000,lastProposalReq=null,lastSignalEpoch=0;
+let derivSocket=null,derivDemoAccount=null,publicSocket=null,liveModel=null,liveEnsemble=null,latestLiveModel=null,latestLiveEnsemble=null,liveSeq=[],livePip=4,liveBarrier=null,liveBarrierProb=null,liveRuleId='neural_argmin',autoDemo=false,pendingTrade=false,activeContractId=null,tradeReq=5000,lastProposalReq=null,lastSignalEpoch=0;
+let researchPolicy={source:'v1',rule:'neural_argmin',mode:'RESEARCH_DEMO'},sessionPolicy={source:'v1',rule:'neural_argmin',mode:'RESEARCH_DEMO'},currentBreakEven=.9174311926605504;
 const SESSION_TARGET=20;
 let sessionPnl=0,sessionWins=0,sessionLosses=0,currentStake=1,sessionStopped=false,lastSettledContractId=null;
 function trace(msg,good=false){
@@ -113,6 +127,7 @@ function trace(msg,good=false){
 }
 function baseStake(){return Math.max(.35,Number($('demoStake')?.value)||1)}
 function maxSessionStake(){return Math.max(baseStake(),Number($('maxStake')?.value)||5)}
+function sessionStopLoss(){return Math.max(1,Number($('sessionStopLoss')?.value)||5)}
 function renderProfitSession(){
  const progress=Math.max(0,Math.min(100,(sessionPnl/SESSION_TARGET)*100));
  $('sessionPnl').textContent=(sessionPnl>=0?'+':'')+'$'+sessionPnl.toFixed(2);
@@ -124,8 +139,14 @@ function renderProfitSession(){
 function resetProfitSession(){
  sessionPnl=0;sessionWins=0;sessionLosses=0;sessionStopped=false;
  currentStake=baseStake();lastSettledContractId=null;
+ sessionPolicy={...researchPolicy};
+ if(latestLiveModel)liveModel=latestLiveModel;
+ if(latestLiveEnsemble)liveEnsemble=latestLiveEnsemble;
+ liveRuleId=sessionPolicy.rule||'neural_argmin';
+ $('sessionPolicy').textContent=(sessionPolicy.source||'v1').toUpperCase()+' · '+(liveRuleId||'–').replaceAll('_',' ');
+ $('policyMeta').textContent=(sessionPolicy.mode||'RESEARCH_DEMO')+' · '+(sessionPolicy.candidate_id||'–')+' · congelada hasta reset';
  renderProfitSession();
- trace('SESIÓN NUEVA · meta +$20.00 · stake base $'+currentStake.toFixed(2),true);
+ trace('SESIÓN NUEVA · meta +$20.00 · stop -$'+sessionStopLoss().toFixed(2)+' · '+$('sessionPolicy').textContent,true);
 }
 function applyProfitLadder(profit){
  sessionPnl+=profit;
@@ -141,6 +162,10 @@ function applyProfitLadder(profit){
    sessionStopped=true;autoDemo=false;syncAutoDemoUI();
    $('autoDemoState').textContent='META ALCANZADA: +$'+sessionPnl.toFixed(2)+' netos · AUTO-DEMO detenido.';
    trace('OBJETIVO +$20 NETOS ALCANZADO · sesión detenida',true);
+ }else if(sessionPnl<=-sessionStopLoss()){
+   sessionStopped=true;autoDemo=false;syncAutoDemoUI();
+   $('autoDemoState').textContent='STOP-LOSS DE SESIÓN alcanzado: $'+sessionPnl.toFixed(2)+' · sesión detenida.';
+   trace('STOP-LOSS -$'+sessionStopLoss().toFixed(2)+' ALCANZADO · no perseguir pérdidas');
  }
 }
 function syncAutoDemoUI(){
@@ -293,19 +318,53 @@ function denseLayer(input,W,b,activation){
  }
  return out;
 }
-function neuralProbs(seq){
- if(!liveModel||seq.length<liveModel.window)return null;
- const w=liveModel.window,x=Array(w*10).fill(0),tail=seq.slice(-w);
+function modelProbs(model,seq){
+ if(!model||seq.length<model.window)return null;
+ const w=model.window,x=Array(w*10).fill(0),tail=seq.slice(-w);
  tail.forEach((d,i)=>{x[i*10+d]=1});
  let a=x;
- for(let k=0;k<liveModel.coefs.length;k++){
-  const last=k===liveModel.coefs.length-1;
-  a=denseLayer(a,liveModel.coefs[k],liveModel.intercepts[k],last?'identity':(liveModel.activation||'relu'));
+ for(let k=0;k<model.coefs.length;k++){
+  const last=k===model.coefs.length-1;
+  a=denseLayer(a,model.coefs[k],model.intercepts[k],last?'identity':(model.activation||'relu'));
  }
- const out=(liveModel.out_activation==='softmax'||a.length>1)?softmax(a):a;
+ const out=(model.out_activation==='softmax'||a.length>1)?softmax(a):a;
  const full=Array(10).fill(1);
- (liveModel.classes||[]).forEach((c,i)=>full[Number(c)]=Number(out[i]));
+ (model.classes||[]).forEach((c,i)=>full[Number(c)]=Number(out[i]));
  return full;
+}
+function neuralProbs(seq){return modelProbs(liveModel,seq)}
+function calUpper(model,p){
+ for(const r of (model?.calibration||[]))if(Number(r.lo)<=p&&p<Number(r.hi))return Number(r.upper95_loss??1);
+ return 1;
+}
+function entropyNorm(a,n=200){
+ const z=a.slice(-n);if(!z.length)return 1;
+ const c=Array(10).fill(0);z.forEach(d=>c[d]++);
+ let h=0;for(const x of c){if(!x)continue;const p=x/z.length;h-=p*Math.log(p)}return h/Math.log(10);
+}
+function repeatRate(a,n=200){const z=a.slice(-n);if(z.length<2)return 0;let k=0;for(let i=1;i<z.length;i++)if(z[i]===z[i-1])k++;return k/(z.length-1)}
+function transitionPeak(a,n=500){
+ const z=a.slice(-n);if(z.length<20)return .1;
+ const m=Array.from({length:10},()=>Array(10).fill(0));for(let i=1;i<z.length;i++)m[z[i-1]][z[i]]++;
+ const vals=[];for(const r of m){const sum=r.reduce((x,y)=>x+y,0);if(sum)vals.push(Math.max(...r)/sum)}
+ return vals.length?vals.reduce((x,y)=>x+y,0)/vals.length:.1;
+}
+function liveRegime(){return repeatRate(liveSeq)>.13||transitionPeak(liveSeq)>.18||entropyNorm(liveSeq)<.955?'CHAOTIC':'STABLE'}
+function ensembleDecision(){
+ const models=liveEnsemble?.models||[];if(models.length<3)return null;
+ const outs=models.map(m=>{const p=modelProbs(m,liveSeq);if(!p)return null;let b=0;for(let d=1;d<10;d++)if(p[d]<p[b])b=d;return {m,p,b,pmin:Number(p[b])}});if(outs.some(x=>!x))return null;
+ const votes=Array(10).fill(0);outs.forEach(x=>votes[x.b]++);let b=0;for(let d=1;d<10;d++)if(votes[d]>votes[b])b=d;
+ const agree=votes[b],avgLoss=outs.reduce((z,x)=>z+Number(x.p[b]),0)/outs.length;
+ const uc=outs.filter(x=>x.b===b).map(x=>calUpper(x.m,x.pmin));const consLoss=Math.max(avgLoss,uc.length?Math.max(...uc):1);
+ const predWin=1-avgLoss,consWin=1-consLoss,rule=liveRuleId||'vote2_margin005',reg=liveRegime();
+ let ok=false,score=predWin;
+ if(rule==='vote2_margin005')ok=agree>=2&&predWin>=currentBreakEven+.005;
+ else if(rule==='vote2_margin010')ok=agree>=2&&predWin>=currentBreakEven+.010;
+ else if(rule==='vote3_margin005')ok=agree>=3&&predWin>=currentBreakEven+.005;
+ else if(rule==='vote2_calibrated'){score=consWin;ok=agree>=2&&consWin>=currentBreakEven+.002}
+ else if(rule==='vote3_calibrated'){score=consWin;ok=agree>=3&&consWin>=currentBreakEven+.002}
+ else if(rule==='stable_vote2_calibrated'){score=consWin;ok=agree>=2&&consWin>=currentBreakEven+.002&&reg==='STABLE'}
+ return {barrier:b,lossProb:1-score,winProb:score,agree,regime:reg,ok};
 }
 function coldDigit(a,n){
  const z=a.slice(-n),c=Array(10).fill(0);z.forEach(d=>c[d]++);
@@ -329,16 +388,22 @@ function liveGate(barrier,pmin){
  return {ok:true,agree};
 }
 function renderLiveDecision(){
+ if(sessionPolicy?.source==='v2'){
+   const d=ensembleDecision();
+   if(!d){$('liveReason').textContent='Esperando ensemble V2/ticks suficientes…';return false}
+   liveBarrier=d.barrier;liveBarrierProb=d.lossProb;
+   $('liveDiffer').textContent='DIFFER '+d.barrier;$('liveProb').textContent=pct(d.lossProb);
+   $('liveReason').textContent='V2 · '+liveRuleId+' · win conservador '+pct(d.winProb)+' · acuerdo '+d.agree+'/3 · '+d.regime+' · '+(d.ok?'SEÑAL VÁLIDA':'ESPERAR');
+   $('liveDiffer').style.color=d.ok?'#4ddcff':'#ffe66d';return d.ok;
+ }
  const p=neuralProbs(liveSeq);
  if(!p){$('liveReason').textContent='Esperando suficientes ticks/modelo neural…';return false}
  let barrier=0;for(let d=1;d<10;d++)if(p[d]<p[barrier])barrier=d;
  const pmin=Number(p[barrier]),gate=liveGate(barrier,pmin);
  liveBarrier=barrier;liveBarrierProb=pmin;
- $('liveDiffer').textContent='DIFFER '+barrier;
- $('liveProb').textContent=pct(pmin);
- $('liveReason').textContent='modelo '+(liveModel.model_id||'–')+' · regla '+liveRuleId+' · prob. DIFFER '+pct(1-pmin)+' · consenso '+gate.agree+'/3 · '+(gate.ok?'SEÑAL VÁLIDA':'ESPERAR');
- $('liveDiffer').style.color=gate.ok?'#4ddcff':'#ffe66d';
- return gate.ok;
+ $('liveDiffer').textContent='DIFFER '+barrier;$('liveProb').textContent=pct(pmin);
+ $('liveReason').textContent='V1 · '+(liveModel?.model_id||'–')+' · '+liveRuleId+' · prob. DIFFER '+pct(1-pmin)+' · consenso '+gate.agree+'/3 · '+(gate.ok?'SEÑAL VÁLIDA':'ESPERAR');
+ $('liveDiffer').style.color=gate.ok?'#4ddcff':'#ffe66d';return gate.ok;
 }
 function maybeAutoBuy(signalOk,tickEpoch=Date.now()){
  if(sessionStopped){trace('META +$20 YA ALCANZADA');return}
@@ -364,9 +429,15 @@ function maybeAutoBuy(signalOk,tickEpoch=Date.now()){
 }
 async function loadLiveModel(){
  try{
-  const r=await fetch('https://raw.githubusercontent.com/quispillocharly-gif/Ia-bot-2.0/main/topo-airomen/memory/differ_live_model.json?t='+Date.now(),{cache:'no-store'});
-  if(!r.ok)return;
-  liveModel=await r.json();
+  const base='https://raw.githubusercontent.com/quispillocharly-gif/Ia-bot-2.0/main/topo-airomen/memory/';
+  const [a,b]=await Promise.all([
+   fetch(base+'differ_live_model.json?t='+Date.now(),{cache:'no-store'}),
+   fetch(base+'differ_live_ensemble.json?t='+Date.now(),{cache:'no-store'})
+  ]);
+  if(a.ok)latestLiveModel=await a.json();
+  if(b.ok)latestLiveEnsemble=await b.json();
+  if(!liveModel&&latestLiveModel)liveModel=latestLiveModel;
+  if(!liveEnsemble&&latestLiveEnsemble)liveEnsemble=latestLiveEnsemble;
   renderLiveDecision();
  }catch(_){}
 }
@@ -398,8 +469,13 @@ $('bridgeAutoDemo').onclick=()=>setAutoDemo(!autoDemo);
 $('resetSession').onclick=()=>{resetProfitSession();if(derivSocket&&derivSocket.readyState===WebSocket.OPEN)setAutoDemo(true)};
 $('demoStake').addEventListener('change',()=>{if(sessionWins===0&&sessionLosses===0){currentStake=baseStake();renderProfitSession()}});
 $('maxStake').addEventListener('change',()=>{currentStake=Math.min(currentStake,maxSessionStake());renderProfitSession()});
+$('sessionStopLoss').addEventListener('change',()=>{renderProfitSession()});
 
 $('derivConnect').onclick=connectDerivDemo;
 
-resetProfitSession();load();loadLiveModel();startPublicDiffer();setInterval(()=>{load();loadLiveModel()},30000);
+async function bootstrap(){
+ await load();await loadLiveModel();resetProfitSession();startPublicDiffer();
+ setInterval(()=>{load();loadLiveModel()},30000);
+}
+bootstrap();
 </script></body></html>
