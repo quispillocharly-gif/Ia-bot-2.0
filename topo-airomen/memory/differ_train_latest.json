@@ -1,79 +1,79 @@
 {
   "version": "2.0-differ-neural-ensemble-research",
-  "timestamp": 1790367352,
+  "timestamp": 1790371003,
   "baseline": 0.9,
   "candidate": {
-    "model_id": "3dd90e2d7f44efe7",
-    "created_at": 1790367352,
-    "last_epoch": 1790367348,
-    "window": 10,
+    "model_id": "0e6b8250dd84d516",
+    "created_at": 1790371003,
+    "last_epoch": 1790370996,
+    "window": 8,
     "hidden": [
-      48
+      32
     ],
     "validation": {
-      "signals": 1998,
-      "wins": 1809,
-      "hit_rate": 0.9054054054054054,
-      "mean_min_probability": 0.0697494082679524,
-      "brier10": 0.0902174076255968,
-      "log_loss": 2.3135430152122387
+      "signals": 1999,
+      "wins": 1813,
+      "hit_rate": 0.9069534767383692,
+      "mean_min_probability": 0.07183232099284155,
+      "brier10": 0.09041964143969745,
+      "log_loss": 2.3230560910158884
     },
     "test": {
       "signals": 2498,
-      "wins": 2235,
-      "hit_rate": 0.8947157726180944,
-      "mean_min_probability": 0.06963200728257855,
-      "brier10": 0.09045337951975482,
-      "log_loss": 2.325664048240708
+      "wins": 2256,
+      "hit_rate": 0.9031224979983987,
+      "mean_min_probability": 0.07214756742993704,
+      "brier10": 0.09037860155068908,
+      "log_loss": 2.3213028917185348
     },
     "calibration": [
       {
         "lo": 0.0,
         "hi": 0.05,
-        "n": 45,
-        "losses": 3,
-        "empirical_loss": 0.06666666666666667,
-        "upper95_loss": 0.17856874388640825
+        "n": 18,
+        "losses": 1,
+        "empirical_loss": 0.05555555555555555,
+        "upper95_loss": 0.2575779980200754
       },
       {
         "lo": 0.05,
         "hi": 0.06,
-        "n": 229,
-        "losses": 21,
-        "empirical_loss": 0.09170305676855896,
-        "upper95_loss": 0.13611731363575633
+        "n": 144,
+        "losses": 17,
+        "empirical_loss": 0.11805555555555555,
+        "upper95_loss": 0.18093275712541537
       },
       {
         "lo": 0.06,
         "hi": 0.07,
-        "n": 682,
-        "losses": 67,
-        "empirical_loss": 0.09824046920821114,
-        "upper95_loss": 0.12288009679179077
+        "n": 598,
+        "losses": 42,
+        "empirical_loss": 0.07023411371237458,
+        "upper95_loss": 0.0935770570330578
       },
       {
         "lo": 0.07,
         "hi": 0.08,
-        "n": 809,
-        "losses": 75,
-        "empirical_loss": 0.09270704573547589,
-        "upper95_loss": 0.11466274909178102
+        "n": 942,
+        "losses": 97,
+        "empirical_loss": 0.1029723991507431,
+        "upper95_loss": 0.12402109666862661
       },
       {
         "lo": 0.08,
         "hi": 0.09,
-        "n": 228,
-        "losses": 23,
-        "empirical_loss": 0.10087719298245613,
-        "upper95_loss": 0.14681806342672366
+        "n": 295,
+        "losses": 29,
+        "empirical_loss": 0.09830508474576272,
+        "upper95_loss": 0.13761771975804582
       },
       {
         "lo": 0.09,
         "hi": 0.1,
-        "n": 5,
+        "n": 2,
         "losses": 0,
         "empirical_loss": 0.0,
-        "upper95_loss": 0.43449149475208104
+        "upper95_loss": 0.6576280471103807
       },
       {
         "lo": 0.1,
@@ -95,10 +95,99 @@
     "selection_metric": "lowest multiclass Brier, then log loss"
   },
   "ensemble_candidate": {
-    "ensemble_id": "8666691e2d4caf77",
-    "created_at": 1790367352,
-    "last_epoch": 1790367348,
+    "ensemble_id": "0eb47101dc146a10",
+    "created_at": 1790371003,
+    "last_epoch": 1790370996,
     "members": [
+      {
+        "name": "w8-h32",
+        "window": 8,
+        "hidden": [
+          32
+        ],
+        "validation": {
+          "signals": 1999,
+          "wins": 1813,
+          "hit_rate": 0.9069534767383692,
+          "mean_min_probability": 0.07183232099284155,
+          "brier10": 0.09041964143969745,
+          "log_loss": 2.3230560910158884
+        },
+        "test": {
+          "signals": 2498,
+          "wins": 2256,
+          "hit_rate": 0.9031224979983987,
+          "mean_min_probability": 0.07214756742993704,
+          "brier10": 0.09037860155068908,
+          "log_loss": 2.3213028917185348
+        },
+        "calibration": [
+          {
+            "lo": 0.0,
+            "hi": 0.05,
+            "n": 18,
+            "losses": 1,
+            "empirical_loss": 0.05555555555555555,
+            "upper95_loss": 0.2575779980200754
+          },
+          {
+            "lo": 0.05,
+            "hi": 0.06,
+            "n": 144,
+            "losses": 17,
+            "empirical_loss": 0.11805555555555555,
+            "upper95_loss": 0.18093275712541537
+          },
+          {
+            "lo": 0.06,
+            "hi": 0.07,
+            "n": 598,
+            "losses": 42,
+            "empirical_loss": 0.07023411371237458,
+            "upper95_loss": 0.0935770570330578
+          },
+          {
+            "lo": 0.07,
+            "hi": 0.08,
+            "n": 942,
+            "losses": 97,
+            "empirical_loss": 0.1029723991507431,
+            "upper95_loss": 0.12402109666862661
+          },
+          {
+            "lo": 0.08,
+            "hi": 0.09,
+            "n": 295,
+            "losses": 29,
+            "empirical_loss": 0.09830508474576272,
+            "upper95_loss": 0.13761771975804582
+          },
+          {
+            "lo": 0.09,
+            "hi": 0.1,
+            "n": 2,
+            "losses": 0,
+            "empirical_loss": 0.0,
+            "upper95_loss": 0.6576280471103807
+          },
+          {
+            "lo": 0.1,
+            "hi": 0.12,
+            "n": 0,
+            "losses": 0,
+            "empirical_loss": null,
+            "upper95_loss": 1.0
+          },
+          {
+            "lo": 0.12,
+            "hi": 1.01,
+            "n": 0,
+            "losses": 0,
+            "empirical_loss": null,
+            "upper95_loss": 1.0
+          }
+        ]
+      },
       {
         "name": "w10-h48",
         "window": 10,
@@ -107,68 +196,68 @@
         ],
         "validation": {
           "signals": 1998,
-          "wins": 1809,
-          "hit_rate": 0.9054054054054054,
-          "mean_min_probability": 0.0697494082679524,
-          "brier10": 0.0902174076255968,
-          "log_loss": 2.3135430152122387
+          "wins": 1815,
+          "hit_rate": 0.9084084084084084,
+          "mean_min_probability": 0.06887233902660152,
+          "brier10": 0.09054197115820518,
+          "log_loss": 2.329779762071422
         },
         "test": {
           "signals": 2498,
-          "wins": 2235,
-          "hit_rate": 0.8947157726180944,
-          "mean_min_probability": 0.06963200728257855,
-          "brier10": 0.09045337951975482,
-          "log_loss": 2.325664048240708
+          "wins": 2250,
+          "hit_rate": 0.900720576461169,
+          "mean_min_probability": 0.0687088457369206,
+          "brier10": 0.09053024009888624,
+          "log_loss": 2.3290119997230683
         },
         "calibration": [
           {
             "lo": 0.0,
             "hi": 0.05,
-            "n": 45,
-            "losses": 3,
+            "n": 60,
+            "losses": 4,
             "empirical_loss": 0.06666666666666667,
-            "upper95_loss": 0.17856874388640825
+            "upper95_loss": 0.15925579893767722
           },
           {
             "lo": 0.05,
             "hi": 0.06,
-            "n": 229,
-            "losses": 21,
-            "empirical_loss": 0.09170305676855896,
-            "upper95_loss": 0.13611731363575633
+            "n": 268,
+            "losses": 26,
+            "empirical_loss": 0.09701492537313433,
+            "upper95_loss": 0.13835271810980518
           },
           {
             "lo": 0.06,
             "hi": 0.07,
-            "n": 682,
-            "losses": 67,
-            "empirical_loss": 0.09824046920821114,
-            "upper95_loss": 0.12288009679179077
+            "n": 714,
+            "losses": 88,
+            "empirical_loss": 0.12324929971988796,
+            "upper95_loss": 0.1493975100693782
           },
           {
             "lo": 0.07,
             "hi": 0.08,
-            "n": 809,
-            "losses": 75,
-            "empirical_loss": 0.09270704573547589,
-            "upper95_loss": 0.11466274909178102
+            "n": 765,
+            "losses": 58,
+            "empirical_loss": 0.07581699346405228,
+            "upper95_loss": 0.09676725246413487
           },
           {
             "lo": 0.08,
             "hi": 0.09,
-            "n": 228,
-            "losses": 23,
-            "empirical_loss": 0.10087719298245613,
-            "upper95_loss": 0.14681806342672366
+            "n": 188,
+            "losses": 7,
+            "empirical_loss": 0.03723404255319149,
+            "upper95_loss": 0.07485078895864641
           },
           {
             "lo": 0.09,
             "hi": 0.1,
-            "n": 5,
+            "n": 3,
             "losses": 0,
             "empirical_loss": 0.0,
-            "upper95_loss": 0.43449149475208104
+            "upper95_loss": 0.5615060804490177
           },
           {
             "lo": 0.1,
@@ -197,150 +286,60 @@
         ],
         "validation": {
           "signals": 1996,
-          "wins": 1796,
-          "hit_rate": 0.8997995991983968,
-          "mean_min_probability": 0.07760429609646895,
-          "brier10": 0.09022428777802911,
-          "log_loss": 2.3133120430558054
+          "wins": 1793,
+          "hit_rate": 0.8982965931863728,
+          "mean_min_probability": 0.06819410527423489,
+          "brier10": 0.09061198062158064,
+          "log_loss": 2.3326188985665897
         },
         "test": {
           "signals": 2495,
-          "wins": 2250,
-          "hit_rate": 0.9018036072144289,
-          "mean_min_probability": 0.07794719065962591,
-          "brier10": 0.09024279874788674,
-          "log_loss": 2.3142622949902427
+          "wins": 2249,
+          "hit_rate": 0.9014028056112224,
+          "mean_min_probability": 0.06797723670414628,
+          "brier10": 0.0904991781779823,
+          "log_loss": 2.3280929577776863
         },
         "calibration": [
           {
             "lo": 0.0,
             "hi": 0.05,
-            "n": 2,
-            "losses": 0,
-            "empirical_loss": 0.0,
-            "upper95_loss": 0.6576280471103807
+            "n": 73,
+            "losses": 5,
+            "empirical_loss": 0.0684931506849315,
+            "upper95_loss": 0.15052299331945376
           },
           {
             "lo": 0.05,
             "hi": 0.06,
-            "n": 30,
-            "losses": 3,
-            "empirical_loss": 0.1,
-            "upper95_loss": 0.2562144131526662
-          },
-          {
-            "lo": 0.06,
-            "hi": 0.07,
-            "n": 257,
+            "n": 305,
             "losses": 28,
-            "empirical_loss": 0.10894941634241245,
-            "upper95_loss": 0.1529569303724998
-          },
-          {
-            "lo": 0.07,
-            "hi": 0.08,
-            "n": 910,
-            "losses": 78,
-            "empirical_loss": 0.08571428571428572,
-            "upper95_loss": 0.10568970144779989
-          },
-          {
-            "lo": 0.08,
-            "hi": 0.09,
-            "n": 766,
-            "losses": 87,
-            "empirical_loss": 0.11357702349869452,
-            "upper95_loss": 0.13800220361417415
-          },
-          {
-            "lo": 0.09,
-            "hi": 0.1,
-            "n": 31,
-            "losses": 4,
-            "empirical_loss": 0.12903225806451613,
-            "upper95_loss": 0.28852756954385356
-          },
-          {
-            "lo": 0.1,
-            "hi": 0.12,
-            "n": 0,
-            "losses": 0,
-            "empirical_loss": null,
-            "upper95_loss": 1.0
-          },
-          {
-            "lo": 0.12,
-            "hi": 1.01,
-            "n": 0,
-            "losses": 0,
-            "empirical_loss": null,
-            "upper95_loss": 1.0
-          }
-        ]
-      },
-      {
-        "name": "w40-h96x48",
-        "window": 40,
-        "hidden": [
-          96,
-          48
-        ],
-        "validation": {
-          "signals": 1992,
-          "wins": 1808,
-          "hit_rate": 0.9076305220883534,
-          "mean_min_probability": 0.07073264537508524,
-          "brier10": 0.0903286118590693,
-          "log_loss": 2.3181887983004597
-        },
-        "test": {
-          "signals": 2490,
-          "wins": 2247,
-          "hit_rate": 0.9024096385542169,
-          "mean_min_probability": 0.07097183538622673,
-          "brier10": 0.09052061487686336,
-          "log_loss": 2.32802176186866
-        },
-        "calibration": [
-          {
-            "lo": 0.0,
-            "hi": 0.05,
-            "n": 39,
-            "losses": 2,
-            "empirical_loss": 0.05128205128205128,
-            "upper95_loss": 0.1688593904563791
-          },
-          {
-            "lo": 0.05,
-            "hi": 0.06,
-            "n": 196,
-            "losses": 17,
-            "empirical_loss": 0.08673469387755102,
-            "upper95_loss": 0.13450131311964558
+            "empirical_loss": 0.09180327868852459,
+            "upper95_loss": 0.12948235381966305
           },
           {
             "lo": 0.06,
             "hi": 0.07,
-            "n": 627,
-            "losses": 56,
-            "empirical_loss": 0.08931419457735247,
-            "upper95_loss": 0.11421085965226249
+            "n": 695,
+            "losses": 74,
+            "empirical_loss": 0.10647482014388489,
+            "upper95_loss": 0.1316089623456862
           },
           {
             "lo": 0.07,
             "hi": 0.08,
-            "n": 839,
+            "n": 748,
             "losses": 81,
-            "empirical_loss": 0.09654350417163289,
-            "upper95_loss": 0.11840580955650504
+            "empirical_loss": 0.10828877005347594,
+            "upper95_loss": 0.13259270675011803
           },
           {
             "lo": 0.08,
             "hi": 0.09,
-            "n": 287,
-            "losses": 28,
-            "empirical_loss": 0.0975609756097561,
-            "upper95_loss": 0.137390027203985
+            "n": 171,
+            "losses": 15,
+            "empirical_loss": 0.08771929824561403,
+            "upper95_loss": 0.13967718417079494
           },
           {
             "lo": 0.09,
@@ -373,6 +372,95 @@
   },
   "ranking": [
     {
+      "name": "w8-h32",
+      "window": 8,
+      "hidden": [
+        32
+      ],
+      "validation": {
+        "signals": 1999,
+        "wins": 1813,
+        "hit_rate": 0.9069534767383692,
+        "mean_min_probability": 0.07183232099284155,
+        "brier10": 0.09041964143969745,
+        "log_loss": 2.3230560910158884
+      },
+      "test": {
+        "signals": 2498,
+        "wins": 2256,
+        "hit_rate": 0.9031224979983987,
+        "mean_min_probability": 0.07214756742993704,
+        "brier10": 0.09037860155068908,
+        "log_loss": 2.3213028917185348
+      },
+      "calibration": [
+        {
+          "lo": 0.0,
+          "hi": 0.05,
+          "n": 18,
+          "losses": 1,
+          "empirical_loss": 0.05555555555555555,
+          "upper95_loss": 0.2575779980200754
+        },
+        {
+          "lo": 0.05,
+          "hi": 0.06,
+          "n": 144,
+          "losses": 17,
+          "empirical_loss": 0.11805555555555555,
+          "upper95_loss": 0.18093275712541537
+        },
+        {
+          "lo": 0.06,
+          "hi": 0.07,
+          "n": 598,
+          "losses": 42,
+          "empirical_loss": 0.07023411371237458,
+          "upper95_loss": 0.0935770570330578
+        },
+        {
+          "lo": 0.07,
+          "hi": 0.08,
+          "n": 942,
+          "losses": 97,
+          "empirical_loss": 0.1029723991507431,
+          "upper95_loss": 0.12402109666862661
+        },
+        {
+          "lo": 0.08,
+          "hi": 0.09,
+          "n": 295,
+          "losses": 29,
+          "empirical_loss": 0.09830508474576272,
+          "upper95_loss": 0.13761771975804582
+        },
+        {
+          "lo": 0.09,
+          "hi": 0.1,
+          "n": 2,
+          "losses": 0,
+          "empirical_loss": 0.0,
+          "upper95_loss": 0.6576280471103807
+        },
+        {
+          "lo": 0.1,
+          "hi": 0.12,
+          "n": 0,
+          "losses": 0,
+          "empirical_loss": null,
+          "upper95_loss": 1.0
+        },
+        {
+          "lo": 0.12,
+          "hi": 1.01,
+          "n": 0,
+          "losses": 0,
+          "empirical_loss": null,
+          "upper95_loss": 1.0
+        }
+      ]
+    },
+    {
       "name": "w10-h48",
       "window": 10,
       "hidden": [
@@ -380,68 +468,68 @@
       ],
       "validation": {
         "signals": 1998,
-        "wins": 1809,
-        "hit_rate": 0.9054054054054054,
-        "mean_min_probability": 0.0697494082679524,
-        "brier10": 0.0902174076255968,
-        "log_loss": 2.3135430152122387
+        "wins": 1815,
+        "hit_rate": 0.9084084084084084,
+        "mean_min_probability": 0.06887233902660152,
+        "brier10": 0.09054197115820518,
+        "log_loss": 2.329779762071422
       },
       "test": {
         "signals": 2498,
-        "wins": 2235,
-        "hit_rate": 0.8947157726180944,
-        "mean_min_probability": 0.06963200728257855,
-        "brier10": 0.09045337951975482,
-        "log_loss": 2.325664048240708
+        "wins": 2250,
+        "hit_rate": 0.900720576461169,
+        "mean_min_probability": 0.0687088457369206,
+        "brier10": 0.09053024009888624,
+        "log_loss": 2.3290119997230683
       },
       "calibration": [
         {
           "lo": 0.0,
           "hi": 0.05,
-          "n": 45,
-          "losses": 3,
+          "n": 60,
+          "losses": 4,
           "empirical_loss": 0.06666666666666667,
-          "upper95_loss": 0.17856874388640825
+          "upper95_loss": 0.15925579893767722
         },
         {
           "lo": 0.05,
           "hi": 0.06,
-          "n": 229,
-          "losses": 21,
-          "empirical_loss": 0.09170305676855896,
-          "upper95_loss": 0.13611731363575633
+          "n": 268,
+          "losses": 26,
+          "empirical_loss": 0.09701492537313433,
+          "upper95_loss": 0.13835271810980518
         },
         {
           "lo": 0.06,
           "hi": 0.07,
-          "n": 682,
-          "losses": 67,
-          "empirical_loss": 0.09824046920821114,
-          "upper95_loss": 0.12288009679179077
+          "n": 714,
+          "losses": 88,
+          "empirical_loss": 0.12324929971988796,
+          "upper95_loss": 0.1493975100693782
         },
         {
           "lo": 0.07,
           "hi": 0.08,
-          "n": 809,
-          "losses": 75,
-          "empirical_loss": 0.09270704573547589,
-          "upper95_loss": 0.11466274909178102
+          "n": 765,
+          "losses": 58,
+          "empirical_loss": 0.07581699346405228,
+          "upper95_loss": 0.09676725246413487
         },
         {
           "lo": 0.08,
           "hi": 0.09,
-          "n": 228,
-          "losses": 23,
-          "empirical_loss": 0.10087719298245613,
-          "upper95_loss": 0.14681806342672366
+          "n": 188,
+          "losses": 7,
+          "empirical_loss": 0.03723404255319149,
+          "upper95_loss": 0.07485078895864641
         },
         {
           "lo": 0.09,
           "hi": 0.1,
-          "n": 5,
+          "n": 3,
           "losses": 0,
           "empirical_loss": 0.0,
-          "upper95_loss": 0.43449149475208104
+          "upper95_loss": 0.5615060804490177
         },
         {
           "lo": 0.1,
@@ -470,150 +558,60 @@
       ],
       "validation": {
         "signals": 1996,
-        "wins": 1796,
-        "hit_rate": 0.8997995991983968,
-        "mean_min_probability": 0.07760429609646895,
-        "brier10": 0.09022428777802911,
-        "log_loss": 2.3133120430558054
+        "wins": 1793,
+        "hit_rate": 0.8982965931863728,
+        "mean_min_probability": 0.06819410527423489,
+        "brier10": 0.09061198062158064,
+        "log_loss": 2.3326188985665897
       },
       "test": {
         "signals": 2495,
-        "wins": 2250,
-        "hit_rate": 0.9018036072144289,
-        "mean_min_probability": 0.07794719065962591,
-        "brier10": 0.09024279874788674,
-        "log_loss": 2.3142622949902427
+        "wins": 2249,
+        "hit_rate": 0.9014028056112224,
+        "mean_min_probability": 0.06797723670414628,
+        "brier10": 0.0904991781779823,
+        "log_loss": 2.3280929577776863
       },
       "calibration": [
         {
           "lo": 0.0,
           "hi": 0.05,
-          "n": 2,
-          "losses": 0,
-          "empirical_loss": 0.0,
-          "upper95_loss": 0.6576280471103807
+          "n": 73,
+          "losses": 5,
+          "empirical_loss": 0.0684931506849315,
+          "upper95_loss": 0.15052299331945376
         },
         {
           "lo": 0.05,
           "hi": 0.06,
-          "n": 30,
-          "losses": 3,
-          "empirical_loss": 0.1,
-          "upper95_loss": 0.2562144131526662
-        },
-        {
-          "lo": 0.06,
-          "hi": 0.07,
-          "n": 257,
+          "n": 305,
           "losses": 28,
-          "empirical_loss": 0.10894941634241245,
-          "upper95_loss": 0.1529569303724998
-        },
-        {
-          "lo": 0.07,
-          "hi": 0.08,
-          "n": 910,
-          "losses": 78,
-          "empirical_loss": 0.08571428571428572,
-          "upper95_loss": 0.10568970144779989
-        },
-        {
-          "lo": 0.08,
-          "hi": 0.09,
-          "n": 766,
-          "losses": 87,
-          "empirical_loss": 0.11357702349869452,
-          "upper95_loss": 0.13800220361417415
-        },
-        {
-          "lo": 0.09,
-          "hi": 0.1,
-          "n": 31,
-          "losses": 4,
-          "empirical_loss": 0.12903225806451613,
-          "upper95_loss": 0.28852756954385356
-        },
-        {
-          "lo": 0.1,
-          "hi": 0.12,
-          "n": 0,
-          "losses": 0,
-          "empirical_loss": null,
-          "upper95_loss": 1.0
-        },
-        {
-          "lo": 0.12,
-          "hi": 1.01,
-          "n": 0,
-          "losses": 0,
-          "empirical_loss": null,
-          "upper95_loss": 1.0
-        }
-      ]
-    },
-    {
-      "name": "w40-h96x48",
-      "window": 40,
-      "hidden": [
-        96,
-        48
-      ],
-      "validation": {
-        "signals": 1992,
-        "wins": 1808,
-        "hit_rate": 0.9076305220883534,
-        "mean_min_probability": 0.07073264537508524,
-        "brier10": 0.0903286118590693,
-        "log_loss": 2.3181887983004597
-      },
-      "test": {
-        "signals": 2490,
-        "wins": 2247,
-        "hit_rate": 0.9024096385542169,
-        "mean_min_probability": 0.07097183538622673,
-        "brier10": 0.09052061487686336,
-        "log_loss": 2.32802176186866
-      },
-      "calibration": [
-        {
-          "lo": 0.0,
-          "hi": 0.05,
-          "n": 39,
-          "losses": 2,
-          "empirical_loss": 0.05128205128205128,
-          "upper95_loss": 0.1688593904563791
-        },
-        {
-          "lo": 0.05,
-          "hi": 0.06,
-          "n": 196,
-          "losses": 17,
-          "empirical_loss": 0.08673469387755102,
-          "upper95_loss": 0.13450131311964558
+          "empirical_loss": 0.09180327868852459,
+          "upper95_loss": 0.12948235381966305
         },
         {
           "lo": 0.06,
           "hi": 0.07,
-          "n": 627,
-          "losses": 56,
-          "empirical_loss": 0.08931419457735247,
-          "upper95_loss": 0.11421085965226249
+          "n": 695,
+          "losses": 74,
+          "empirical_loss": 0.10647482014388489,
+          "upper95_loss": 0.1316089623456862
         },
         {
           "lo": 0.07,
           "hi": 0.08,
-          "n": 839,
+          "n": 748,
           "losses": 81,
-          "empirical_loss": 0.09654350417163289,
-          "upper95_loss": 0.11840580955650504
+          "empirical_loss": 0.10828877005347594,
+          "upper95_loss": 0.13259270675011803
         },
         {
           "lo": 0.08,
           "hi": 0.09,
-          "n": 287,
-          "losses": 28,
-          "empirical_loss": 0.0975609756097561,
-          "upper95_loss": 0.137390027203985
+          "n": 171,
+          "losses": 15,
+          "empirical_loss": 0.08771929824561403,
+          "upper95_loss": 0.13967718417079494
         },
         {
           "lo": 0.09,
@@ -642,67 +640,68 @@
       ]
     },
     {
-      "name": "w8-h32",
-      "window": 8,
+      "name": "w40-h96x48",
+      "window": 40,
       "hidden": [
-        32
+        96,
+        48
       ],
       "validation": {
-        "signals": 1999,
-        "wins": 1815,
-        "hit_rate": 0.9079539769884942,
-        "mean_min_probability": 0.05841669781494824,
-        "brier10": 0.0908596028789506,
-        "log_loss": 2.3439527636345425
+        "signals": 1992,
+        "wins": 1791,
+        "hit_rate": 0.8990963855421686,
+        "mean_min_probability": 0.00048292596545247175,
+        "brier10": 0.13248886708921467,
+        "log_loss": 4.942830996892493
       },
       "test": {
-        "signals": 2498,
-        "wins": 2234,
-        "hit_rate": 0.8943154523618895,
-        "mean_min_probability": 0.05856976896032047,
-        "brier10": 0.09118897760846334,
-        "log_loss": 2.3588549052436325
+        "signals": 2490,
+        "wins": 2237,
+        "hit_rate": 0.8983935742971888,
+        "mean_min_probability": 0.000516999867735282,
+        "brier10": 0.13154652768037006,
+        "log_loss": 4.928722455954106
       },
       "calibration": [
         {
           "lo": 0.0,
           "hi": 0.05,
-          "n": 456,
-          "losses": 44,
-          "empirical_loss": 0.09649122807017543,
-          "upper95_loss": 0.12705939444050143
+          "n": 1992,
+          "losses": 201,
+          "empirical_loss": 0.10090361445783133,
+          "upper95_loss": 0.11490856821682284
         },
         {
           "lo": 0.05,
           "hi": 0.06,
-          "n": 614,
-          "losses": 53,
-          "empirical_loss": 0.08631921824104234,
-          "upper95_loss": 0.11118490835864062
+          "n": 0,
+          "losses": 0,
+          "empirical_loss": null,
+          "upper95_loss": 1.0
         },
         {
           "lo": 0.06,
           "hi": 0.07,
-          "n": 599,
-          "losses": 62,
-          "empirical_loss": 0.10350584307178631,
-          "upper95_loss": 0.13048044548344237
+          "n": 0,
+          "losses": 0,
+          "empirical_loss": null,
+          "upper95_loss": 1.0
         },
         {
           "lo": 0.07,
           "hi": 0.08,
-          "n": 293,
-          "losses": 24,
-          "empirical_loss": 0.08191126279863481,
-          "upper95_loss": 0.11898437380098843
+          "n": 0,
+          "losses": 0,
+          "empirical_loss": null,
+          "upper95_loss": 1.0
         },
         {
           "lo": 0.08,
           "hi": 0.09,
-          "n": 37,
-          "losses": 1,
-          "empirical_loss": 0.02702702702702703,
-          "upper95_loss": 0.13824378437563367
+          "n": 0,
+          "losses": 0,
+          "empirical_loss": null,
+          "upper95_loss": 1.0
         },
         {
           "lo": 0.09,
