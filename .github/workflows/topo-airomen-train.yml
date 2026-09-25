@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
     paths:
+      - "topo-airomen/collect_ticks.py"
       - "topo-airomen/differ_train.py"
       - ".github/workflows/topo-airomen-train.yml"
   schedule:
@@ -16,16 +17,19 @@ concurrency:
 jobs:
   train:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 18
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
-        with: {python-version: "3.12"}
+        with:
+          python-version: "3.12"
       - run: pip install -r topo-airomen/requirements-ai.txt
-      - name: Refresh ticks
-        env: {TICK_COUNT: "10000"}
+      - name: Collect 10000 paginated ticks
+        env:
+          TICK_COUNT: "10000"
         run: python topo-airomen/collect_ticks.py
-      - run: python topo-airomen/differ_train.py
+      - name: Train chronological DIFFER candidate
+        run: python topo-airomen/differ_train.py
       - name: Persist neural candidate
         run: |
           git config user.name "github-actions[bot]"
@@ -33,4 +37,9 @@ jobs:
           git add topo-airomen/memory/differ_train_latest.json topo-airomen/memory/differ_candidate.json topo-airomen/memory/differ_candidate.joblib
           git diff --cached --quiet || git commit -m "TOPO AIROMEN neural research"
           git restore topo-airomen/ticks.json topo-airomen/audit.json
-          for attempt in 1 2 3; do git pull --rebase origin main; if git push; then break; fi; [ "$attempt" -eq 3 ] && exit 1; sleep 3; done
+          for attempt in 1 2 3; do
+            git pull --rebase origin main
+            if git push; then break; fi
+            if [ "$attempt" -eq 3 ]; then exit 1; fi
+            sleep 3
+          done
