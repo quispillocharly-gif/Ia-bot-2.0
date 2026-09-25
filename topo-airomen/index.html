@@ -54,7 +54,7 @@ button:disabled{opacity:.45;cursor:not-allowed}
 </div>
 
 <div class="card signal">
- <div class="lab">ZERO-MATCH LIVE · MATCH AI CONTRARIAN + DIFFER · 10 DÍGITOS LIBRES</div>
+ <div class="lab">ZERO-MATCH LIVE · PATTERN + LEAST-PROBABLE · 10 DÍGITOS LIBRES</div>
  <div id="bestDigit" class="digit">DIFFER –</div>
  <div id="signalMeta" class="mini">Esperando historial R_75…</div>
  <div id="ranking" class="chips"></div>
@@ -103,7 +103,7 @@ button:disabled{opacity:.45;cursor:not-allowed}
 <script>
 'use strict';
 
-const BUILD='CLEAN-2.4-STAGE-COOLDOWN';
+const BUILD='CLEAN-2.5-PATTERN-LEAST-PROBABLE';
 const CADENCE_MIN=1,CADENCE_MAX=3;
 const SYMBOL='R_75';
 const STAGE_TARGET=5;
@@ -489,6 +489,14 @@ function matchBrain(){
   return {digit:best,votes:votes[best],all:votes,preds};
 }
 
+function lastSeenDistance(d,maxLook=40){
+  const z=seq.slice(-maxLook);
+  for(let i=z.length-1;i>=0;i--){
+    if(Number(z[i])===Number(d))return z.length-i;
+  }
+  return maxLook+1;
+}
+
 function analyze(){
   if(seq.length<220 || !model)return null;
 
@@ -497,49 +505,113 @@ function analyze(){
   const t2=transitionVector(2,1200);
   const t3=transitionVector(3,1500);
   const neural=neuralVector();
+  const off=offlineVector();
+  const context=contextualMatchVector();
+  const exec=execRiskVector();
   const mb=matchBrain();
 
   const digits=[0,1,2,3,4,5,6,7,8,9];
-  // Ningún dígito queda bloqueado entre operaciones.
-  // Los 10 vuelven a competir desde cero en CADA tick.
-  const allowed=digits;
+
+  // Ocho fuentes independientes aproximan qué dígitos están "fríos".
+  const sources=[neural,t1,t2,t3,recent,off,context,exec];
+  const bottom3=sources.map(v=>[...digits].sort((x,y)=>Number(v[x])-Number(v[y])||x-y).slice(0,3));
+  const coreSources=[neural,t2,t3,off,context];
+  const coreHot2=coreSources.map(v=>[...digits].sort((x,y)=>Number(v[y])-Number(v[x])||x-y).slice(0,2));
 
   const rows=digits.map(d=>{
-    const score=
-      .45*Number(neural[d]||.1)+
-      .10*Number(recent[d]||.1)+
-      .13*Number(t1[d]||.1)+
-      .17*Number(t2[d]||.1)+
-      .15*Number(t3[d]||.1);
+    const leastVotes=bottom3.reduce((n,set)=>n+(set.includes(d)?1:0),0);
+    const coreHot=coreHot2.reduce((n,set)=>n+(set.includes(d)?1:0),0);
+    const age=lastSeenDistance(d,40);
+    const justSeen=Number(seq[seq.length-1])===d;
+    const seenLast3=seq.slice(-3).some(x=>Number(x)===d);
+
+    const baseRisk=
+      .30*Number(neural[d]||.1)+
+      .08*Number(recent[d]||.1)+
+      .10*Number(t1[d]||.1)+
+      .15*Number(t2[d]||.1)+
+      .15*Number(t3[d]||.1)+
+      .10*Number(off[d]||.1)+
+      .07*Number(context[d]||.1)+
+      .05*Number(exec[d]||.1);
+
+    // "Ya salió" no bloquea el dígito: solo exige un poco más.
+    const recentPenalty=justSeen?.0040:(seenLast3?.0020:0);
+    // La IA MATCH ha fallado mucho históricamente: sus votos se usan solo
+    // como señal secundaria contraria, nunca como criterio único.
+    const contrarianBonus=Math.min(.0024,Number(mb.all[d]||0)*.0004);
+    const patternRisk=Math.min(.30,Math.max(.001,
+      baseRisk+recentPenalty-contrarianBonus+recentBarrierLossPenalty(d)
+    ));
+
     return {
       digit:d,
-      score,
-      combined:score,
+      score:patternRisk,
+      combined:patternRisk,
+      patternRisk,
       neural:Number(neural[d]||.1),
       calibratedNeural:Number(neural[d]||.1),
       t1:Number(t1[d]||.1),
       t2:Number(t2[d]||.1),
       t3:Number(t3[d]||.1),
       recent:Number(recent[d]||.1),
+      off:Number(off[d]||.1),
+      context:Number(context[d]||.1),
+      exec:Number(exec[d]||.1),
+      leastVotes,
+      coreHot,
+      age,
+      justSeen,
+      seenLast3,
       matchVotes:Number(mb.all[d]||0)
     };
   });
 
-  const differOrder=[...allowed].sort((x,y)=>rows[x].score-rows[y].score||rows[x].neural-rows[y].neural||x-y);
-  const rankLimit=idleTradeTicks>=8?3:2;
-  const safeSet=new Set(differOrder.slice(0,rankLimit));
-  const predicted=Number(mb.digit);
-  const best=rows[predicted];
+  // Primero maximiza consenso de "menos probable"; después minimiza riesgo.
+  const sorted=[...rows].sort((x,y)=>
+    y.leastVotes-x.leastVotes ||
+    x.coreHot-y.coreHot ||
+    x.patternRisk-y.patternRisk ||
+    y.age-x.age ||
+    x.digit-y.digit
+  );
+  const best=sorted[0];
+  const second=sorted[1]||best;
 
-  const dualAgreement=safeSet.has(predicted);
-  const enoughMatchVotes=mb.votes>=2;
-  const hardRisk=best.score<=.105 && best.neural<=.115;
+  // Anti-freeze gradual: relaja consenso, nunca bloquea números.
+  let baseLeastNeed=5;
+  let maxCoreHot=0;
+  let maxRisk=.104;
+  let maxNeural=.115;
+  let minMatchVotes=2;
+  let patternPhase='STRICT';
+
+  if(idleTradeTicks>=12){
+    baseLeastNeed=3;
+    maxCoreHot=1;
+    maxRisk=.108;
+    maxNeural=.122;
+    minMatchVotes=1;
+    patternPhase='RECOVERY 12+';
+  }else if(idleTradeTicks>=6){
+    baseLeastNeed=4;
+    maxCoreHot=1;
+    maxRisk=.106;
+    maxNeural=.118;
+    minMatchVotes=1;
+    patternPhase='RECOVERY 6+';
+  }
+
+  // Si ya apareció en los últimos tres ticks, pide una fuente extra.
+  const leastNeed=Math.min(7,baseLeastNeed+(best.seenLast3?1:0));
+  const leastOk=best.leastVotes>=leastNeed;
+  const patternOk=best.coreHot<=maxCoreHot;
+  const hardRisk=best.patternRisk<=maxRisk && best.neural<=maxNeural;
+  const matchSupport=best.matchVotes>=minMatchVotes;
   const cooldownClear=stageCooldownRemaining<=0;
-  const ok=cooldownClear&&dualAgreement&&enoughMatchVotes&&hardRisk;
+  const ok=cooldownClear&&leastOk&&patternOk&&hardRisk&&matchSupport;
 
-  const sorted=[...rows].sort((x,y)=>x.score-y.score||x.neural-y.neural);
-  const second=sorted.find(x=>x.digit!==predicted)||best;
-  const gap=Math.max(0,Number(second.score)-Number(best.score));
+  const gap=Math.max(0,Number(second.patternRisk)-Number(best.patternRisk));
 
   return {
     best,
@@ -547,11 +619,13 @@ function analyze(){
     ok,
     gap,
     mr:actualMatchRate(50),
-    strategyId:'MATCH-AI CONTRARIAN + DIFFER TOP-'+rankLimit,
-    matchPredicted:predicted,
-    matchVotes:mb.votes,
-    differRank:differOrder.indexOf(predicted)+1,
-    rankLimit,
+    strategyId:'PATTERN + LEAST-PROBABLE',
+    matchPredicted:Number(mb.digit),
+    matchVotes:best.matchVotes,
+    differRank:sorted.findIndex(x=>x.digit===best.digit)+1,
+    rankLimit:leastNeed,
+    leastNeed,
+    patternPhase,
     remainingToTarget:Math.max(0,nextStageTarget()-sessionPnl),
     stage:stageNumber(),
     stageTarget:nextStageTarget(),
@@ -573,29 +647,35 @@ function renderDecision(){
   }
 
   $('bestDigit').textContent='DIFFER '+d.best.digit;
-  $('riskView').textContent=pct(d.best.score);
+  $('riskView').textContent=pct(d.best.patternRisk);
   $('riskMeta').textContent=
-    'MATCH AI predice D'+d.matchPredicted+
-    ' · votos '+d.matchVotes+'/12'+
-    ' · DIFFER rank #'+d.differRank+
-    ' · riesgo '+pct(d.best.score);
+    'MENOS PROBABLE '+d.best.leastVotes+'/8'+
+    ' · coreHot '+d.best.coreHot+
+    ' · edad '+d.best.age+'t'+
+    ' · MATCH votes '+d.best.matchVotes+
+    ' · riesgo '+pct(d.best.patternRisk);
 
   $('signalMeta').textContent=
     (d.stageCooldownRemaining>0
       ?'DESCANSO '+d.stageCooldownRemaining+' TICK'+(d.stageCooldownRemaining===1?'':'S')
       :(d.ok?'LISTO':'ESPERAR'))+
-    ' · CONTRARIAN'+
+    ' · '+d.patternPhase+
+    ' · patrón T1/T2/T3'+
+    (d.best.seenLast3?' · YA SALIÓ ≤3t: +1 confirmación':'')+
     ' · racha '+antiMatchStreak+
     ' · etapa '+d.stage+'/'+TOTAL_STAGES+
     ' · faltan $'+d.remainingToTarget.toFixed(2)+' para +$'+d.stageTarget.toFixed(0)+
-    ' · top-'+d.rankLimit+
     ' · idle '+d.idleTradeTicks+
-    ' · cadena '+d.cadenceStep+
-    ' espera '+d.ticksIntoCadence+'/'+d.cadenceWait+
+    ' · espera '+d.ticksIntoCadence+'/'+d.cadenceWait+
     ' · 10/10 DÍGITOS LIBRES';
 
   $('ranking').innerHTML=d.rows.map(x=>
-    '<span class="chip '+(x.digit===d.best.digit?'best':'')+'">D'+x.digit+' '+pct(x.score)+' · MV'+x.matchVotes+'</span>'
+    '<span class="chip '+(x.digit===d.best.digit?'best':'')+'">D'+x.digit+
+    ' LP'+x.leastVotes+'/8'+
+    ' '+pct(x.patternRisk)+
+    ' age'+x.age+
+    (x.seenLast3?' · recent':'')+
+    '</span>'
   ).join('');
   return d;
 }
@@ -629,10 +709,10 @@ function sendTrade(payload){
 function requestProposal(decision){
   if(!canTrade()||pending||activeContract||!decision?.ok)return false;
 
-  // Revalidación inmediata: MATCH AI y DIFFER deben seguir coincidiendo.
+  // Revalidación inmediata del patrón y del consenso de menos probable.
   const confirm=analyze();
   if(!confirm?.ok || Number(confirm.best.digit)!==Number(decision.best.digit)){
-    log('CANCEL BUY · consenso MATCH→DIFFER cambió');
+    log('CANCEL BUY · patrón/menos-probable cambió');
     return false;
   }
 
@@ -664,6 +744,9 @@ function requestProposal(decision){
       previousBarrier:lastBoughtDigit,
       matchVotes:Number(decision.matchVotes||0),
       differRank:Number(decision.differRank||0),
+      leastVotes:Number(decision.best.leastVotes||0),
+      patternRisk:Number(decision.best.patternRisk||0),
+      age:Number(decision.best.age||0),
       epoch:lastEpoch
     }
   };
