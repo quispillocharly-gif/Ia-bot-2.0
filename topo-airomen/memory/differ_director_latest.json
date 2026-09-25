@@ -1,6 +1,6 @@
 {
   "version": "2.0-differ-director",
-  "timestamp": 1790324685,
+  "timestamp": 1790325259,
   "decision": "COLLECT_V2_FORWARD_DATA",
   "baseline_random": 0.9,
   "payout_status": "OK",
@@ -44,30 +44,49 @@
   },
   "v2_leader": {
     "id": "vote2_margin005",
-    "signals": 554,
-    "wins": 496,
-    "losses": 58,
-    "hit_rate": 0.8953068592057761,
-    "wilson_lower": 0.8670325816983447,
-    "raw_economic_p": 0.9722548876347656,
+    "signals": 617,
+    "wins": 553,
+    "losses": 64,
+    "hit_rate": 0.8962722852512156,
+    "wilson_lower": 0.8697106142695731,
+    "raw_economic_p": 0.9732026755588095,
     "bonferroni_p": 1.0,
-    "shadow_pnl": -13.360000000000067,
-    "shadow_roi": -0.024115523465704093,
-    "max_drawdown_flat_stake": 14.250000000000066,
-    "temporal_blocks": [],
+    "shadow_pnl": -14.230000000000075,
+    "shadow_roi": -0.02306320907617516,
+    "max_drawdown_flat_stake": 15.130000000000075,
+    "temporal_blocks": [
+      {
+        "n": 206,
+        "wins": 180,
+        "hit_rate": 0.8737864077669902,
+        "wilson_lower": 0.8214923096122266
+      },
+      {
+        "n": 206,
+        "wins": 191,
+        "hit_rate": 0.9271844660194175,
+        "wilson_lower": 0.8833481283732438
+      },
+      {
+        "n": 205,
+        "wins": 182,
+        "hit_rate": 0.8878048780487805,
+        "wilson_lower": 0.8372760515183417
+      }
+    ],
     "block_stable": false,
     "prospective_sessions": {
       "target": 20.0,
       "stop_loss": 5.0,
       "base_stake": 1.0,
       "max_stake": 5.0,
-      "completed": 6,
+      "completed": 7,
       "targets": 0,
-      "stops": 6,
+      "stops": 7,
       "target_rate": 0.0,
-      "open_pnl": -2.5884183899999997,
-      "open_stake": 1.4115816100000003,
-      "open_trades": 26
+      "open_pnl": -3.319714790257523,
+      "open_stake": 1.5386239549000005,
+      "open_trades": 39
     },
     "status": "COLLECTING"
   },
@@ -78,7 +97,7 @@
   "ensemble_id": "8c3cc077eb40bd9e",
   "live_policy": {
     "version": "2.0-live-policy",
-    "timestamp": 1790324685,
+    "timestamp": 1790325259,
     "source": "v1",
     "rule": "neural_argmin",
     "candidate_id": "f32e2858ae10b449",
