@@ -36,7 +36,15 @@ def main():
     else:
         decision="NO_CONFIRMED_EDGE_CONTINUE_RESEARCH"
 
-    if l2 and int(l2.get("signals",0) or 0)>0:
+    n1=int(l1.get("signals",0) or 0); n2=int(l2.get("signals",0) or 0)
+    use_v2=bool(c2)
+    if not use_v2 and n2>=300 and viable(l2,be):
+        if not viable(l1,be) or float(l2.get("wilson_lower",0) or 0)>=float(l1.get("wilson_lower",0) or 0):
+            use_v2=True
+    if not use_v2 and n2>=600 and not viable(l1,be):
+        use_v2=float(l2.get("wilson_lower",0) or 0)>float(l1.get("wilson_lower",0) or 0)
+
+    if use_v2:
         source="v2"; rule=l2.get("id"); leader=l2
         confirmed=rule in c2
         candidate_id=v2.get("ensemble_id")
