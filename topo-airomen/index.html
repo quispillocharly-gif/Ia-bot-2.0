@@ -313,8 +313,8 @@ let lastBoughtBarrier=null,sameBarrierBuyStreak=0;
 const MAX_SAME_BARRIER_BUYS=1;
 let recentBarrierHistory=[],matchRecoveryTicks=0,lastProfitCheckpoint=0;
 const DIVERSIFY_MEMORY=30;
-const IMMEDIATE_REPEAT_PENALTY=.010;
-const RECENT_USE_PENALTY=.0025;
+const IMMEDIATE_REPEAT_PENALTY=.004;
+const RECENT_USE_PENALTY=.0010;
 const ALT_RISK_TOLERANCE=.0075;
 const ONLINE_LEARNER_KEY='topo_airomen_avoidmatch_learner_v2';
 const ADV_RANKER_KEY='topo_airomen_adv_ranker_v1';
@@ -336,7 +336,7 @@ let currentWinStreak=0,bestWinStreak=0,bestStreakContext=null,streakTargetHit=fa
 let lastSettlementProbeEpoch=0;
 let pendingSignalSnapshot=null,activeSignalSnapshot=null;
 let buyReqContexts=new Map(),activeContractContexts=new Map(),settledContractIds=new Set();
-const MAX_INFLIGHT_CONTRACTS=3;
+const MAX_INFLIGHT_CONTRACTS=1;
 let sessionPnl=0,sessionWins=0,sessionLosses=0,currentStake=1,sessionStopped=false,lastSettledContractId=null;
 let sessionBatchTrades=0,sessionBatchWins=0,sessionStage=1,sessionPauseLeft=0;
 const SESSION_STATS_KEY='topo_airomen_session_stats_v1';
@@ -406,10 +406,10 @@ function selectDiversifiedDigit(rows){
  const last2=recentBarrierHistory[recentBarrierHistory.length-2];
  const ranked=pool.map(x=>{
    const d=Number(x.digit),use=counts[d]||0;
-   const immediate=(d===Number(last1)?IMMEDIATE_REPEAT_PENALTY:0)+(d===Number(last2)?.004:0);
+   const immediate=(d===Number(last1)?IMMEDIATE_REPEAT_PENALTY:0)+(d===Number(last2)?.0015:0);
    const reuse=RECENT_USE_PENALTY*use;
-   const diversityBonus=.0009*(maxCount-use);
-   const adjusted=Number(x.matchProb)+immediate+reuse-diversityBonus+.025*Number(x.uncertainty||0);
+   const diversityBonus=.00035*(maxCount-use);
+   const adjusted=Number(x.matchProb)+immediate+reuse-diversityBonus+.012*Number(x.uncertainty||0);
    return {...x,adjustedRisk:adjusted,recentUse:use};
  }).sort((a,b)=>a.adjustedRisk-b.adjustedRisk||Number(a.matchProb)-Number(b.matchProb));
  return ranked[0]||sorted[0];
@@ -524,7 +524,7 @@ function resetProfitSession(){
  if(latestLiveEnsemble)liveEnsemble=latestLiveEnsemble;
  liveRuleId='avoid_match_adaptive_all_digits';
  $('sessionPolicy').textContent='V3 · AVOID MATCH';
- $('policyMeta').textContent='ANTI-MATCH CONTINUO - stake gradual redondeado a 2 decimales - contratos separados - max USD 6 - objetivo +20';
+ $('policyMeta').textContent='ANTI-MATCH ESTADISTICO - 1 contrato a la vez - estadistica real prioritaria - neural solo apoyo - stake gradual - objetivo +20';
  renderProfitSession();renderStreakLab();
  trace('SESIÓN NUEVA · meta +$20.00 · stop -$'+sessionStopLoss().toFixed(2)+' · '+$('sessionPolicy').textContent,true);
 }
@@ -1122,7 +1122,19 @@ function scanAvoidMatchDigits(){
  for(let d=0;d<10;d++){
    const learnedRisk=adaptiveSources.reduce((z,v,i)=>z+advW[i]*Number(v[d]||0),0);
    const legacyRisk=coreW[0]*transition[d]+coreW[1]*recent[d]+coreW[2]*frequency[d];
-   const baseRisk=.70*learnedRisk+.18*legacyRisk+.12*execution[d];
+
+   // PRIORIDAD ESTADISTICA:
+   // transición 1/2, frecuencia, recencia y desempeño real pesan mucho más
+   // que la red neural. La IA queda como desempate/apoyo.
+   const statisticalRisk=
+     .22*Number(transition[d]||0)+
+     .20*Number(transition2[d]||0)+
+     .16*Number(recent[d]||0)+
+     .10*Number(micro[d]||0)+
+     .18*Number(frequency[d]||0)+
+     .14*Number(execution[d]||0);
+   const adaptiveStat=.65*legacyRisk+.35*learnedRisk;
+   const baseRisk=.72*statisticalRisk+.20*adaptiveStat+.08*Number(neural[d]||0);
    const components=allSources.map(v=>Number(v[d]||0));
    const uncertainty=Math.max(...components)-Math.min(...components);
    // Conservative ranking only: uncertainty slightly penalizes a digit, but never blocks a trade.
@@ -1314,7 +1326,7 @@ function maybeAutoBuy(signalOk,tickEpoch=Date.now()){
  liveBarrierProb=chosenRisk;
  $('liveDiffer').textContent='DIFFER '+chosenBarrier;
  $('liveProb').textContent=pct(chosenRisk);
- $('liveReason').textContent='ANTI-MATCH SUAVE - D'+chosenBarrier+' - riesgo '+pct(chosenRisk)+' - uso reciente '+Number(pick.recentUse||0)+' - todos los digitos compiten';
+ $('liveReason').textContent='ESTADISTICA PRIORITARIA - D'+chosenBarrier+' - riesgo '+pct(chosenRisk)+' - uso reciente '+Number(pick.recentUse||0)+' - 1 contrato a la vez';
  if(tickEpoch===lastSignalEpoch){trace('TICK YA PROCESADO');return}
  lastSignalEpoch=tickEpoch;
  const stake=money2(Math.min(HARD_MAX_STAKE,maxSessionStake(),Math.max(.35,currentStake||baseStake())));
