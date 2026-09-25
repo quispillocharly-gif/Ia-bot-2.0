@@ -1,6 +1,6 @@
 {
   "version": "2.0-differ-director",
-  "timestamp": 1790321670,
+  "timestamp": 1790321861,
   "decision": "COLLECT_V2_FORWARD_DATA",
   "baseline_random": 0.9,
   "payout_status": "OK",
@@ -78,7 +78,7 @@
   "ensemble_id": "798d92d801221615",
   "live_policy": {
     "version": "2.0-live-policy",
-    "timestamp": 1790321670,
+    "timestamp": 1790321861,
     "source": "v1",
     "rule": "neural_argmin",
     "candidate_id": "41df350ce7fca84c",
@@ -91,7 +91,7 @@
     "leader_wilson": 0.8936098287697176,
     "leader_shadow_pnl": -33.96000000000019,
     "money_policy": null,
-    "note": "Demo-only policy. Research continues in parallel. A session freezes its selected entry and money-management policy until reset."
+    "note": "Demo-only policy. Research continues in parallel. The DIFFER digit is recalculated across 0-9 every tick; no digit is frozen. Money-management policy remains session-scoped."
   },
   "note": "High DIFFER hit rate alone is not enough. Director prioritizes economic forward evidence and keeps live execution demo-only."
 }
