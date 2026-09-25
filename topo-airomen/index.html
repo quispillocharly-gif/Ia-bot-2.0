@@ -159,7 +159,7 @@ button:disabled{opacity:.55;cursor:not-allowed}
   <div><div class="lab">ÚLTIMA COMPRA DEMO</div><div id="lastDemoBuy" class="big">–</div></div>
  </div>
  <div class="controls">
-  <div><div class="mini">STAKE BASE DEMO</div><input id="demoStake" type="number" inputmode="decimal" min="0.35" step="0.01" value="1.00"></div>
+  <div><div class="mini">STAKE BASE DEMO</div><input id="demoStake" type="number" inputmode="decimal" min="0.35" max="6" step="0.01" value="1.00"></div>
   <div><div class="mini">AUTO-COMPRA</div><button id="autoDemoToggle">AUTO-DEMO OFF</button></div>
  </div>
  <div class="grid" style="margin-top:10px">
@@ -168,11 +168,16 @@ button:disabled{opacity:.55;cursor:not-allowed}
   <div><div class="lab">PRÓXIMO STAKE</div><div id="nextStake" class="big">$1.00</div><div id="sessionWL" class="mini">0 WIN · 0 LOSS</div></div>
  </div>
  <div class="grid" style="margin-top:10px">
-  <div><div class="mini">STAKE MÁXIMO DEMO</div><input id="maxStake" type="number" inputmode="decimal" min="0.35" step="0.01" value="5.00"></div>
+  <div><div class="mini">STAKE MÁXIMO DEMO</div><input id="maxStake" type="number" inputmode="decimal" min="0.35" max="6" step="0.01" value="6.00"></div>
   <div><div class="mini">STOP-LOSS SESIÓN</div><input id="sessionStopLoss" type="number" inputmode="decimal" min="1" step="0.50" value="5.00"></div>
   <div><div class="mini">SESIÓN</div><button id="resetSession">REINICIAR META +$20</button></div>
  </div>
- <div id="ladderInfo" class="mini statusline">PROFIT LADDER: cada WIN suma su ganancia al siguiente stake; cada LOSS vuelve al stake base. Sin martingala.</div>
+ <div class="grid" style="margin-top:10px">
+  <div><div class="lab">RACHA ACTUAL</div><div id="streakCurrent" class="big cyan">0 / 46</div><div id="streakPhase" class="mini">FASE 1 - BUSCANDO VENTAJA</div></div>
+  <div><div class="lab">MEJOR RACHA</div><div id="streakBest" class="big green">0</div><div id="streakBestMeta" class="mini">Sin racha registrada</div></div>
+  <div><div class="lab">46 WIN STREAK LAB</div><div id="streakLabState" class="big yellow">BUSCANDO 46</div><div id="streakLabMeta" class="mini">Filtro progresivo segun la racha.</div></div>
+ </div>
+ <div id="ladderInfo" class="mini statusline">46 WIN STREAK LAB: un LOSS reinicia la racha; el sistema aprende de las mejores rachas. Stake maximo USD 6. Sin martingala.</div>
  <div id="autoDemoState" class="mini statusline">La IA analiza continuamente los 10 dígitos y solo compra cuando detecta una oportunidad anti-MATCH que además supera el margen económico. Sin espera fija. Solo demo.</div>
  <div id="tradeTrace" class="mini statusline">TRACE: esperando AUTO-DEMO…</div>
 </div>
@@ -260,6 +265,11 @@ let recentTradeResults=[],consecutiveDemoLosses=0;
 let researchPolicy={source:'v1',rule:'neural_argmin',mode:'RESEARCH_DEMO'},sessionPolicy={source:'v1',rule:'neural_argmin',mode:'RESEARCH_DEMO'},currentBreakEven=.9174311926605504;
 let activeMoneyPolicy={promoted:false,compound_fraction:1,pause_after_match:0,batch_size:5,stage_size:5};
 const SESSION_TARGET=20;
+const WIN_STREAK_TARGET=46;
+const HARD_MAX_STAKE=6;
+const STREAK_LAB_KEY='topo_airomen_streak_lab_v1';
+let currentWinStreak=0,bestWinStreak=0,bestStreakContext=null,streakTargetHit=false;
+let pendingSignalSnapshot=null,activeSignalSnapshot=null;
 let sessionPnl=0,sessionWins=0,sessionLosses=0,currentStake=1,sessionStopped=false,lastSettledContractId=null;
 let sessionBatchTrades=0,sessionBatchWins=0,sessionStage=1,sessionPauseLeft=0;
 const SESSION_STATS_KEY='topo_airomen_session_stats_v1';
@@ -285,19 +295,24 @@ function rollingMatchRate(n){
 function rollingCount(n){return Math.min(n,selectorStats.outcomes.length)}
 function clamp01(x){return Math.max(0,Math.min(1,Number(x)||0))}
 function adaptiveOpportunityThreshold(){
- let threshold=48;
+ let threshold=streakPhase().score;
  const r100=rollingMatchRate(100),n100=rollingCount(100);
  if(n100>=30){
-   if(r100>=.13)threshold=72;
-   else if(r100>=.11)threshold=62;
-   else if(r100>=.09)threshold=54;
-   else if(r100<=.07)threshold=44;
+   if(r100>=.13)threshold=Math.max(threshold,72);
+   else if(r100>=.11)threshold=Math.max(threshold,62);
+   else if(r100>=.09)threshold=Math.max(threshold,54);
+   else if(r100<=.07)threshold=Math.max(streakPhase().score,44);
  }
  if(consecutiveDemoLosses>=3)threshold=Math.max(threshold,78);
  else if(consecutiveDemoLosses>=2)threshold=Math.max(threshold,68);
  else if(consecutiveDemoLosses===1)threshold=Math.max(threshold,56);
  return threshold;
 }
+function loadStreakLab(){try{const x=JSON.parse(localStorage.getItem(STREAK_LAB_KEY)||'null');if(x){bestWinStreak=Math.max(0,Number(x.bestWinStreak)||0);bestStreakContext=x.bestStreakContext||null}}catch(_){}}
+function saveStreakLab(){try{localStorage.setItem(STREAK_LAB_KEY,JSON.stringify({bestWinStreak:bestWinStreak,bestStreakContext:bestStreakContext}))}catch(_){}}
+function streakPhase(){if(currentWinStreak>=40)return {name:'FASE 5 - PROTEGER 40+',score:72,edge:.0050};if(currentWinStreak>=30)return {name:'FASE 4 - PROTEGER 30+',score:66,edge:.0035};if(currentWinStreak>=20)return {name:'FASE 3 - PROTEGER 20+',score:60,edge:.0022};if(currentWinStreak>=10)return {name:'FASE 2 - PROTEGER 10+',score:54,edge:.0012};return {name:'FASE 1 - BUSCANDO VENTAJA',score:48,edge:.0003};}
+function renderStreakLab(){const p=streakPhase();if($('streakCurrent'))$('streakCurrent').textContent=currentWinStreak+' / '+WIN_STREAK_TARGET;if($('streakPhase'))$('streakPhase').textContent=p.name;if($('streakBest'))$('streakBest').textContent=bestWinStreak;if($('streakLabState'))$('streakLabState').textContent=streakTargetHit?'46 ALCANZADO':'BUSCANDO '+WIN_STREAK_TARGET;if($('streakLabMeta'))$('streakLabMeta').textContent='min SCORE '+p.score+' - min EDGE '+pct(p.edge)+' - stake max USD '+HARD_MAX_STAKE.toFixed(2);if($('streakBestMeta')){const c=bestStreakContext;$('streakBestMeta').textContent=c?('EDGE '+(c.edge>=0?'+':'')+pct(c.edge)+' - SCORE '+c.score+' - D'+c.barrier):'Sin racha registrada'}}
+function updateWinStreak(profit){if(profit>0){currentWinStreak++;if(currentWinStreak>=WIN_STREAK_TARGET)streakTargetHit=true;if(currentWinStreak>bestWinStreak){bestWinStreak=currentWinStreak;bestStreakContext=activeSignalSnapshot?Object.assign({},activeSignalSnapshot):bestStreakContext;saveStreakLab()}}else{currentWinStreak=0}renderStreakLab();}
 function sessionStats(){
  try{return JSON.parse(localStorage.getItem(SESSION_STATS_KEY)||'{"wins":0,"losses":0}')}catch(_){return {wins:0,losses:0}}
 }
@@ -321,8 +336,8 @@ function trace(msg,good=false){
  const el=$('tradeTrace'); if(!el)return;
  el.textContent='TRACE: '+msg; el.style.color=good?'#6affb6':'#8ca4c8';
 }
-function baseStake(){return Math.max(.35,Number($('demoStake')?.value)||1)}
-function maxSessionStake(){return Math.max(baseStake(),Number($('maxStake')?.value)||5)}
+function baseStake(){return Math.min(HARD_MAX_STAKE,Math.max(.35,Number($('demoStake')?.value)||1))}
+function maxSessionStake(){return Math.min(HARD_MAX_STAKE,Math.max(baseStake(),Number($('maxStake')?.value)||HARD_MAX_STAKE))}
 function sessionStopLoss(){return Math.max(1,Number($('sessionStopLoss')?.value)||5)}
 function renderProfitSession(){
  const progress=Math.max(0,Math.min(100,(sessionPnl/SESSION_TARGET)*100));
@@ -334,6 +349,7 @@ function renderProfitSession(){
 }
 function resetProfitSession(){
  sessionPnl=0;sessionWins=0;sessionLosses=0;sessionStopped=false;
+ currentWinStreak=0;streakTargetHit=false;activeSignalSnapshot=null;pendingSignalSnapshot=null;
  currentStake=baseStake();lastSettledContractId=null;
  sessionPolicy={source:'v3',rule:'avoid_match_adaptive_all_digits',mode:'RESEARCH_DEMO',candidate_id:(latestLiveEnsemble?.ensemble_id||researchPolicy.candidate_id||'–')};
  activeMoneyPolicy=researchPolicy.money_policy?{...researchPolicy.money_policy}:{promoted:false,compound_fraction:1,pause_after_match:0,batch_size:5,stage_size:5};
@@ -344,8 +360,8 @@ function resetProfitSession(){
  if(latestLiveEnsemble)liveEnsemble=latestLiveEnsemble;
  liveRuleId='avoid_match_adaptive_all_digits';
  $('sessionPolicy').textContent='V3 · AVOID MATCH';
- $('policyMeta').textContent='0–9 compiten cada tick · puede repetir el mejor · EDGE ágil · más entradas válidas · freno adaptativo';
- renderProfitSession();
+ $('policyMeta').textContent='46 WIN STREAK LAB · 0-9 compiten cada tick · filtro progresivo · stake max USD 6';
+ renderProfitSession();renderStreakLab();
  trace('SESIÓN NUEVA · meta +$20.00 · stop -$'+sessionStopLoss().toFixed(2)+' · '+$('sessionPolicy').textContent,true);
 }
 function applyProfitLadder(profit){
@@ -375,11 +391,17 @@ function applyProfitLadder(profit){
    }
  }
  renderProfitSession();
- if(sessionPnl>=SESSION_TARGET){
+ if(sessionPnl>=SESSION_TARGET && streakTargetHit){
    countFinishedSession('WIN');
    sessionStopped=true;autoDemo=false;syncAutoDemoUI();
-   $('autoDemoState').textContent='META ALCANZADA: +$'+sessionPnl.toFixed(2)+' netos · AUTO-DEMO detenido.';
-   trace('OBJETIVO +$20 NETOS ALCANZADO · sesión detenida',true);
+   $('autoDemoState').textContent='META COMPLETA: USD '+sessionPnl.toFixed(2)+' y racha de 46 WIN registrada. AUTO-DEMO detenido.';
+   trace('OBJETIVO COMPLETO: USD 20 Y RACHA 46 WIN',true);
+ }else if(sessionPnl>=SESSION_TARGET && !streakTargetHit){
+   $('autoDemoState').textContent='USD 20 alcanzados. STREAK LAB sigue buscando la racha de 46 WIN.';
+   trace('META ECONOMICA OK - buscando racha '+currentWinStreak+'/'+WIN_STREAK_TARGET);
+ }else if(streakTargetHit && sessionPnl<SESSION_TARGET){
+   $('autoDemoState').textContent='Racha 46 WIN lograda. Buscando completar USD 20 netos.';
+   trace('RACHA 46 OK - PNL '+sessionPnl.toFixed(2)+' / 20');
  }else if(sessionPnl<=-sessionStopLoss()){
    countFinishedSession('LOSS');
    sessionStopped=true;autoDemo=false;syncAutoDemoUI();
@@ -491,7 +513,9 @@ async function connectDerivDemo(){
       pendingTrade=false;
       activeTradeBarrier=(pendingBuyBarrier==null?liveBarrier:Number(pendingBuyBarrier));
       pendingBuyBarrier=null;
-      trace('BUY OK · contrato '+activeContractId+' · DIFFER '+activeTradeBarrier,true);
+      activeSignalSnapshot=pendingSignalSnapshot?Object.assign({},pendingSignalSnapshot):null;
+      pendingSignalSnapshot=null;
+      trace('BUY OK · contrato '+activeContractId+' · DIFFER '+activeTradeBarrier+' · racha '+currentWinStreak+'/'+WIN_STREAK_TARGET,true);
       $('lastDemoBuy').textContent='DIFFER '+activeTradeBarrier;
       $('lastDemoBuy').className='big yellow';
       $('autoDemoState').textContent='Contrato demo activo '+activeContractId+' · esperando resultado.';
@@ -510,7 +534,9 @@ async function connectDerivDemo(){
         activeContractId=null; pendingTrade=false;activeTradeBarrier=null;
         recentTradeResults.push(profit>=0?1:0);if(recentTradeResults.length>50)recentTradeResults.shift();
         consecutiveDemoLosses=profit<0?consecutiveDemoLosses+1:0;
+        updateWinStreak(profit);
         applyProfitLadder(profit);
+        activeSignalSnapshot=null;
         if(!sessionStopped)$('autoDemoState').textContent='Contrato demo cerrado · reanalizando los 10 dígitos hasta detectar otra oportunidad anti-MATCH.';
         trace('CONTRATO CERRADO · '+(profit>=0?'WIN ':'LOSS ')+profit.toFixed(2)+' · P&L sesión '+sessionPnl.toFixed(2),profit>=0);
         if(m.subscription?.id)derivSocket.send(JSON.stringify({forget:m.subscription.id}));
@@ -706,7 +732,7 @@ function avoidMatchDecision(){
  const gap=Math.max(0,Number(second.matchProb)-Number(best.matchProb));
  const predictedWin=1-Number(best.matchProb);
  const edge=predictedWin-currentBreakEven;
- const minEdge=.0003;
+ const minEdge=streakPhase().edge;
  const economicMatchLimit=Math.max(.04,1-currentBreakEven-minEdge);
  const maxMatchRisk=Math.min(.085,economicMatchLimit);
  const minGap=.0008;
@@ -816,8 +842,9 @@ function maybeAutoBuy(signalOk,tickEpoch=Date.now()){
  let chosenBarrier=Number(liveBarrier);
  if(tickEpoch===lastSignalEpoch){trace('TICK YA PROCESADO');return}
  lastSignalEpoch=tickEpoch;
- const stake=Math.max(.35,currentStake||baseStake());
+ const stake=Math.min(HARD_MAX_STAKE,Math.max(.35,currentStake||baseStake()));
  const currency=derivDemoAccount?.currency||derivDemoAccount?.currency_code||'USD';
+ pendingSignalSnapshot={barrier:chosenBarrier,edge:Number(lastAvoidDecision?.edge||0),score:Number(lastAvoidDecision?.opportunityScore||0),matchProb:Number(lastAvoidDecision?.matchProb||0),streakBefore:currentWinStreak,epoch:tickEpoch};
  pendingTrade=true;
  const req=++tradeReq;lastProposalReq={req,stake,barrier:chosenBarrier};
  $('lastDemoBuy').textContent='PROPUESTA '+chosenBarrier;
@@ -871,13 +898,14 @@ function startPublicDiffer(){
 $('autoDemoToggle').onclick=()=>setAutoDemo(!autoDemo);
 $('bridgeAutoDemo').onclick=()=>setAutoDemo(!autoDemo);
 $('resetSession').onclick=()=>{resetProfitSession();if(derivSocket&&derivSocket.readyState===WebSocket.OPEN)setAutoDemo(true)};
-$('demoStake').addEventListener('change',()=>{if(sessionWins===0&&sessionLosses===0){currentStake=baseStake();renderProfitSession()}});
-$('maxStake').addEventListener('change',()=>{currentStake=Math.min(currentStake,maxSessionStake());renderProfitSession()});
+$('demoStake').addEventListener('change',()=>{if(Number($('demoStake').value)>HARD_MAX_STAKE)$('demoStake').value=HARD_MAX_STAKE.toFixed(2);if(sessionWins===0&&sessionLosses===0){currentStake=baseStake();renderProfitSession()}});
+$('maxStake').addEventListener('change',()=>{if(Number($('maxStake').value)>HARD_MAX_STAKE)$('maxStake').value=HARD_MAX_STAKE.toFixed(2);currentStake=Math.min(currentStake,maxSessionStake(),HARD_MAX_STAKE);renderProfitSession()});
 $('sessionStopLoss').addEventListener('change',()=>{renderProfitSession()});
 
 $('derivConnect').onclick=connectDerivDemo;
 
 async function bootstrap(){
+ loadStreakLab();renderStreakLab();
  await load();await loadLiveModel();renderSessionStats();resetProfitSession();startPublicDiffer();
  setInterval(()=>{load();loadLiveModel()},30000);
 }
