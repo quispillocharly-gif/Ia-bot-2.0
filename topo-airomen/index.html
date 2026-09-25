@@ -173,7 +173,7 @@ button:disabled{opacity:.55;cursor:not-allowed}
   <div><div class="mini">SESIÓN</div><button id="resetSession">REINICIAR META +$20</button></div>
  </div>
  <div id="ladderInfo" class="mini statusline">PROFIT LADDER: cada WIN suma su ganancia al siguiente stake; cada LOSS vuelve al stake base. Sin martingala.</div>
- <div id="autoDemoState" class="mini statusline">Después de cada operación espera 1 tick y vuelve a aplicar la MISMA regla a los 10 dígitos. Solo compra si el nuevo ranking 0–9 pasa el filtro anti-MATCH. Solo demo.</div>
+ <div id="autoDemoState" class="mini statusline">La IA analiza continuamente los 10 dígitos y solo compra cuando detecta una oportunidad anti-MATCH que además supera el margen económico. Sin espera fija. Solo demo.</div>
  <div id="tradeTrace" class="mini statusline">TRACE: esperando AUTO-DEMO…</div>
 </div>
 <div class="card"><div class="lab">TOURNAMENT · 6 VARIANTES PREDECLARADAS</div><div class="scroll"><table>
@@ -252,8 +252,6 @@ async function load(){
 
 let derivSocket=null,derivDemoAccount=null,publicSocket=null,liveModel=null,liveEnsemble=null,latestLiveModel=null,latestLiveEnsemble=null,liveSeq=[],livePip=4,liveBarrier=null,liveBarrierProb=null,liveRuleId='neural_argmin',autoDemo=false,pendingTrade=false,activeContractId=null,tradeReq=5000,lastProposalReq=null,lastSignalEpoch=0;
 let latestPublicTickEpoch=0,latestPublicTickDigit=null,latestPublicTickQuote=null,ticksWithoutSignal=0;
-const MODERATE_COOLDOWN_TICKS=1;
-let cooldownTicksRemaining=0;
 let lastAvoidDecision=null,pendingLearnSnapshot=null;
 const ONLINE_LEARNER_KEY='topo_airomen_avoidmatch_learner_v2';
 let researchPolicy={source:'v1',rule:'neural_argmin',mode:'RESEARCH_DEMO'},sessionPolicy={source:'v1',rule:'neural_argmin',mode:'RESEARCH_DEMO'},currentBreakEven=.9174311926605504;
@@ -301,12 +299,12 @@ function resetProfitSession(){
  currentStake=baseStake();lastSettledContractId=null;
  sessionPolicy={source:'v3',rule:'avoid_match_adaptive_all_digits',mode:'RESEARCH_DEMO',candidate_id:(latestLiveEnsemble?.ensemble_id||researchPolicy.candidate_id||'–')};
  activeMoneyPolicy=researchPolicy.money_policy?{...researchPolicy.money_policy}:{promoted:false,compound_fraction:1,pause_after_match:0,batch_size:5,stage_size:5};
- sessionBatchTrades=0;sessionBatchWins=0;sessionStage=1;sessionPauseLeft=0;cooldownTicksRemaining=0;
+ sessionBatchTrades=0;sessionBatchWins=0;sessionStage=1;sessionPauseLeft=0;
  if(latestLiveModel)liveModel=latestLiveModel;
  if(latestLiveEnsemble)liveEnsemble=latestLiveEnsemble;
  liveRuleId='avoid_match_adaptive_all_digits';
  $('sessionPolicy').textContent='V3 · AVOID MATCH';
- $('policyMeta').textContent='RESEARCH_DEMO · selector 0–9 dinámico · ensemble '+(sessionPolicy.candidate_id||'–')+' · aprendizaje continuo';
+ $('policyMeta').textContent='RESEARCH_DEMO · selector 0–9 dinámico · sin espera fija · compra solo con oportunidad válida · aprendizaje continuo';
  renderProfitSession();
  trace('SESIÓN NUEVA · meta +$20.00 · stop -$'+sessionStopLoss().toFixed(2)+' · '+$('sessionPolicy').textContent,true);
 }
@@ -373,8 +371,8 @@ function setAutoDemo(next){
      return false;
    }
    autoDemo=true;
-   $('autoDemoState').textContent='AUTO-DEMO activo · ritmo moderado · 1 tick de pausa entre compras · solo demo.';
-   trace('AUTO-DEMO ARMADO · ritmo moderado · pausa 1 tick',true);
+   $('autoDemoState').textContent='AUTO-DEMO activo · analiza 0–9 y compra solo con oportunidad anti-MATCH válida · solo demo.';
+   trace('AUTO-DEMO ARMADO · esperando oportunidad anti-MATCH válida',true);
  }else{
    autoDemo=false;
    $('autoDemoState').textContent='AUTO-DEMO apagado. La IA sigue analizando.';
@@ -468,8 +466,7 @@ async function connectDerivDemo(){
         $('lastDemoBuy').className='big '+(profit>=0?'green':'red');
         activeContractId=null; pendingTrade=false;
         applyProfitLadder(profit);
-        if(!sessionStopped)cooldownTicksRemaining=MODERATE_COOLDOWN_TICKS;
-        if(!sessionStopped)$('autoDemoState').textContent='Contrato demo cerrado · profit '+profit.toFixed(2)+' · pausa moderada de '+cooldownTicksRemaining+' ticks · próximo stake $'+currentStake.toFixed(2);
+        if(!sessionStopped)$('autoDemoState').textContent='Contrato demo cerrado · reanalizando los 10 dígitos hasta detectar otra oportunidad anti-MATCH.';
         trace('CONTRATO CERRADO · '+(profit>=0?'WIN ':'LOSS ')+profit.toFixed(2)+' · P&L sesión '+sessionPnl.toFixed(2),profit>=0);
         if(m.subscription?.id)derivSocket.send(JSON.stringify({forget:m.subscription.id}));
 
@@ -646,7 +643,8 @@ function avoidMatchDecision(){
 
  const best=eligible[0],second=eligible[1]||best;
  const gap=Math.max(0,Number(second.matchProb)-Number(best.matchProb));
- const maxMatchRisk=.09;
+ const economicMatchLimit=Math.max(.04,1-currentBreakEven-.003);
+ const maxMatchRisk=Math.min(.08,economicMatchLimit);
  const minGap=.0025;
  const historyOk=liveSeq.length>=40;
  const riskOk=Number(best.matchProb)<=maxMatchRisk;
@@ -671,7 +669,7 @@ function renderAvoidMatchScanner(){
  const w=d.weights;
  $('avoidBest').textContent='DIFFER '+d.digit;
  $('avoidBest').style.color=d.ok?'#6affb6':'#ffe66d';
- $('avoidMeta').textContent='Regla 0–9 · riesgo MATCH '+pct(d.matchProb)+' · evitar '+pct(d.avoidProb)+' · gap '+pct(d.gap)+' · '+(d.ok?'SEÑAL VÁLIDA':'SOLO ANALIZAR');
+ $('avoidMeta').textContent='0–9 · riesgo MATCH '+pct(d.matchProb)+' · límite '+pct(d.maxMatchRisk)+' · gap '+pct(d.gap)+' · '+(d.ok?'OPORTUNIDAD VÁLIDA':'SEGUIR ANALIZANDO');
  $('avoidRanking').innerHTML=d.rows.map(x=>'<span class="chip '+(x.digit===d.digit?'best':'')+'">D'+x.digit+' · riesgo '+pct(x.matchProb)+'</span>').join('');
  $('safetyStatus').textContent=d.ok?'DYNAMIC':'LEARNING';
  $('safetyStatus').className='big '+(d.ok?'green':'yellow');
@@ -737,18 +735,7 @@ function tryNextTickTrade(){
 function maybeAutoBuy(signalOk,tickEpoch=Date.now()){
  if(sessionStopped){trace('META +$20 YA ALCANZADA');return}
  if(!autoDemo){trace('AUTO-DEMO OFF');return}
- if(cooldownTicksRemaining>0){
-   trace('RITMO MODERADO · analizando tick · faltan '+cooldownTicksRemaining+' antes de comprar');
-   cooldownTicksRemaining--;
-   $('autoDemoState').textContent='IA analizando los 10 dígitos · pausa moderada · '+cooldownTicksRemaining+' ticks restantes antes de otra compra.';
-   return;
- }
- if(!signalOk){trace('SEÑAL FILTRADA · '+liveRuleId);return}
- if(activeMoneyPolicy.promoted && sessionPauseLeft>0){
-   sessionPauseLeft--;
-   trace('V4 PAUSA POST-MATCH · señal omitida · faltan '+sessionPauseLeft);
-   return;
- }
+ if(!signalOk){trace('SIN OPORTUNIDAD CLARA · IA sigue analizando los 10 dígitos');return}
  if(pendingTrade){trace('ESPERANDO RESPUESTA DE PROPUESTA/BUY');return}
  if(activeContractId){trace('CONTRATO '+activeContractId+' AÚN ABIERTO');return}
  if(!derivSocket||derivSocket.readyState!==WebSocket.OPEN){trace('WEBSOCKET DEMO NO LISTO');return}
