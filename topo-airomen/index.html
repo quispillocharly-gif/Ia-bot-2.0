@@ -515,7 +515,7 @@ function resetProfitSession(){
  if(latestLiveEnsemble)liveEnsemble=latestLiveEnsemble;
  liveRuleId='avoid_match_adaptive_all_digits';
  $('sessionPolicy').textContent='V3 · AVOID MATCH';
- $('policyMeta').textContent='ANTI-MATCH ADAPTATIVO - diversificacion suave 0-9 - recuperacion post-MATCH - checkpoints +5/+10/+15 - objetivo +20';
+ $('policyMeta').textContent='ANTI-MATCH CONTINUO - aprovecha cada tick disponible - diversificacion suave 0-9 - recalibra sin pausar - objetivo +20';
  renderProfitSession();renderStreakLab();
  trace('SESIÓN NUEVA · meta +$20.00 · stop -$'+sessionStopLoss().toFixed(2)+' · '+$('sessionPolicy').textContent,true);
 }
@@ -773,9 +773,15 @@ async function connectDerivDemo(){
         recordExecutedTrade(profit,activeSignalSnapshot);
         applyProfitLadder(profit);
         activeSignalSnapshot=null;
-        if(!sessionStopped)$('autoDemoState').textContent='Contrato demo cerrado · reanalizando los 10 dígitos hasta detectar otra oportunidad anti-MATCH.';
+        if(!sessionStopped)$('autoDemoState').textContent='Contrato demo cerrado · usando el tick más reciente para preparar la siguiente compra.';
         trace('CONTRATO CERRADO · '+(profit>=0?'WIN ':'LOSS ')+profit.toFixed(2)+' · P&L sesión '+sessionPnl.toFixed(2),profit>=0);
         if(m.subscription?.id)derivSocket.send(JSON.stringify({forget:m.subscription.id}));
+
+        // Catch-up: si el tick de cierre llegó mientras el contrato seguía activo,
+        // compra para el siguiente tick inmediatamente después de liquidar.
+        if(autoDemo&&!sessionStopped&&latestPublicTickEpoch&&latestPublicTickEpoch!==lastSignalEpoch){
+          setTimeout(()=>tryNextTickTrade(),0);
+        }
 
       }
     }
@@ -1156,21 +1162,18 @@ function tryNextTickTrade(){
    };
  }
  ticksWithoutSignal=0;
+
+ // Las protecciones ahora recalibran el ranking, pero NO bloquean compras.
  if(blockPauseTicks>0){
-   const before=blockPauseTicks;
    blockPauseTicks=Math.max(0,blockPauseTicks-1);
-   $('autoDemoState').textContent='PROTECCIÓN DE RACHA · '+before+' tick'+(before===1?'':'s')+' de recalibración · sigue aprendiendo sin comprar.';
-   trace('RECALIBRANDO BLOQUE · '+before+' tick'+(before===1?'':'s'));
+   trace('RECALIBRACIÓN DE RACHA ACTIVA · '+blockPauseTicks+' ticks restantes · compra continua');
    renderStreakLab();
-   return;
  }
  if(matchRecoveryTicks>0){
-   const before=matchRecoveryTicks;
    matchRecoveryTicks=Math.max(0,matchRecoveryTicks-1);
-   $('autoDemoState').textContent='RECUPERACIÓN ANTI-MATCH · observando '+before+' tick'+(before===1?'':'s')+' · sin perseguir pérdidas.';
-   trace('RECUPERACIÓN POST-MATCH · '+before+' tick'+(before===1?'':'s')+' · ranking sigue aprendiendo');
-   return;
+   trace('RECALIBRACIÓN POST-MATCH · '+matchRecoveryTicks+' ticks restantes · compra continua');
  }
+
  maybeAutoBuy(ok,latestPublicTickEpoch);
 }
 function maybeAutoBuy(signalOk,tickEpoch=Date.now()){
