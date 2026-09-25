@@ -399,7 +399,7 @@ function resetProfitSession(){
  if(latestLiveEnsemble)liveEnsemble=latestLiveEnsemble;
  liveRuleId='avoid_match_adaptive_all_digits';
  $('sessionPolicy').textContent='V3 · AVOID MATCH';
- $('policyMeta').textContent='46 WIN STREAK LAB PRO · 0-9 · max 2 seguidas/numero · EDGE conservador · consenso multi-modelo · payout real · stake max USD 6';
+ $('policyMeta').textContent='MODO MENOS PROBABLE · ordena 0-9 cada tick · compra el menor riesgo MATCH · max 2 seguidas/numero · stake max USD 6';
  renderProfitSession();renderStreakLab();
  trace('SESIÓN NUEVA · meta +$20.00 · stop -$'+sessionStopLoss().toFixed(2)+' · '+$('sessionPolicy').textContent,true);
 }
@@ -472,7 +472,7 @@ function setAutoDemo(next){
      return false;
    }
    autoDemo=true;
-   $('autoDemoState').textContent='AUTO-DEMO activo · analiza 0–9 y compra solo con oportunidad anti-MATCH válida · solo demo.';
+   $('autoDemoState').textContent='AUTO-DEMO activo · en cada tick compra DIFFER sobre el dígito menos probable · solo demo.';
    trace('AUTO-DEMO ARMADO · esperando oportunidad anti-MATCH válida',true);
  }else{
    autoDemo=false;
@@ -544,24 +544,12 @@ async function connectDerivDemo(){
       const predictedWin=Number(lastProposalReq.predictedWin||0);
       const realEdge=predictedWin-realBreakEven;
       const requiredEdge=Number(lastProposalReq.minEdge??streakPhase().edge);
-      if(payout>0 && realEdge<requiredEdge){
-        pendingTrade=false;
-        if(pendingSignalSnapshot){
-          pendingSignalSnapshot.realBreakEven=realBreakEven;
-          pendingSignalSnapshot.realEdge=realEdge;
-        }
-        trace('PROPUESTA DESCARTADA · EDGE real '+(realEdge>=0?'+':'')+pct(realEdge)+' < minimo '+pct(requiredEdge));
-        $('autoDemoState').textContent='Payout cambio: la ventaja desaparecio antes de comprar. Reanalizando 0-9.';
-        lastProposalReq=null;
-        pendingSignalSnapshot=null;
-        return;
-      }
       if(pendingSignalSnapshot){
         pendingSignalSnapshot.realBreakEven=realBreakEven;
         pendingSignalSnapshot.realEdge=realEdge;
       }
       pendingBuyBarrier=Number(lastProposalReq.barrier);
-      trace('PROPUESTA OK · EDGE real '+(realEdge>=0?'+':'')+pct(realEdge)+' · enviando BUY',true);
+      trace('PROPUESTA OK · MENOS PROBABLE D'+lastProposalReq.barrier+' · enviando BUY',true);
       derivSocket.send(JSON.stringify({buy:p.id,price:maxPrice,req_id:++tradeReq}));
       $('lastDemoBuy').textContent='COMPRANDO…';
       lastProposalReq=null;
@@ -825,7 +813,7 @@ function avoidMatchDecision(){
  const opportunityThreshold=adaptiveOpportunityThreshold();
  const opportunityScore=candidateOpportunityScore(best,gap,maxMatchRisk);
  const scoreOk=opportunityScore>=opportunityThreshold || strongEdge;
- const ok=historyOk && riskOk && edgeOk && consensusOk && uncertaintyOk && gapOk && scoreOk;
+ const ok=historyOk;
 
  return {
    ...best,gap,ok,riskOk,edgeOk,consensusOk,uncertaintyOk,gapOk,scoreOk,maxMatchRisk,minGap,
@@ -847,7 +835,7 @@ function renderAvoidMatchScanner(){
  $('avoidBest').textContent='DIFFER '+d.digit;
  $('avoidBest').style.color=d.ok?'#6affb6':'#ffe66d';
  const r100=rollingMatchRate(100),r250=rollingMatchRate(250),r500=rollingMatchRate(500);
- $('avoidMeta').textContent='EDGE CONS. '+(d.conservativeEdge>=0?'+':'')+pct(d.conservativeEdge)+' · SCORE '+d.opportunityScore+'/'+d.opportunityThreshold+' · consenso '+d.sourceConsensus+'/4 · '+(d.ok?'ENTRADA VÁLIDA':'ANALIZANDO');
+ $('avoidMeta').textContent='MENOS PROBABLE: D'+d.digit+' · MATCH '+pct(d.matchProb)+' · EDGE '+(d.conservativeEdge>=0?'+':'')+pct(d.conservativeEdge)+' · '+(d.ok?'LISTO PARA DIFFER':'CARGANDO HISTORIAL');
  $('avoidRanking').innerHTML=d.rows.map(x=>'<span class="chip '+(x.digit===d.digit?'best':'')+'">D'+x.digit+' · riesgo '+pct(x.matchProb)+'</span>').join('');
  $('safetyStatus').textContent=d.ok?'DYNAMIC':'LEARNING';
  $('safetyStatus').className='big '+(d.ok?'green':'yellow');
@@ -885,7 +873,7 @@ function renderLiveDecision(){
    liveBarrier=a.digit;liveBarrierProb=a.matchProb;
    $('liveDiffer').textContent='DIFFER '+a.digit;
    $('liveProb').textContent=pct(a.matchProb);
-   $('liveReason').textContent='0-9 · D'+a.digit+' · EDGE CONS. '+(a.conservativeEdge>=0?'+':'')+pct(a.conservativeEdge)+' · consenso '+a.sourceConsensus+'/4 · SCORE '+a.opportunityScore+'/'+a.opportunityThreshold+' · '+(a.ok?'COMPRAR':'ESPERAR');
+   $('liveReason').textContent='0-9 ordenados por riesgo · D'+a.digit+' es el MENOS PROBABLE ahora · MATCH '+pct(a.matchProb)+' · '+(a.ok?'COMPRAR DIFFER':'CARGANDO');
    $('liveDiffer').style.color=a.ok?'#4ddcff':'#ffe66d';
    return a.ok;
  }
@@ -927,37 +915,21 @@ function maybeAutoBuy(signalOk,tickEpoch=Date.now()){
  let chosenUncertainty=Number(lastAvoidDecision?.uncertainty||0);
  if(chosenBarrier===lastBoughtBarrier && sameBarrierBuyStreak>=MAX_SAME_BARRIER_BUYS){
    const rows=lastAvoidDecision?.rows||[];
-   const bestRisk=Number(rows[0]?.matchProb??1);
-   const maxRisk=Number(lastAvoidDecision?.maxMatchRisk??.085);
-   const minScore=Number(lastAvoidDecision?.opportunityThreshold??adaptiveOpportunityThreshold());
-   const minEdge=Number(lastAvoidDecision?.minEdge??streakPhase().edge);
-   const phase=streakPhase();
-   const alt=rows.find(x=>{
-     if(Number(x.digit)===Number(lastBoughtBarrier))return false;
-     const risk=Number(x.matchProb);
-     const rawEdge=(1-risk)-currentBreakEven;
-     const uncPenalty=Math.max(0,Number(x.uncertainty||0)-.020)*(currentWinStreak>=30?.10:.06);
-     const edge=rawEdge-uncPenalty;
-     if(risk>maxRisk || edge<minEdge)return false;
-     if(Number(x.sourceConsensus||0)<phase.consensus || Number(x.uncertainty||0)>phase.maxUnc)return false;
-     const score=candidateOpportunityScore(x,Number(lastAvoidDecision?.gap??0),maxRisk);
-     return score>=minScore && (risk-bestRisk)<=ALT_RISK_TOLERANCE;
-   });
+   const alt=rows.find(x=>Number(x.digit)!==Number(lastBoughtBarrier));
    if(!alt){
-     trace('ANTI-REPETICIÓN · D'+lastBoughtBarrier+' ya se usó 2 veces · esperando otro dígito con ventaja');
-     $('autoDemoState').textContent='Máximo 2 compras seguidas por número: esperando otro dígito que también cumpla EDGE y SCORE.';
+     trace('ANTI-REPETICIÓN · sin alternativa disponible');
      return;
    }
    chosenBarrier=Number(alt.digit);
    liveBarrier=chosenBarrier;
    liveBarrierProb=Number(alt.matchProb);
    chosenRisk=Number(alt.matchProb);
-   chosenScore=candidateOpportunityScore(alt,Number(lastAvoidDecision?.gap??0),maxRisk);
+   chosenScore=Number(lastAvoidDecision?.opportunityScore||0);
    chosenConsensus=Number(alt.sourceConsensus||0);
    chosenUncertainty=Number(alt.uncertainty||0);
    $('liveDiffer').textContent='DIFFER '+chosenBarrier;
    $('liveProb').textContent=pct(liveBarrierProb);
-   $('liveReason').textContent='ANTI-REPETICIÓN · D'+lastBoughtBarrier+' llegó a 2 · cambia a D'+chosenBarrier+' con ventaja válida';
+   $('liveReason').textContent='D'+lastBoughtBarrier+' llegó a 2 compras seguidas · usa el siguiente MENOS PROBABLE: D'+chosenBarrier;
  }
  if(tickEpoch===lastSignalEpoch){trace('TICK YA PROCESADO');return}
  lastSignalEpoch=tickEpoch;
