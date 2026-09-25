@@ -321,6 +321,7 @@ const ADV_RANKER_KEY='topo_airomen_adv_ranker_v1';
 const SELECTOR_STATS_KEY='topo_airomen_selector_stats_v3';
 let recentTradeResults=[],consecutiveDemoLosses=0;
 let stableCandidateDigit=null,stableCandidateTicks=0,stableCandidateEpoch=0;
+let ticksSinceBuy=0,gateSkips=0;
 let researchPolicy={source:'v1',rule:'neural_argmin',mode:'RESEARCH_DEMO'},sessionPolicy={source:'v1',rule:'neural_argmin',mode:'RESEARCH_DEMO'},currentBreakEven=.9174311926605504;
 let activeMoneyPolicy={promoted:false,compound_fraction:1,pause_after_match:0,batch_size:5,stage_size:5};
 const SESSION_TARGET=20;
@@ -508,6 +509,7 @@ function conservativeRiskEstimate(p,confidence,support){
 }
 function requiredStableTicks(){
  const mr=executedMatchRate(50);
+ if(ticksSinceBuy>=8 && (mr==null||mr<.14) && consecutiveDemoLosses<2)return 1;
  if(consecutiveDemoLosses>=2)return 3;
  if(mr!=null&&mr>=.14)return 3;
  if(mr!=null&&mr>=.10)return 2;
@@ -540,6 +542,17 @@ function selectiveAntiMatchGate(pick){
  }
  if(consecutiveDemoLosses>=2){maxRisk-=.004;minCold+=1;maxHot=Math.max(0,maxHot-1);minConf+=.05}
 
+ // MODO OPORTUNIDAD: si pasan muchos ticks sin entrada, relajamos solo
+ // criterios secundarios. Riesgo y señales calientes siguen protegidos.
+ const waitRelax=clamp01((ticksSinceBuy-4)/12);
+ const safeRelax=(mr!=null&&mr>=.14)?waitRelax*.25:(mr!=null&&mr>=.12)?waitRelax*.45:waitRelax;
+ minCold=Math.max(1,minCold-Math.floor(safeRelax*1.25));
+ minConf=Math.max(.30,minConf-.10*safeRelax);
+ minGap=Math.max(.00003,minGap*(1-.75*safeRelax));
+ maxUnc=Math.min(.105,maxUnc+.018*safeRelax);
+ if((mr==null||mr<.10)&&ticksSinceBuy>=10)maxHot=Math.min(4,maxHot+1);
+ if((mr==null||mr<.10)&&ticksSinceBuy>=12)maxRisk=Math.min(.118,maxRisk+.003);
+
  const checks={
    risk:risk<=maxRisk,
    cold:cold>=minCold,
@@ -549,7 +562,7 @@ function selectiveAntiMatchGate(pick){
    uncertainty:unc<=maxUnc
  };
  const pass=Object.values(checks).every(Boolean);
- return {pass,mr,n,risk,cold,hot,conf,gap,unc,maxRisk,minCold,maxHot,minConf,minGap,maxUnc,checks};
+ return {pass,mr,n,risk,cold,hot,conf,gap,unc,maxRisk,minCold,maxHot,minConf,minGap,maxUnc,waitRelax,safeRelax,checks};
 }
 function executionCalibration(){
  const z=execHistory.slice(-60),n=z.length;
@@ -614,7 +627,7 @@ function resetProfitSession(){
  if(latestLiveEnsemble)liveEnsemble=latestLiveEnsemble;
  liveRuleId='avoid_match_adaptive_all_digits';
  $('sessionPolicy').textContent='V3 · AVOID MATCH';
- $('policyMeta').textContent='ANTI-MATCH SELECTIVO PRO - riesgo conservador + confirmación 1-3 ticks + T1/T2/T3 + memoria 24/7 - objetivo +20';
+ $('policyMeta').textContent='ANTI-MATCH BALANCE - filtro selectivo + modo oportunidad adaptativo + riesgo duro protegido + memoria 24/7 - objetivo +20';
  renderProfitSession();renderStreakLab();
  trace('SESIÓN NUEVA · meta +$20.00 · stop -$'+sessionStopLoss().toFixed(2)+' · '+$('sessionPolicy').textContent,true);
 }
@@ -798,6 +811,7 @@ function processR75MarketMessage(m,source){
    latestPublicTickEpoch=epoch;
    latestPublicTickDigit=d;
    latestPublicTickQuote=q;
+   if(autoDemo&&!sessionStopped)ticksSinceBuy=Math.min(999,ticksSinceBuy+1);
    learnFromObservedDigit(d);
    liveSeq.push(d);if(liveSeq.length>1500)liveSeq.shift();
    $('liveTick').textContent=q+' · '+d;
@@ -934,6 +948,8 @@ async function connectDerivDemo(){
       lastSettlementProbeEpoch=0;
       pendingTrade=false;
       stableCandidateDigit=null;stableCandidateTicks=0;stableCandidateEpoch=0;
+ ticksSinceBuy=0;gateSkips=0;
+      ticksSinceBuy=0;gateSkips=0;
       pendingBuyBarrier=null;
 
       const barrier=Number(ctx.barrier);
@@ -1514,7 +1530,12 @@ function maybeAutoBuy(signalOk,tickEpoch=Date.now()){
  let chosenConsensus=Number(pick.sourceConsensus||0);
  let chosenUncertainty=Number(pick.uncertainty||0);
  const stable=updateCandidateStability(chosenBarrier,tickEpoch);
- const requiredStable=requiredStableTicks();
+ const strongNow=
+   Number(pick.conservativeRisk??chosenRisk)<=.100 &&
+   Number(pick.sourceConsensus||0)>=3 &&
+   Number(pick.dangerConsensus||0)<=1 &&
+   Number(pick.confidence||0)>=.48;
+ const requiredStable=strongNow?1:requiredStableTicks();
  if(stable<requiredStable){
    $('liveReason').textContent='CONFIRMANDO D'+chosenBarrier+' · '+stable+'/'+requiredStable+' ticks estables · riesgo conservador '+pct(pick.conservativeRisk??chosenRisk);
    trace('SKIP TICK · confirmando D'+chosenBarrier+' · '+stable+'/'+requiredStable+' · riesgo conservador '+pct(pick.conservativeRisk??chosenRisk));
@@ -1522,16 +1543,17 @@ function maybeAutoBuy(signalOk,tickEpoch=Date.now()){
  }
  const gate=selectiveAntiMatchGate(pick);
  if(!gate.pass){
+   gateSkips=Math.min(999,gateSkips+1);
    const failed=Object.entries(gate.checks).filter(([,v])=>!v).map(([k])=>k).join(',');
    $('liveReason').textContent='ESPERAR · D'+chosenBarrier+' no supera filtro anti-MATCH · '+failed;
-   trace('SKIP TICK · D'+chosenBarrier+' · riesgo '+pct(chosenRisk)+' · cold '+gate.cold+' · hot '+gate.hot+' · gap '+pct(gate.gap)+' · MATCH real '+(gate.mr==null?'–':pct(gate.mr)));
+   trace('SKIP · '+ticksSinceBuy+' ticks sin BUY · D'+chosenBarrier+' · cons '+pct(gate.risk)+' · cold '+gate.cold+' · hot '+gate.hot+' · relax '+pct(gate.safeRelax)+' · falla '+failed);
    return;
  }
  liveBarrier=chosenBarrier;
  liveBarrierProb=chosenRisk;
  $('liveDiffer').textContent='DIFFER '+chosenBarrier;
  $('liveProb').textContent=pct(chosenRisk);
- $('liveReason').textContent='ENTRADA SELECTIVA - D'+chosenBarrier+' · riesgo '+pct(chosenRisk)+' · cold '+gate.cold+' · hot '+gate.hot+' · gap '+pct(gate.gap)+' · MATCH real '+(gate.mr==null?'–':pct(gate.mr));
+ $('liveReason').textContent='ENTRADA SELECTIVA - D'+chosenBarrier+' · cons '+pct(gate.risk)+' · cold '+gate.cold+' · hot '+gate.hot+' · espera '+ticksSinceBuy+' ticks · relax '+pct(gate.safeRelax);
  if(tickEpoch===lastSignalEpoch){trace('TICK YA PROCESADO');return}
  lastSignalEpoch=tickEpoch;
  const stake=money2(Math.min(HARD_MAX_STAKE,maxSessionStake(),Math.max(.35,currentStake||baseStake())));
