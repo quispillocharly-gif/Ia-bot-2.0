@@ -320,6 +320,7 @@ const ONLINE_LEARNER_KEY='topo_airomen_avoidmatch_learner_v2';
 const ADV_RANKER_KEY='topo_airomen_adv_ranker_v1';
 const SELECTOR_STATS_KEY='topo_airomen_selector_stats_v3';
 let recentTradeResults=[],consecutiveDemoLosses=0;
+let stableCandidateDigit=null,stableCandidateTicks=0,stableCandidateEpoch=0;
 let researchPolicy={source:'v1',rule:'neural_argmin',mode:'RESEARCH_DEMO'},sessionPolicy={source:'v1',rule:'neural_argmin',mode:'RESEARCH_DEMO'},currentBreakEven=.9174311926605504;
 let activeMoneyPolicy={promoted:false,compound_fraction:1,pause_after_match:0,batch_size:5,stage_size:5};
 const SESSION_TARGET=20;
@@ -392,11 +393,11 @@ function recentDigitCount(d,n=DIVERSIFY_MEMORY){
 }
 function selectDiversifiedDigit(rows){
  if(!Array.isArray(rows)||!rows.length)return null;
- const sorted=[...rows].sort((a,b)=>Number(a.matchProb)-Number(b.matchProb));
- const bestRisk=Number(sorted[0]?.matchProb??1);
+ const sorted=[...rows].sort((a,b)=>Number(a.conservativeRisk??a.matchProb)-Number(b.conservativeRisk??b.matchProb));
+ const bestRisk=Number(sorted[0]?.conservativeRisk??sorted[0]?.matchProb??1);
  const r100=rollingMatchRate(100);
  const tolerance=(r100!=null&&r100>=.11)?.0025:.0045;
- let pool=sorted.filter(x=>Number(x.matchProb)<=bestRisk+tolerance);
+ let pool=sorted.filter(x=>Number(x.conservativeRisk??x.matchProb)<=bestRisk+tolerance);
  if(!pool.length)pool=[sorted[0]];
  const counts=Array.from({length:10},(_,d)=>recentDigitCount(d));
  const maxCount=Math.max(...counts,1);
@@ -409,7 +410,7 @@ function selectDiversifiedDigit(rows){
    const diversityBonus=.00035*(maxCount-use);
    const coldBonus=.00055*Math.min(6,Number(x.sourceConsensus||0));
    const hotPenalty=.0010*Math.min(6,Number(x.dangerConsensus||0));
-   const adjusted=Number(x.matchProb)+immediate+reuse-diversityBonus+.010*Number(x.uncertainty||0)+hotPenalty-coldBonus;
+   const adjusted=Number(x.conservativeRisk??x.matchProb)+immediate+reuse-diversityBonus+.010*Number(x.uncertainty||0)+hotPenalty-coldBonus;
    return {...x,adjustedRisk:adjusted,recentUse:use};
  }).sort((a,b)=>a.adjustedRisk-b.adjustedRisk||Number(a.matchProb)-Number(b.matchProb));
  const first=ranked[0]||sorted[0];
@@ -456,6 +457,10 @@ function recordExecutedTrade(profit,snapshot){
   edge:Number(s.realEdge??s.edge??0),
   score:Number(s.score??0),
   matchProb:Number(s.matchProb??0),
+  conservativeRisk:Number(s.conservativeRisk??s.matchProb??0),
+  evidenceSupport:Number(s.evidenceSupport??0),
+  stableTicks:Number(s.stableTicks??0),
+  requiredStableTicks:Number(s.requiredStableTicks??0),
   barrier:Number(s.barrier??-1),
   streakBefore:Number(s.streakBefore??0),
   last1:Number(s.last1??-1),
@@ -476,22 +481,62 @@ function executedMatchRate(n=50){
  if(!z.length)return null;
  return z.reduce((a,b)=>a+(Number(b.win||0)===0?1:0),0)/z.length;
 }
+function currentContextSupport(){
+ const z=liveSeq;
+ if(!z.length)return {t1:0,t2:0,t3:0,offline:0,effective:1};
+ const l1=z[z.length-1],l2=z[z.length-2],l3=z[z.length-3];
+ let t1=0,t2=0,t3=0;
+ for(let i=1;i<z.length;i++)if(z[i-1]===l1)t1++;
+ for(let i=2;i<z.length;i++)if(z[i-2]===l2&&z[i-1]===l1)t2++;
+ for(let i=3;i<z.length;i++)if(z[i-3]===l3&&z[i-2]===l2&&z[i-1]===l1)t3++;
+ let off=0;
+ if(offlineStats){
+   const a=offlineStats.t1?.[String(l1)];
+   const b=(l2==null)?null:offlineStats.t2?.[String(l2)+','+String(l1)];
+   const c=(l3==null)?null:offlineStats.t3?.[String(l3)+','+String(l2)+','+String(l1)];
+   off=.10*Number(a?.n||0)+.22*Number(b?.n||0)+.38*Number(c?.n||0);
+ }
+ const effective=Math.max(1,Math.min(600,8+.35*t1+.70*t2+1.10*t3+off));
+ return {t1,t2,t3,offline:off,effective};
+}
+function conservativeRiskEstimate(p,confidence,support){
+ const x=Math.max(.001,Math.min(.30,Number(p)||.10));
+ const n=Math.max(1,Number(support?.effective)||1);
+ const se=Math.sqrt(Math.max(.008,x*(1-x))/n);
+ const evidencePenalty=Math.min(.020,.90*se+.006*(1-clamp01(confidence)));
+ return Math.min(.30,x+evidencePenalty);
+}
+function requiredStableTicks(){
+ const mr=executedMatchRate(50);
+ if(consecutiveDemoLosses>=2)return 3;
+ if(mr!=null&&mr>=.14)return 3;
+ if(mr!=null&&mr>=.10)return 2;
+ return 1;
+}
+function updateCandidateStability(digit,epoch){
+ const d=Number(digit),e=Number(epoch)||0;
+ if(e&&e===stableCandidateEpoch)return stableCandidateTicks;
+ stableCandidateEpoch=e;
+ if(Number(stableCandidateDigit)===d)stableCandidateTicks++;
+ else{stableCandidateDigit=d;stableCandidateTicks=1}
+ return stableCandidateTicks;
+}
 function selectiveAntiMatchGate(pick){
  const n=Math.min(80,execHistory.length);
  const mr=executedMatchRate(n||50);
- const risk=Number(pick?.matchProb??1);
+ const risk=Number(pick?.conservativeRisk??pick?.matchProb??1);
  const cold=Number(pick?.sourceConsensus||0);
  const hot=Number(pick?.dangerConsensus||0);
  const conf=Number(pick?.confidence||0);
  const gap=Number(pick?.selectionGap||0);
  const unc=Number(pick?.uncertainty||1);
 
- let maxRisk=.098,minCold=2,maxHot=4,minConf=.38,minGap=.00015,maxUnc=.090;
+ let maxRisk=.112,minCold=2,maxHot=4,minConf=.38,minGap=.00015,maxUnc=.090;
  if(n>=20&&mr!=null){
-   if(mr>=.14){maxRisk=.087;minCold=4;maxHot=1;minConf=.58;minGap=.0012;maxUnc=.055}
-   else if(mr>=.12){maxRisk=.090;minCold=3;maxHot=2;minConf=.52;minGap=.0008;maxUnc=.065}
-   else if(mr>=.10){maxRisk=.094;minCold=3;maxHot=3;minConf=.46;minGap=.00045;maxUnc=.075}
-   else if(mr<=.075){maxRisk=.101;minCold=1;maxHot=4;minConf=.34;minGap=.00005;maxUnc=.100}
+   if(mr>=.14){maxRisk=.101;minCold=4;maxHot=1;minConf=.58;minGap=.0012;maxUnc=.055}
+   else if(mr>=.12){maxRisk=.104;minCold=3;maxHot=2;minConf=.52;minGap=.0008;maxUnc=.065}
+   else if(mr>=.10){maxRisk=.108;minCold=3;maxHot=3;minConf=.46;minGap=.00045;maxUnc=.075}
+   else if(mr<=.075){maxRisk=.116;minCold=1;maxHot=4;minConf=.34;minGap=.00005;maxUnc=.100}
  }
  if(consecutiveDemoLosses>=2){maxRisk-=.004;minCold+=1;maxHot=Math.max(0,maxHot-1);minConf+=.05}
 
@@ -564,11 +609,12 @@ function resetProfitSession(){
  pendingBuyBarrier=null;activeTradeBarrier=null;
  buyReqContexts.clear();activeContractContexts.clear();settledContractIds.clear();activeContractId=null;
  recentTradeResults=[];consecutiveDemoLosses=0;
+ stableCandidateDigit=null;stableCandidateTicks=0;stableCandidateEpoch=0;
  if(latestLiveModel)liveModel=latestLiveModel;
  if(latestLiveEnsemble)liveEnsemble=latestLiveEnsemble;
  liveRuleId='avoid_match_adaptive_all_digits';
  $('sessionPolicy').textContent='V3 · AVOID MATCH';
- $('policyMeta').textContent='ANTI-MATCH SELECTIVO - compra solo con evidencia suficiente - T1/T2/T3 + memoria 24/7 + régimen + consenso - objetivo +20';
+ $('policyMeta').textContent='ANTI-MATCH SELECTIVO PRO - riesgo conservador + confirmación 1-3 ticks + T1/T2/T3 + memoria 24/7 - objetivo +20';
  renderProfitSession();renderStreakLab();
  trace('SESIÓN NUEVA · meta +$20.00 · stop -$'+sessionStopLoss().toFixed(2)+' · '+$('sessionPolicy').textContent,true);
 }
@@ -887,6 +933,7 @@ async function connectDerivDemo(){
       activeContractId=cid;
       lastSettlementProbeEpoch=0;
       pendingTrade=false;
+      stableCandidateDigit=null;stableCandidateTicks=0;stableCandidateEpoch=0;
       pendingBuyBarrier=null;
 
       const barrier=Number(ctx.barrier);
@@ -1232,6 +1279,7 @@ function scanAvoidMatchDigits(){
  const offline=offlineStatRiskVector();
  const regime=regimeShiftScore();
  const confidence=statisticalConfidence(regime);
+ const support=currentContextSupport();
 
  const coreW=learnerWeights();
  const advW=advancedWeights();
@@ -1289,14 +1337,15 @@ function scanAvoidMatchDigits(){
    // Si varias señales creen que este dígito está "caliente", lo castigamos.
    const dangerPenalty=.0018*dangerConsensus;
    const rankRisk=Math.min(.30,Math.max(.001,baseRisk+.05*uncertainty+dangerPenalty));
+   const conservativeRisk=conservativeRiskEstimate(rankRisk,confidence,support);
    rows.push({
-     digit:d,matchProb:rankRisk,rawMatchProb:baseRisk,avoidProb:1-rankRisk,
+     digit:d,matchProb:rankRisk,conservativeRisk,rawMatchProb:baseRisk,avoidProb:1-rankRisk,
      transition:transition[d],transition2:transition2[d],transition3:transition3[d],recent:recent[d],micro:micro[d],frequency:frequency[d],
      neuralRisk:neural[d],executionRisk:execution[d],contextExecutionRisk:contextExecution[d],offlineRisk:offline[d],agree:votes[d]||0,
-     uncertainty,sourceConsensus,dangerConsensus,regime,confidence
+     uncertainty,sourceConsensus,dangerConsensus,regime,confidence,evidenceSupport:Number(support.effective||1)
    });
  }
- rows.sort((a,b)=>a.matchProb-b.matchProb||b.sourceConsensus-a.sourceConsensus||a.neuralRisk-b.neuralRisk||a.digit-b.digit);
+ rows.sort((a,b)=>Number(a.conservativeRisk)-Number(b.conservativeRisk)||a.matchProb-b.matchProb||b.sourceConsensus-a.sourceConsensus||a.digit-b.digit);
  return {
    rows,
    features:{transition,transition2,transition3,recent,frequency,advancedSources:adaptiveSources},
@@ -1378,7 +1427,7 @@ function renderAvoidMatchScanner(){
  $('avoidBest').style.color=d.ok?'#6affb6':'#ffe66d';
  const r100=rollingMatchRate(100),r250=rollingMatchRate(250),r500=rollingMatchRate(500);
  $('avoidMeta').textContent='MENOS PROBABLE: D'+d.digit+' · riesgo MATCH '+pct(d.matchProb)+' · estadística T1/T2/T3 + recencia + memoria real · '+(d.ok?'LISTO':'APRENDIENDO');
- $('avoidRanking').innerHTML=d.rows.map(x=>'<span class="chip '+(x.digit===d.digit?'best':'')+'">D'+x.digit+' · riesgo '+pct(x.matchProb)+'</span>').join('');
+ $('avoidRanking').innerHTML=d.rows.map(x=>'<span class="chip '+(x.digit===d.digit?'best':'')+'">D'+x.digit+' · cons '+pct(x.conservativeRisk??x.matchProb)+'</span>').join('');
  $('safetyStatus').textContent=d.ok?'DYNAMIC':'LEARNING';
  $('safetyStatus').className='big '+(d.ok?'green':'yellow');
  const ec=executionCalibration();
@@ -1386,7 +1435,7 @@ function renderAvoidMatchScanner(){
  $('safetyMeta').textContent='diversificacion suave · '+usedRecent+'/10 digitos usados recientemente · MATCH 100/250/500 '+(r100==null?'–':pct(r100))+' / '+(r250==null?'–':pct(r250))+' / '+(r500==null?'–':pct(r500))+' · HIT real '+(ec.hit==null?'–':pct(ec.hit))+' ('+ec.n+')';
  $('safetyGap').textContent=d.opportunityScore+' / '+d.opportunityThreshold;
  $('safetyRecent').textContent=r100==null?'–':pct(r100);
- $('safetyTransition').textContent='D'+d.digit+' · T1 '+pct(d.transition)+' · T2 '+pct(d.transition2)+' · T3 '+pct(d.transition3)+' · caliente '+Number(d.dangerConsensus||0)+' · régimen '+pct(d.regime)+' · confianza '+pct(d.confidence);
+ $('safetyTransition').textContent='D'+d.digit+' · riesgo cons '+pct(d.conservativeRisk??d.matchProb)+' · evidencia '+Math.round(Number(d.evidenceSupport||0))+' · T1 '+pct(d.transition)+' · T2 '+pct(d.transition2)+' · T3 '+pct(d.transition3)+' · caliente '+Number(d.dangerConsensus||0);
  return d;
 }
 function coldDigit(a,n){
@@ -1464,6 +1513,13 @@ function maybeAutoBuy(signalOk,tickEpoch=Date.now()){
  let chosenScore=candidateOpportunityScore(pick,Number(lastAvoidDecision?.gap||0),Number(lastAvoidDecision?.maxMatchRisk||.085));
  let chosenConsensus=Number(pick.sourceConsensus||0);
  let chosenUncertainty=Number(pick.uncertainty||0);
+ const stable=updateCandidateStability(chosenBarrier,tickEpoch);
+ const requiredStable=requiredStableTicks();
+ if(stable<requiredStable){
+   $('liveReason').textContent='CONFIRMANDO D'+chosenBarrier+' · '+stable+'/'+requiredStable+' ticks estables · riesgo conservador '+pct(pick.conservativeRisk??chosenRisk);
+   trace('SKIP TICK · confirmando D'+chosenBarrier+' · '+stable+'/'+requiredStable+' · riesgo conservador '+pct(pick.conservativeRisk??chosenRisk));
+   return;
+ }
  const gate=selectiveAntiMatchGate(pick);
  if(!gate.pass){
    const failed=Object.entries(gate.checks).filter(([,v])=>!v).map(([k])=>k).join(',');
@@ -1491,6 +1547,8 @@ function maybeAutoBuy(signalOk,tickEpoch=Date.now()){
  }
  pendingSignalSnapshot={
    barrier:chosenBarrier,edge:chosenRawEdge,score:chosenScore,matchProb:chosenRisk,
+   conservativeRisk:Number(pick.conservativeRisk??chosenRisk),evidenceSupport:Number(pick.evidenceSupport||0),
+   stableTicks:stable,requiredStableTicks:requiredStable,
    predictedWin:chosenPredictedWin,consensus:chosenConsensus,uncertainty:chosenUncertainty,
    streakBefore:currentWinStreak,epoch:tickEpoch,
    filterMatchRate:gate.mr,filterCold:gate.cold,filterHot:gate.hot,filterGap:gate.gap,filterConfidence:gate.conf,
