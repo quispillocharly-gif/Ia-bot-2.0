@@ -78,7 +78,7 @@ def main():
       "leader_wilson":leader.get("wilson_lower"),
       "leader_shadow_pnl":leader.get("shadow_pnl"),
       "money_policy":money,
-      "note":"Demo-only policy. Research continues in parallel. A session freezes its selected entry and money-management policy until reset."
+      "note":"Demo-only policy. Research continues in parallel. The DIFFER digit is recalculated across 0-9 every tick; no digit is frozen. Money-management policy remains session-scoped."
     }
     POLICY.write_text(json.dumps(policy,indent=2))
 
