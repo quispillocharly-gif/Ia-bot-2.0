@@ -9,7 +9,7 @@ from sklearn.metrics import log_loss
 
 R=Path(__file__).resolve().parent
 M=R/"memory"; M.mkdir(exist_ok=True)
-OUT=M/"differ_train_latest.json"; MODEL=M/"differ_candidate.joblib"; META=M/"differ_candidate.json"
+OUT=M/"differ_train_latest.json"; MODEL=M/"differ_candidate.joblib"; META=M/"differ_candidate.json"; LIVE=M/"differ_live_model.json"
 
 CONFIGS=[
  {"window":8,"hidden":(32,),"alpha":.0002,"lr":.0015},
@@ -54,6 +54,17 @@ def main():
     best=rows[0]; sig=f'w{best["cfg"]["window"]}-h{"x".join(map(str,best["cfg"]["hidden"]))}'
     model_id=hashlib.sha256((sig+str(int(time.time())//3600)).encode()).hexdigest()[:16]
     joblib.dump({"clf":best["clf"],"encoder":best["enc"],"window":best["cfg"]["window"],"model_id":model_id},MODEL)
+    live={
+      "model_id":model_id,
+      "window":int(best["cfg"]["window"]),
+      "classes":[int(x) for x in best["clf"].classes_],
+      "activation":str(best["clf"].activation),
+      "out_activation":str(best["clf"].out_activation_),
+      "coefs":[np.asarray(x,dtype=float).tolist() for x in best["clf"].coefs_],
+      "intercepts":[np.asarray(x,dtype=float).tolist() for x in best["clf"].intercepts_],
+      "created_at":int(time.time())
+    }
+    LIVE.write_text(json.dumps(live))
     meta={"model_id":model_id,"created_at":int(time.time()),"last_epoch":int(raw["ticks"][-1]["epoch"]),
           "window":best["cfg"]["window"],"hidden":list(best["cfg"]["hidden"]),
           "validation":best["val"],"test":best["test"],"selection_metric":"lowest multiclass Brier, then log loss"}

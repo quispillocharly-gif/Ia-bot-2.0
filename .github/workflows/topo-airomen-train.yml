@@ -34,7 +34,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add topo-airomen/memory/differ_train_latest.json topo-airomen/memory/differ_candidate.json topo-airomen/memory/differ_candidate.joblib
+          git add topo-airomen/memory/differ_train_latest.json topo-airomen/memory/differ_candidate.json topo-airomen/memory/differ_candidate.joblib topo-airomen/memory/differ_live_model.json
           git diff --cached --quiet || git commit -m "TOPO AIROMEN neural research"
           rm -f topo-airomen/ticks.json topo-airomen/audit.json
           for attempt in 1 2 3; do
