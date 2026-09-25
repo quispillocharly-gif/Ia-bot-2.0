@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "topo-airomen/differ_forward.py"
+      - "topo-airomen/differ_strategy_search.py"
       - ".github/workflows/topo-airomen-forward.yml"
       - "topo-airomen/requirements-ai.txt"
   workflow_run:
@@ -36,11 +37,13 @@ jobs:
         run: python topo-airomen/collect_ticks.py
       - name: Run forward-only DIFFER shadow lab
         run: python topo-airomen/differ_forward.py
+      - name: Run anti-MATCH strategy search
+        run: python topo-airomen/differ_strategy_search.py
       - name: Persist forward state
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add topo-airomen/memory/differ_payout_snapshot.json topo-airomen/memory/differ_forward_latest.json topo-airomen/memory/differ_forward_state.json topo-airomen/memory/differ_frozen.json topo-airomen/memory/differ_frozen.joblib
+          git add topo-airomen/memory/differ_payout_snapshot.json topo-airomen/memory/differ_forward_latest.json topo-airomen/memory/differ_forward_state.json topo-airomen/memory/differ_frozen.json topo-airomen/memory/differ_frozen.joblib topo-airomen/memory/differ_strategy_search_latest.json
           [ ! -f topo-airomen/memory/differ_graveyard.json ] || git add topo-airomen/memory/differ_graveyard.json
           git diff --cached --quiet || git commit -m "TOPO AIROMEN forward research"
           rm -f topo-airomen/ticks.json topo-airomen/audit.json
