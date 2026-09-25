@@ -328,9 +328,9 @@ const SESSION_TARGET=20;
 const WIN_STREAK_TARGET=46;
 const STREAK_BLOCK_SIZE=10;
 const HARD_MAX_STAKE=6;
-const GRADUAL_WIN_GROWTH=.85;
+const GRADUAL_WIN_GROWTH=.40;
 const MIN_WIN_STEP_RATE=.05;
-const MAX_WIN_STEP_RATE=.12;
+const MAX_WIN_STEP_RATE=.06;
 let blockPauseTicks=0,lastProtectedBlock=0;
 const STREAK_LAB_KEY='topo_airomen_streak_lab_v1';
 const EXEC_HISTORY_KEY='topo_airomen_exec_history_v1';
@@ -340,6 +340,7 @@ let pendingSignalSnapshot=null,activeSignalSnapshot=null;
 let buyReqContexts=new Map(),activeContractContexts=new Map(),settledContractIds=new Set();
 const MAX_INFLIGHT_CONTRACTS=1;
 let sessionPnl=0,sessionWins=0,sessionLosses=0,currentStake=1,sessionStopped=false,lastSettledContractId=null;
+let sessionPeakPnl=0,sessionMaxDrawdown=0;
 let sessionBatchTrades=0,sessionBatchWins=0,sessionStage=1,sessionPauseLeft=0;
 const SESSION_STATS_KEY='topo_airomen_session_stats_v1';
 function loadSelectorStats(){
@@ -383,9 +384,9 @@ function loadStreakLab(){try{const x=JSON.parse(localStorage.getItem(STREAK_LAB_
 function saveStreakLab(){try{localStorage.setItem(STREAK_LAB_KEY,JSON.stringify({bestWinStreak:bestWinStreak,bestStreakContext:bestStreakContext}))}catch(_){}}
 function streakPhase(){if(currentWinStreak>=40)return {name:'FASE 5 - PROTEGER 40+',score:72,edge:.0050,consensus:3,maxUnc:.035};if(currentWinStreak>=30)return {name:'FASE 4 - PROTEGER 30+',score:66,edge:.0035,consensus:3,maxUnc:.040};if(currentWinStreak>=20)return {name:'FASE 3 - PROTEGER 20+',score:60,edge:.0022,consensus:2,maxUnc:.045};if(currentWinStreak>=10)return {name:'FASE 2 - PROTEGER 10+',score:54,edge:.0012,consensus:2,maxUnc:.050};return {name:'FASE 1 - BUSCANDO VENTAJA',score:48,edge:.0003,consensus:1,maxUnc:.060};}
 function adaptiveMatchRecoveryTicks(){
- const mr=executedMatchRate(50);
- if(consecutiveDemoLosses>=2)return 3;
- if(mr!=null&&mr>=.14)return 3;
+ const mr=executedMatchRate(50),mode=sessionRiskMode();
+ if(mode==='RED'||consecutiveDemoLosses>=2)return 5;
+ if(mode==='YELLOW'||(mr!=null&&mr>=.14))return 3;
  if(mr!=null&&mr>=.11)return 2;
  return 1;
 }
@@ -542,16 +543,36 @@ function selectiveAntiMatchGate(pick){
  }
  if(consecutiveDemoLosses>=2){maxRisk-=.004;minCold+=1;maxHot=Math.max(0,maxHot-1);minConf+=.05}
 
+ const riskMode=sessionRiskMode();
+ const drawdown=sessionDrawdown();
+ if(riskMode==='YELLOW'){
+   maxRisk=Math.min(maxRisk,.106);
+   minCold=Math.max(minCold,3);
+   maxHot=Math.min(maxHot,2);
+   minConf=Math.max(minConf,.50);
+   minGap=Math.max(minGap,.00065);
+   maxUnc=Math.min(maxUnc,.070);
+ }else if(riskMode==='RED'){
+   maxRisk=Math.min(maxRisk,.101);
+   minCold=Math.max(minCold,4);
+   maxHot=Math.min(maxHot,1);
+   minConf=Math.max(minConf,.58);
+   minGap=Math.max(minGap,.0011);
+   maxUnc=Math.min(maxUnc,.055);
+ }
+
  // MODO OPORTUNIDAD: si pasan muchos ticks sin entrada, relajamos solo
  // criterios secundarios. Riesgo y señales calientes siguen protegidos.
  const waitRelax=clamp01((ticksSinceBuy-4)/12);
- const safeRelax=(mr!=null&&mr>=.14)?waitRelax*.25:(mr!=null&&mr>=.12)?waitRelax*.45:waitRelax;
+ let safeRelax=(mr!=null&&mr>=.14)?waitRelax*.25:(mr!=null&&mr>=.12)?waitRelax*.45:waitRelax;
+ if(riskMode==='YELLOW')safeRelax=Math.min(safeRelax,.20);
+ if(riskMode==='RED')safeRelax=0;
  minCold=Math.max(1,minCold-Math.floor(safeRelax*1.25));
  minConf=Math.max(.30,minConf-.10*safeRelax);
  minGap=Math.max(.00003,minGap*(1-.75*safeRelax));
  maxUnc=Math.min(.105,maxUnc+.018*safeRelax);
- if((mr==null||mr<.10)&&ticksSinceBuy>=10)maxHot=Math.min(4,maxHot+1);
- if((mr==null||mr<.10)&&ticksSinceBuy>=12)maxRisk=Math.min(.118,maxRisk+.003);
+ if(riskMode==='GREEN'&&(mr==null||mr<.10)&&ticksSinceBuy>=10)maxHot=Math.min(4,maxHot+1);
+ if(riskMode==='GREEN'&&(mr==null||mr<.10)&&ticksSinceBuy>=12)maxRisk=Math.min(.118,maxRisk+.003);
 
  const checks={
    risk:risk<=maxRisk,
@@ -562,7 +583,7 @@ function selectiveAntiMatchGate(pick){
    uncertainty:unc<=maxUnc
  };
  const pass=Object.values(checks).every(Boolean);
- return {pass,mr,n,risk,cold,hot,conf,gap,unc,maxRisk,minCold,maxHot,minConf,minGap,maxUnc,waitRelax,safeRelax,checks};
+ return {pass,mr,n,risk,cold,hot,conf,gap,unc,maxRisk,minCold,maxHot,minConf,minGap,maxUnc,waitRelax,safeRelax,riskMode,drawdown,checks};
 }
 function executionCalibration(){
  const z=execHistory.slice(-60),n=z.length;
@@ -601,16 +622,34 @@ function money2(x){return Math.round((Number(x)+Number.EPSILON)*100)/100}
 function baseStake(){return Math.min(HARD_MAX_STAKE,Math.max(.35,Number($('demoStake')?.value)||1))}
 function maxSessionStake(){return Math.min(HARD_MAX_STAKE,Math.max(baseStake(),Number($('maxStake')?.value)||HARD_MAX_STAKE))}
 function sessionStopLoss(){return Math.max(1,Number($('sessionStopLoss')?.value)||5)}
+function sessionDrawdown(){
+ return Math.max(0,Number(sessionPeakPnl||0)-Number(sessionPnl||0));
+}
+function sessionRiskMode(){
+ const dd=sessionDrawdown();
+ if(sessionPnl<=-2.50||dd>=3.00||consecutiveDemoLosses>=2)return 'RED';
+ if(sessionPnl<0||dd>=1.25||consecutiveDemoLosses===1)return 'YELLOW';
+ return 'GREEN';
+}
+function sessionRiskStakeCap(){
+ const b=baseStake(),mode=sessionRiskMode();
+ if(mode==='RED')return b;
+ if(mode==='YELLOW')return Math.min(maxSessionStake(),money2(b*1.08));
+ if(sessionPnl<5)return b;
+ return maxSessionStake();
+}
 function renderProfitSession(){
  const progress=Math.max(0,Math.min(100,(sessionPnl/SESSION_TARGET)*100));
  $('sessionPnl').textContent=(sessionPnl>=0?'+':'')+'$'+sessionPnl.toFixed(2);
  $('sessionPnl').className='big '+(sessionPnl>=0?'green':'red');
  $('sessionProgress').textContent=progress.toFixed(1)+'% de la meta';
  $('nextStake').textContent='$'+currentStake.toFixed(2);
- $('sessionWL').textContent=sessionWins+' WIN · '+sessionLosses+' LOSS';
+ const mode=sessionRiskMode(),dd=sessionDrawdown();
+ $('sessionWL').textContent=sessionWins+' WIN · '+sessionLosses+' LOSS · '+mode+' · DD USD '+dd.toFixed(2);
 }
 function resetProfitSession(){
  sessionPnl=0;sessionWins=0;sessionLosses=0;sessionStopped=false;
+ sessionPeakPnl=0;sessionMaxDrawdown=0;
  currentWinStreak=0;streakTargetHit=false;activeSignalSnapshot=null;pendingSignalSnapshot=null;
  blockPauseTicks=0;lastProtectedBlock=0;
  lastBoughtBarrier=null;sameBarrierBuyStreak=0;
@@ -627,19 +666,26 @@ function resetProfitSession(){
  if(latestLiveEnsemble)liveEnsemble=latestLiveEnsemble;
  liveRuleId='avoid_match_adaptive_all_digits';
  $('sessionPolicy').textContent='V3 · AVOID MATCH';
- $('policyMeta').textContent='ANTI-MATCH BALANCE - filtro selectivo + modo oportunidad adaptativo + riesgo duro protegido + memoria 24/7 - objetivo +20';
+ $('policyMeta').textContent='ANTI-MATCH RISK SHIELD - GREEN/YELLOW/RED por drawdown - oportunidad solo en GREEN - stake defensivo - memoria 24/7 - objetivo +20';
  renderProfitSession();renderStreakLab();
  trace('SESIÓN NUEVA · meta +$20.00 · stop -$'+sessionStopLoss().toFixed(2)+' · '+$('sessionPolicy').textContent,true);
 }
 function applyProfitLadder(profit){
  sessionPnl+=profit;
+ sessionPeakPnl=Math.max(sessionPeakPnl,sessionPnl);
+ sessionMaxDrawdown=Math.max(sessionMaxDrawdown,sessionDrawdown());
  if(profit>=0){
    sessionWins++;
    const b=baseStake();
-   const rawStep=Math.max(Math.max(0,profit)*GRADUAL_WIN_GROWTH,b*MIN_WIN_STEP_RATE);
-   const maxStep=Math.max(b*MIN_WIN_STEP_RATE,currentStake*MAX_WIN_STEP_RATE);
-   const step=Math.min(rawStep,maxStep);
-   currentStake=money2(Math.min(HARD_MAX_STAKE,maxSessionStake(),Math.max(b,currentStake+step)));
+   const mode=sessionRiskMode();
+   if(mode!=='GREEN'||sessionPnl<5){
+     currentStake=money2(b);
+   }else{
+     const rawStep=Math.max(Math.max(0,profit)*GRADUAL_WIN_GROWTH,b*MIN_WIN_STEP_RATE);
+     const maxStep=Math.max(b*MIN_WIN_STEP_RATE,currentStake*MAX_WIN_STEP_RATE);
+     const step=Math.min(rawStep,maxStep);
+     currentStake=money2(Math.min(HARD_MAX_STAKE,sessionRiskStakeCap(),Math.max(b,currentStake+step)));
+   }
    if(activeMoneyPolicy.promoted)sessionBatchWins++;
  }else{
    sessionLosses++;
@@ -1553,10 +1599,10 @@ function maybeAutoBuy(signalOk,tickEpoch=Date.now()){
  liveBarrierProb=chosenRisk;
  $('liveDiffer').textContent='DIFFER '+chosenBarrier;
  $('liveProb').textContent=pct(chosenRisk);
- $('liveReason').textContent='ENTRADA SELECTIVA - D'+chosenBarrier+' · cons '+pct(gate.risk)+' · cold '+gate.cold+' · hot '+gate.hot+' · espera '+ticksSinceBuy+' ticks · relax '+pct(gate.safeRelax);
+ $('liveReason').textContent='ENTRADA '+gate.riskMode+' - D'+chosenBarrier+' · cons '+pct(gate.risk)+' · cold '+gate.cold+' · hot '+gate.hot+' · DD '+gate.drawdown.toFixed(2)+' · relax '+pct(gate.safeRelax);
  if(tickEpoch===lastSignalEpoch){trace('TICK YA PROCESADO');return}
  lastSignalEpoch=tickEpoch;
- const stake=money2(Math.min(HARD_MAX_STAKE,maxSessionStake(),Math.max(.35,currentStake||baseStake())));
+ const stake=money2(Math.min(HARD_MAX_STAKE,sessionRiskStakeCap(),Math.max(.35,currentStake||baseStake())));
  const currency=derivDemoAccount?.currency||derivDemoAccount?.currency_code||'USD';
  const chosenPredictedWin=1-chosenRisk;
  const chosenRawEdge=chosenPredictedWin-currentBreakEven;
