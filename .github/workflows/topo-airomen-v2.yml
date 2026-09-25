@@ -1,21 +1,21 @@
-name: TOPO AIROMEN - DIFFER Neural Research
+name: TOPO AIROMEN - DIFFER V2 Economic Lab
 on:
   workflow_dispatch:
   push:
     branches: [main]
     paths:
-      - "topo-airomen/collect_ticks.py"
-      - "topo-airomen/differ_train.py"
-      - ".github/workflows/topo-airomen-train.yml"
+      - "topo-airomen/differ_v2.py"
+      - ".github/workflows/topo-airomen-v2.yml"
+      - "topo-airomen/requirements-ai.txt"
   schedule:
-    - cron: "7 */2 * * *"
+    - cron: "18,38,58 * * * *"
 permissions:
   contents: write
 concurrency:
-  group: topo-airomen-train
+  group: topo-airomen-v2
   cancel-in-progress: false
 jobs:
-  train:
+  v2:
     runs-on: ubuntu-latest
     timeout-minutes: 18
     steps:
@@ -24,19 +24,21 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -r topo-airomen/requirements-ai.txt
+      - name: Refresh DIFFER payout
+        run: python topo-airomen/payout_probe_differ.py
       - name: Collect 10000 paginated ticks
         env:
           TICK_COUNT: "10000"
         run: python topo-airomen/collect_ticks.py
-      - name: Train chronological DIFFER candidates
-        run: python topo-airomen/differ_train.py
-      - name: Persist neural and ensemble candidates
+      - name: Run V2 economic ensemble forward lab
+        run: python topo-airomen/differ_v2.py
+      - name: Persist V2 state
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add topo-airomen/memory/differ_train_latest.json topo-airomen/memory/differ_candidate.json topo-airomen/memory/differ_candidate.joblib topo-airomen/memory/differ_live_model.json
-          git add topo-airomen/memory/differ_ensemble_candidate.json topo-airomen/memory/differ_ensemble_candidate.joblib topo-airomen/memory/differ_live_ensemble.json
-          git diff --cached --quiet || git commit -m "TOPO AIROMEN neural ensemble research"
+          git add topo-airomen/memory/differ_payout_snapshot.json topo-airomen/memory/differ_v2_latest.json topo-airomen/memory/differ_v2_state.json topo-airomen/memory/differ_v2_frozen.json topo-airomen/memory/differ_v2_frozen.joblib
+          [ ! -f topo-airomen/memory/differ_v2_graveyard.json ] || git add topo-airomen/memory/differ_v2_graveyard.json
+          git diff --cached --quiet || git commit -m "TOPO AIROMEN V2 economic research"
           rm -f topo-airomen/ticks.json topo-airomen/audit.json
           for attempt in 1 2 3; do
             git pull --rebase origin main
