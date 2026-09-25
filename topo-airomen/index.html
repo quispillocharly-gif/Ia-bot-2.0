@@ -51,6 +51,7 @@ button:disabled{opacity:.55;cursor:not-allowed}.formgrid{display:grid;grid-templ
   <div><div class="mini">AUTO-COMPRA</div><button id="autoDemoToggle">AUTO-DEMO OFF</button></div>
  </div>
  <div id="autoDemoState" class="mini statusline">La IA recalcula DIFFER X en cada tick. Las compras solo se ejecutan en la cuenta demo conectada.</div>
+ <div id="tradeTrace" class="mini statusline">TRACE: esperando AUTO-DEMO…</div>
 </div>
 <div class="card"><div class="lab">TOURNAMENT · 6 VARIANTES PREDECLARADAS</div><div class="scroll"><table>
 <thead><tr><th>VARIANTE</th><th>SEÑALES</th><th>WINS</th><th>HIT</th><th>WILSON</th><th>ADJ-P</th><th>P&L</th><th>ESTADO</th></tr></thead><tbody id="rows"></tbody>
@@ -92,12 +93,17 @@ async function load(){
  }catch(e){$('decision').textContent='MEMORY WAITING'}
 }
 
-let derivSocket=null,derivDemoAccount=null,publicSocket=null,liveModel=null,liveSeq=[],livePip=4,liveBarrier=null,liveBarrierProb=null,liveRuleId='neural_argmin',autoDemo=false,pendingTrade=false,activeContractId=null,tradeReq=5000,lastProposalReq=null;
+let derivSocket=null,derivDemoAccount=null,publicSocket=null,liveModel=null,liveSeq=[],livePip=4,liveBarrier=null,liveBarrierProb=null,liveRuleId='neural_argmin',autoDemo=false,pendingTrade=false,activeContractId=null,tradeReq=5000,lastProposalReq=null,lastSignalEpoch=0;
+function trace(msg,good=false){
+ const el=$('tradeTrace'); if(!el)return;
+ el.textContent='TRACE: '+msg; el.style.color=good?'#6affb6':'#8ca4c8';
+}
 function derivMsg(msg,ok=false){
  const el=$('derivStatus'); el.textContent=msg; el.style.color=ok?'#6affb6':'#ffe66d';
 }
 function apiError(j,fallback){
- return (j&&j.errors&&j.errors[0]&&(j.errors[0].message||j.errors[0].code))||fallback;
+ return (j&&j.error&&(j.error.message||j.error.code))||
+        (j&&j.errors&&j.errors[0]&&(j.errors[0].message||j.errors[0].code))||fallback;
 }
 async function connectDerivDemo(){
  const appId=$('derivAppId').value.trim(),pat=$('derivPat').value.trim(),btn=$('derivConnect');
@@ -126,22 +132,25 @@ async function connectDerivDemo(){
   if(!wsUrl)throw Error('Deriv no devolvió la URL WebSocket demo');
   if(derivSocket)try{derivSocket.close()}catch(_){}
   derivSocket=new WebSocket(wsUrl);
-  derivSocket.onopen=()=>{derivMsg('CONECTADO A DERIV DEMO · AUTO-BUY OFF',true);btn.textContent='RECONECTAR DEMO';btn.disabled=false};
+  derivSocket.onopen=()=>{derivMsg('CONECTADO A DERIV DEMO · AUTO-BUY OFF',true);trace('DEMO CONECTADA · activa AUTO-DEMO para operar',true);btn.textContent='RECONECTAR DEMO';btn.disabled=false};
   derivSocket.onclose=()=>{derivMsg('CONEXIÓN DEMO CERRADA');btn.disabled=false};
   derivSocket.onerror=()=>{derivMsg('ERROR EN WEBSOCKET DEMO');btn.disabled=false};
   derivSocket.onmessage=e=>{
    try{
     const m=JSON.parse(e.data);
     if(m.error||m.errors){
+      const err=apiError(m,'respuesta de error');
       pendingTrade=false; lastProposalReq=null;
-      derivMsg('DERIV: '+apiError(m,'respuesta de error'));
+      derivMsg('DERIV: '+err);
       $('autoDemoState').textContent='Orden rechazada por Deriv · AUTO-DEMO '+(autoDemo?'ON':'OFF');
+      trace('ERROR '+err);
       return;
     }
     if(m.proposal && lastProposalReq && m.req_id===lastProposalReq.req){
       const p=m.proposal||{};
-      if(!p.id){pendingTrade=false;lastProposalReq=null;return}
+      if(!p.id){pendingTrade=false;lastProposalReq=null;trace('PROPUESTA SIN ID');return}
       const maxPrice=Number(p.ask_price??lastProposalReq.stake);
+      trace('PROPUESTA OK · enviando BUY',true);
       derivSocket.send(JSON.stringify({buy:p.id,price:maxPrice,req_id:++tradeReq}));
       $('lastDemoBuy').textContent='COMPRANDO…';
       lastProposalReq=null;
@@ -151,6 +160,7 @@ async function connectDerivDemo(){
       const b=m.buy||{};
       activeContractId=b.contract_id;
       pendingTrade=false;
+      trace('BUY OK · contrato '+activeContractId,true);
       $('lastDemoBuy').textContent='DIFFER '+liveBarrier;
       $('lastDemoBuy').className='big yellow';
       $('autoDemoState').textContent='Contrato demo activo '+activeContractId+' · esperando resultado.';
@@ -165,6 +175,7 @@ async function connectDerivDemo(){
         $('lastDemoBuy').className='big '+(profit>=0?'green':'red');
         $('autoDemoState').textContent='Contrato demo cerrado · profit '+profit.toFixed(2)+' · esperando próxima señal válida.';
         activeContractId=null; pendingTrade=false;
+        trace('CONTRATO CERRADO · '+(profit>=0?'WIN ':'LOSS ')+profit.toFixed(2),profit>=0);
         if(m.subscription?.id)derivSocket.send(JSON.stringify({forget:m.subscription.id}));
       }
     }
@@ -236,13 +247,21 @@ function renderLiveDecision(){
  $('liveDiffer').style.color=gate.ok?'#4ddcff':'#ffe66d';
  return gate.ok;
 }
-function maybeAutoBuy(signalOk){
- if(!signalOk||!autoDemo||pendingTrade||activeContractId||!derivSocket||derivSocket.readyState!==WebSocket.OPEN||liveBarrier==null)return;
+function maybeAutoBuy(signalOk,tickEpoch=Date.now()){
+ if(!autoDemo){trace('AUTO-DEMO OFF');return}
+ if(!signalOk){trace('SEÑAL FILTRADA · '+liveRuleId);return}
+ if(pendingTrade){trace('ESPERANDO RESPUESTA DE PROPUESTA/BUY');return}
+ if(activeContractId){trace('CONTRATO '+activeContractId+' AÚN ABIERTO');return}
+ if(!derivSocket||derivSocket.readyState!==WebSocket.OPEN){trace('WEBSOCKET DEMO NO LISTO');return}
+ if(liveBarrier==null){trace('SIN DÍGITO DIFFER');return}
+ if(tickEpoch===lastSignalEpoch){trace('TICK YA PROCESADO');return}
+ lastSignalEpoch=tickEpoch;
  const stake=Math.max(.35,Number($('demoStake').value)||1);
- const currency=derivDemoAccount?.currency||'USD';
+ const currency=derivDemoAccount?.currency||derivDemoAccount?.currency_code||'USD';
  pendingTrade=true;
  const req=++tradeReq;lastProposalReq={req,stake,barrier:liveBarrier};
  $('lastDemoBuy').textContent='PROPUESTA '+liveBarrier;
+ trace('SEÑAL VÁLIDA DIFFER '+liveBarrier+' · solicitando propuesta',true);
  derivSocket.send(JSON.stringify({
    proposal:1,amount:stake,basis:'stake',contract_type:'DIGITDIFF',
    currency,duration:1,duration_unit:'t',barrier:String(liveBarrier),
@@ -275,7 +294,7 @@ function startPublicDiffer(){
     liveSeq.push(d);if(liveSeq.length>1500)liveSeq.shift();
     $('liveTick').textContent=q+' · '+d;
     const ok=renderLiveDecision();
-    maybeAutoBuy(ok);
+    maybeAutoBuy(ok,Number(m.tick.epoch??Date.now()));
    }
   }catch(_){}
  };
@@ -288,6 +307,7 @@ $('autoDemoToggle').onclick=()=>{
   if(!liveModel){$('autoDemoState').textContent='Modelo neural live todavía no disponible.';return}
   autoDemo=true;$('autoDemoToggle').textContent='AUTO-DEMO ON';$('autoDemoToggle').style.color='#6affb6';
   $('autoDemoState').textContent='AUTO-DEMO activo · una operación a la vez · solo cuenta demo.';
+  trace('AUTO-DEMO ARMADO · esperando señal válida',true);
  }else{
   autoDemo=false;$('autoDemoToggle').textContent='AUTO-DEMO OFF';$('autoDemoToggle').style.color='';
   $('autoDemoState').textContent='AUTO-DEMO apagado. La IA sigue analizando.';
