@@ -54,7 +54,7 @@ button:disabled{opacity:.45;cursor:not-allowed}
 </div>
 
 <div class="card signal">
- <div class="lab">ULTRA LOW MATCH + STREAK SHIELD · PROTEGE RACHAS LARGAS</div>
+ <div class="lab">ANTI-MATCH CADENCE 1→2→3 · NO REPITE DÍGITO · STREAK SHIELD</div>
  <div id="bestDigit" class="digit">DIFFER –</div>
  <div id="signalMeta" class="mini">Esperando historial R_75…</div>
  <div id="ranking" class="chips"></div>
@@ -103,7 +103,8 @@ button:disabled{opacity:.45;cursor:not-allowed}
 <script>
 'use strict';
 
-const BUILD='CLEAN-1.3-STREAK-SHIELD';
+const BUILD='CLEAN-1.4-CADENCE-123';
+const ENTRY_CADENCE=[1,2,3];
 const SYMBOL='R_75';
 const TARGET=10;
 const HARD_MAX=6;
@@ -130,6 +131,7 @@ let sessionPnl=0,sessionWins=0,sessionMatches=0,currentStake=1;
 let antiMatchStreak=0,bestAntiMatchStreak=0;
 let currentDecision=null,stableDigit=null,stableTicks=0,lastStabilityEpoch=0;
 let recoveryTicks=0;
+let cadenceIndex=0,ticksIntoCadence=0,lastBoughtDigit=null;
 
 let execHistory=[];
 try{
@@ -180,6 +182,7 @@ function resetSession(){
   antiMatchStreak=0;
   currentStake=baseStake();pending=false;pendingOrder=null;
   stableDigit=null;stableTicks=0;recoveryTicks=0;
+  cadenceIndex=0;ticksIntoCadence=0;lastBoughtDigit=null;
   renderSession();
   $('contractView').textContent='–';
   $('contractView').className='big';
@@ -199,7 +202,7 @@ function applyResult(profit,snapshot){
   }else{
     sessionMatches++;
     antiMatchStreak=0;
-    recoveryTicks=actualMatchRate(30)>=.14?2:1;
+    recoveryTicks=0;
   }
 
   // Reinvierte toda la ganancia NETA de la sesión, sin perseguir pérdidas.
@@ -207,6 +210,9 @@ function applyResult(profit,snapshot){
   currentStake=money(Math.min(HARD_MAX,maxStake(),Math.max(b,b+Math.max(0,sessionPnl))));
 
   if(snapshot){
+    lastBoughtDigit=Number(snapshot.barrier);
+    cadenceIndex=(cadenceIndex+1)%ENTRY_CADENCE.length;
+    ticksIntoCadence=0;
     execHistory.push({
       win:profit>=0?1:0,
       barrier:Number(snapshot.barrier),
@@ -218,6 +224,9 @@ function applyResult(profit,snapshot){
       last1:Number(snapshot.last1??-1),
       last2:Number(snapshot.last2??-1),
       last3:Number(snapshot.last3??-1),
+      cadenceWait:Number(snapshot.cadenceWait||0),
+      cadenceIndex:Number(snapshot.cadenceIndex??0),
+      previousBarrier:Number(snapshot.previousBarrier??-1),
       t:Date.now()
     });
     if(execHistory.length>500)execHistory=execHistory.slice(-500);
@@ -442,11 +451,14 @@ function analyze(){
 
   rows.sort((a,b)=>a.combined-b.combined||a.neuralRank-b.neuralRank||a.structHot-b.structHot);
 
-  // ULTRA LOW MATCH:
-  // se compra SOLO el #1 absoluto del ranking 0-9. Si no supera todos
-  // los vetos de seguridad, no sustituimos por el #2/#3: esperamos otro tick.
-  const best=rows[0];
-  const second=rows[1]||best;
+  // CADENCE 1-2-3 + NO REPEAT:
+  // El último dígito comprado queda bloqueado para la siguiente entrada.
+  // Entre los 9 permitidos se toma el de menor riesgo estimado.
+  const allowedRows=(lastBoughtDigit==null)
+    ?rows
+    :rows.filter(x=>Number(x.digit)!==Number(lastBoughtDigit));
+  const best=allowedRows[0]||rows[0];
+  const second=allowedRows[1]||best;
 
   const mr=actualMatchRate(50);
   const gap=Math.max(0,second.combined-best.combined);
@@ -526,7 +538,8 @@ function analyze(){
 
   const checks={
     memory:memoryReady,
-    absoluteMin:best===rows[0],
+    allowedMin:best===allowedRows[0],
+    noRepeat:lastBoughtDigit==null||Number(best.digit)!==Number(lastBoughtDigit),
     risk:best.combined<=maxRisk,
     neural:best.calibratedNeural<=maxNeural,
     neuralRank:best.neuralRank<=maxNeuralRank,
@@ -544,7 +557,8 @@ function analyze(){
   return {
     best,rows,gap,mr,ok,stableNeed,checks,
     thresholds:{maxRisk,maxNeural,maxNeuralRank,maxStructHot,maxHot,minCold,minGap,maxContext,maxStructure},
-    structureRisk,streakPhase,antiMatchStreak,bestAntiMatchStreak
+    structureRisk,streakPhase,antiMatchStreak,bestAntiMatchStreak,
+    cadenceWait:ENTRY_CADENCE[cadenceIndex],cadenceIndex,ticksIntoCadence,lastBoughtDigit
   };
 }
 function renderDecision(){
@@ -567,6 +581,8 @@ function renderDecision(){
     ' · gap '+pct(d.gap)+
     ' · MATCH real '+(d.mr==null?'–':pct(d.mr))+
     ' · racha '+antiMatchStreak+' · '+d.streakPhase+
+    ' · cadencia '+(d.cadenceIndex+1)+'/3 espera '+d.ticksIntoCadence+'/'+d.cadenceWait+
+    (d.lastBoughtDigit==null?'':' · bloqueado D'+d.lastBoughtDigit)+
     ' · estabilidad '+stableTicks+'/'+d.stableNeed+
     (failed?' · falta '+failed:'');
 
@@ -622,6 +638,9 @@ function requestProposal(decision){
       last1:seq[seq.length-1],
       last2:seq[seq.length-2],
       last3:seq[seq.length-3],
+      cadenceWait:ENTRY_CADENCE[cadenceIndex],
+      cadenceIndex,
+      previousBarrier:lastBoughtDigit,
       epoch:lastEpoch
     }
   };
@@ -850,6 +869,10 @@ function handleMarket(m){
     lastEpoch=epoch;lastDigit=digit;lastQuote=quote;
     seq.push(digit);if(seq.length>1500)seq.shift();
 
+    if(auto&&!sessionStopped&&!pending&&!activeContract){
+      ticksIntoCadence=Math.min(999,ticksIntoCadence+1);
+    }
+
     $('lastTick').textContent=quote+' · '+digit;
     $('tickMeta').textContent='epoch '+epoch;
     const d=renderDecision();
@@ -859,6 +882,12 @@ function handleMarket(m){
     if(recoveryTicks>0){
       recoveryTicks--;
       log('POST-MATCH · observando '+recoveryTicks+' tick(s)');
+      return;
+    }
+
+    const cadenceNeed=ENTRY_CADENCE[cadenceIndex];
+    if(auto&&!sessionStopped&&!pending&&!activeContract&&ticksIntoCadence<cadenceNeed){
+      log('CADENCIA '+cadenceNeed+' · esperando '+ticksIntoCadence+'/'+cadenceNeed+' ticks');
       return;
     }
 
