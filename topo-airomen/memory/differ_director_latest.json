@@ -1,46 +1,66 @@
 {
-  "version": "1.0-differ-director",
-  "timestamp": 1790312391,
-  "decision": "COLLECT_FORWARD_DATA",
+  "version": "2.0-differ-director",
+  "timestamp": 1790313003,
+  "decision": "COLLECT_V2_FORWARD_DATA",
   "baseline_random": 0.9,
   "payout_status": "OK",
   "break_even_rate": 0.9174311926605504,
-  "forward_status": "RESEARCHING",
-  "leader": {
-    "id": "neural_p09",
-    "signals": 1063,
-    "wins": 975,
-    "losses": 88,
-    "hit_rate": 0.9172154280338665,
-    "wilson_lower": 0.8991094963916227,
-    "raw_economic_p": 0.5385095565521758,
+  "v1_status": "RESEARCHING",
+  "v2_status": "NOT_STARTED",
+  "v1_leader": {
+    "id": "neural_p08",
+    "signals": 921,
+    "wins": 842,
+    "losses": 79,
+    "hit_rate": 0.9142236699239956,
+    "wilson_lower": 0.8943731046176119,
+    "raw_economic_p": 0.6654113297078463,
     "bonferroni_p": 1.0,
-    "shadow_pnl": -0.2500000000000622,
-    "shadow_roi": -0.00023518344308566527,
+    "shadow_pnl": -3.220000000000046,
+    "shadow_roi": -0.003496199782844784,
     "temporal_blocks": [
       {
-        "n": 355,
-        "wins": 331,
-        "hit_rate": 0.9323943661971831,
-        "wilson_lower": 0.9013787176070726
+        "n": 307,
+        "wins": 287,
+        "hit_rate": 0.9348534201954397,
+        "wilson_lower": 0.901522827826709
       },
       {
-        "n": 354,
-        "wins": 318,
-        "hit_rate": 0.8983050847457628,
-        "wilson_lower": 0.8624220854874779
+        "n": 307,
+        "wins": 278,
+        "hit_rate": 0.9055374592833876,
+        "wilson_lower": 0.8676275888582442
       },
       {
-        "n": 354,
-        "wins": 326,
-        "hit_rate": 0.9209039548022598,
-        "wilson_lower": 0.888058889575702
+        "n": 307,
+        "wins": 277,
+        "hit_rate": 0.9022801302931596,
+        "wilson_lower": 0.863925940650445
       }
     ],
     "block_stable": false,
     "status": "COLLECTING"
   },
-  "confirmed_variants": [],
-  "candidate_model_id": "70e47ba5fe5f5191",
-  "note": "High DIFFER hit rate alone is not enough. Decisions use economic break-even and forward evidence."
+  "v2_leader": {},
+  "v1_confirmed": [],
+  "v2_confirmed": [],
+  "candidate_model_id": "41df350ce7fca84c",
+  "ensemble_id": "f81db252073342fe",
+  "live_policy": {
+    "version": "2.0-live-policy",
+    "timestamp": 1790313003,
+    "source": "v1",
+    "rule": "neural_p08",
+    "candidate_id": "70e47ba5fe5f5191",
+    "mode": "RESEARCH_DEMO",
+    "confirmed": false,
+    "economic_qualified": false,
+    "break_even_rate": 0.9174311926605504,
+    "leader_signals": 921,
+    "leader_hit_rate": 0.9142236699239956,
+    "leader_wilson": 0.8943731046176119,
+    "leader_shadow_pnl": -3.220000000000046,
+    "note": "Demo-only policy. Research continues in parallel. A session freezes its selected policy until reset."
+  },
+  "note": "High DIFFER hit rate alone is not enough. Director prioritizes economic forward evidence and keeps live execution demo-only."
 }
