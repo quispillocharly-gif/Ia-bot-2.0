@@ -154,8 +154,8 @@ button:disabled{opacity:.45;cursor:not-allowed;filter:grayscale(.4)}
  <div class="card"><div class="lab">POLÍTICA DE SESIÓN</div><div id="sessionPolicy" class="big vio">–</div><div id="policyMeta" class="mini">TOPO sigue aprendiendo en paralelo</div></div>
 </div>
 <div class="grid">
- <div class="card"><div class="lab">+20 SESSION LAB</div><div id="sessionLabTarget" class="big cyan">–</div><div id="sessionLabMeta" class="mini">Bootstrap forward pendiente</div></div>
- <div class="card"><div class="lab">RIESGO +20 / -5</div><div id="sessionLabStop" class="big yellow">–</div><div id="sessionLabRisk" class="mini">Sin estimación</div></div>
+ <div class="card"><div class="lab">HISTÓRICO +20 SESSION LAB</div><div id="sessionLabTarget" class="big cyan">–</div><div id="sessionLabMeta" class="mini">Bootstrap forward pendiente</div></div>
+ <div class="card"><div class="lab">HISTÓRICO RIESGO +20 / -5</div><div id="sessionLabStop" class="big yellow">–</div><div id="sessionLabRisk" class="mini">Sin estimación</div></div>
  <div class="card"><div class="lab">V2 SESIONES REALES</div><div id="v2RealSessions" class="big vio">0</div><div id="v2RealMeta" class="mini">Prospectivas · sin reutilizar histórico</div></div>
 </div>
 <div class="grid">
@@ -191,7 +191,7 @@ button:disabled{opacity:.45;cursor:not-allowed;filter:grayscale(.4)}
  <div id="derivAccount" class="mini">El PAT se usa solo en esta pestaña y no se guarda en GitHub.</div>
 </div>
 <div class="grid">
- <div class="card"><div class="lab">SESIONES GANADAS</div><div id="wonSessions" class="big green">0</div><div class="mini">Cada +$20 completados suma 1</div></div>
+ <div class="card"><div class="lab">SESIONES GANADAS</div><div id="wonSessions" class="big green">0</div><div class="mini">Cada +$10 netos completados suma 1</div></div>
  <div class="card"><div class="lab">SESIONES PERDIDAS</div><div id="lostSessions" class="big red">0</div><div class="mini">Cada stop-loss completado suma 1</div></div>
  <div class="card"><div class="lab">TOTAL SESIONES</div><div id="totalSessions" class="big cyan">0</div><div id="sessionWinRate" class="mini">Éxito –</div></div>
 </div>
@@ -209,21 +209,21 @@ button:disabled{opacity:.45;cursor:not-allowed;filter:grayscale(.4)}
   <div><div class="mini">AUTO-COMPRA</div><button id="autoDemoToggle">AUTO-DEMO OFF</button></div>
  </div>
  <div class="grid" style="margin-top:10px">
-  <div><div class="lab">META DE SESIÓN</div><div class="big green">+$20.00</div><div class="mini">P&L neto real de contratos demo</div></div>
+  <div><div class="lab">META DE SESIÓN</div><div class="big green">+$10.00</div><div class="mini">P&L neto real de contratos demo</div></div>
   <div><div class="lab">P&L SESIÓN</div><div id="sessionPnl" class="big">+$0.00</div><div id="sessionProgress" class="mini">0.0% de la meta</div></div>
   <div><div class="lab">PRÓXIMO STAKE</div><div id="nextStake" class="big">$1.00</div><div id="sessionWL" class="mini">0 WIN · 0 LOSS</div></div>
  </div>
  <div class="grid" style="margin-top:10px">
   <div><div class="mini">STAKE MÁXIMO DEMO</div><input id="maxStake" type="number" inputmode="decimal" min="0.35" max="6" step="0.01" value="6.00"></div>
   <div><div class="mini">STOP-LOSS SESIÓN</div><input id="sessionStopLoss" type="number" inputmode="decimal" min="1" step="0.50" value="5.00"></div>
-  <div><div class="mini">SESIÓN</div><button id="resetSession">REINICIAR META +$20</button></div>
+  <div><div class="mini">SESIÓN</div><button id="resetSession">REINICIAR META +$10</button></div>
  </div>
  <div class="grid" style="margin-top:10px">
   <div><div class="lab">RACHA ACTUAL</div><div id="streakCurrent" class="big cyan">0 / 46</div><div id="streakPhase" class="mini">FASE 1 - BUSCANDO VENTAJA</div></div>
   <div><div class="lab">MEJOR RACHA</div><div id="streakBest" class="big green">0</div><div id="streakBestMeta" class="mini">Sin racha registrada</div></div>
   <div><div class="lab">46 WIN STREAK LAB</div><div id="streakLabState" class="big yellow">BUSCANDO 46</div><div id="streakLabMeta" class="mini">Filtro progresivo segun la racha.</div></div>
  </div>
- <div id="ladderInfo" class="mini statusline">ANTI-MATCH ESTADISTICO: 1 contrato a la vez. Prioriza transiciones T1/T2/T3, frecuencia, recencia y memoria de MATCH reales. La red neural solo apoya. Stake gradual y +$20 detiene la sesión.</div>
+ <div id="ladderInfo" class="mini statusline">ANTI-MATCH ESTADISTICO: 1 contrato a la vez. Prioriza transiciones T1/T2/T3, frecuencia, recencia y memoria de MATCH reales. La red neural solo apoya. Stake progresivo y +$10 netos detiene la sesión.</div>
  <div id="autoDemoState" class="mini statusline">AUTO-DEMO estadístico: al cerrar un contrato usa el tick más reciente para escoger el siguiente DIFFER. Un contrato a la vez. Solo demo.</div>
  <div id="tradeTrace" class="mini statusline">TRACE: esperando AUTO-DEMO…</div>
 </div>
@@ -324,7 +324,7 @@ let stableCandidateDigit=null,stableCandidateTicks=0,stableCandidateEpoch=0;
 let ticksSinceBuy=0,gateSkips=0;
 let researchPolicy={source:'v1',rule:'neural_argmin',mode:'RESEARCH_DEMO'},sessionPolicy={source:'v1',rule:'neural_argmin',mode:'RESEARCH_DEMO'},currentBreakEven=.9174311926605504;
 let activeMoneyPolicy={promoted:false,compound_fraction:1,pause_after_match:0,batch_size:5,stage_size:5};
-const SESSION_TARGET=20;
+const SESSION_TARGET=10;
 const WIN_STREAK_TARGET=46;
 const STREAK_BLOCK_SIZE=10;
 const HARD_MAX_STAKE=6;
@@ -670,9 +670,9 @@ function resetProfitSession(){
  if(latestLiveEnsemble)liveEnsemble=latestLiveEnsemble;
  liveRuleId='avoid_match_adaptive_all_digits';
  $('sessionPolicy').textContent='V3 · AVOID MATCH';
- $('policyMeta').textContent='STAKE PROGRESIVO CLASICO - sube tras cada WIN y LOSS vuelve a base · ANALISIS anti-MATCH neural + T1/T2/T3 + memoria 24/7 · objetivo +20';
+ $('policyMeta').textContent='STAKE PROGRESIVO CLASICO - sube tras cada WIN y LOSS vuelve a base · ANALISIS anti-MATCH neural + T1/T2/T3 + memoria 24/7 · objetivo +10 netos';
  renderProfitSession();renderStreakLab();
- trace('SESIÓN NUEVA · meta +$20.00 · stop -$'+sessionStopLoss().toFixed(2)+' · '+$('sessionPolicy').textContent,true);
+ trace('SESIÓN NUEVA · meta +$10.00 · stop -$'+sessionStopLoss().toFixed(2)+' · '+$('sessionPolicy').textContent,true);
 }
 function applyProfitLadder(profit){
  sessionPnl+=profit;
@@ -711,11 +711,11 @@ function applyProfitLadder(profit){
  if(sessionPnl>=SESSION_TARGET){
    countFinishedSession('WIN');
    sessionStopped=true;autoDemo=false;syncAutoDemoUI();
-   $('autoDemoState').textContent='META +$20 ALCANZADA: USD '+sessionPnl.toFixed(2)+' netos. AUTO-DEMO detenido para proteger la sesión.';
-   trace('OBJETIVO +$20 NETOS ALCANZADO - sesión protegida',true);
+   $('autoDemoState').textContent='META +$10 ALCANZADA: USD '+sessionPnl.toFixed(2)+' netos. AUTO-DEMO detenido para proteger la sesión.';
+   trace('OBJETIVO +$10 NETOS ALCANZADO - sesión protegida',true);
  }else if(streakTargetHit && sessionPnl<SESSION_TARGET){
-   $('autoDemoState').textContent='Racha 46 WIN registrada como investigación. La sesión sigue solo hasta completar +$20.';
-   trace('RACHA 46 REGISTRADA - objetivo económico sigue siendo +$20');
+   $('autoDemoState').textContent='Racha 46 WIN registrada como investigación. La sesión sigue solo hasta completar +$10 netos.';
+   trace('RACHA 46 REGISTRADA - objetivo económico sigue siendo +$10 netos');
  }else if(sessionPnl<=-sessionStopLoss()){
    countFinishedSession('LOSS');
    sessionStopped=true;autoDemo=false;syncAutoDemoUI();
@@ -737,7 +737,7 @@ function syncAutoDemoUI(){
 function setAutoDemo(next){
  if(next){
    if(sessionStopped){
-     $('autoDemoState').textContent='La sesión está finalizada por meta o stop-loss. Pulsa REINICIAR META +$20 para comenzar otra.';
+     $('autoDemoState').textContent='La sesión está finalizada por meta o stop-loss. Pulsa REINICIAR META +$10 para comenzar otra.';
      trace('SESIÓN FINALIZADA · reinicia para volver a operar');
      return false;
    }
@@ -1559,7 +1559,7 @@ function tryNextTickTrade(){
  maybeAutoBuy(ok,latestPublicTickEpoch);
 }
 function maybeAutoBuy(signalOk,tickEpoch=Date.now()){
- if(sessionStopped){trace('META +$20 YA ALCANZADA');return}
+ if(sessionStopped){trace('META +$10 YA ALCANZADA');return}
  if(!autoDemo){trace('AUTO-DEMO OFF');return}
  if(!signalOk){trace('SIN OPORTUNIDAD CLARA · IA sigue analizando los 10 dígitos');return}
  if(pendingTrade){trace('ESPERANDO RESPUESTA DE PROPUESTA/BUY');return}
