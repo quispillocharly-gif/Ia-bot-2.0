@@ -1,6 +1,11 @@
 name: TOPO AIROMEN - DIFFER Director
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "topo-airomen/differ_director.py"
+      - ".github/workflows/topo-airomen-director.yml"
   workflow_run:
     workflows: ["TOPO AIROMEN - DIFFER Forward Lab"]
     types: [completed]
@@ -26,11 +31,12 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          cp topo-airomen/memory/differ_director_latest.json /tmp/differ_director_latest.json
+          cp topo-airomen/memory/differ_live_policy.json /tmp/differ_live_policy.json
+          git fetch origin main
+          git reset --hard origin/main
+          cp /tmp/differ_director_latest.json topo-airomen/memory/differ_director_latest.json
+          cp /tmp/differ_live_policy.json topo-airomen/memory/differ_live_policy.json
           git add topo-airomen/memory/differ_director_latest.json topo-airomen/memory/differ_live_policy.json
           git diff --cached --quiet || git commit -m "TOPO AIROMEN director checkpoint"
-          for attempt in 1 2 3; do
-            git pull --rebase origin main
-            if git push; then break; fi
-            if [ "$attempt" -eq 3 ]; then exit 1; fi
-            sleep 3
-          done
+          git push
