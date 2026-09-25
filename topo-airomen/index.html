@@ -65,6 +65,11 @@ button:disabled{opacity:.55;cursor:not-allowed}.formgrid{display:grid;grid-templ
  <div id="derivStatus" class="statusline mini">DESCONECTADO · solo demo · auto-buy OFF</div>
  <div id="derivAccount" class="mini">El PAT se usa solo en esta pestaña y no se guarda en GitHub.</div>
 </div>
+<div class="grid">
+ <div class="card"><div class="lab">SESIONES GANADAS</div><div id="wonSessions" class="big green">0</div><div class="mini">Cada +$20 completados suma 1</div></div>
+ <div class="card"><div class="lab">SESIONES PERDIDAS</div><div id="lostSessions" class="big red">0</div><div class="mini">Cada stop-loss completado suma 1</div></div>
+ <div class="card"><div class="lab">TOTAL SESIONES</div><div id="totalSessions" class="big cyan">0</div><div id="sessionWinRate" class="mini">Éxito –</div></div>
+</div>
 <div class="card signalbox">
  <div class="lab">LIVE DIFFER DECISION · DESPUÉS DE CADA TICK → SIGUIENTE TICK</div>
  <div id="liveDiffer" class="signalDigit">DIFFER –</div>
@@ -173,6 +178,26 @@ let activeMoneyPolicy={promoted:false,compound_fraction:1,pause_after_match:0,ba
 const SESSION_TARGET=20;
 let sessionPnl=0,sessionWins=0,sessionLosses=0,currentStake=1,sessionStopped=false,lastSettledContractId=null;
 let sessionBatchTrades=0,sessionBatchWins=0,sessionStage=1,sessionPauseLeft=0;
+const SESSION_STATS_KEY='topo_airomen_session_stats_v1';
+function sessionStats(){
+ try{return JSON.parse(localStorage.getItem(SESSION_STATS_KEY)||'{"wins":0,"losses":0}')}catch(_){return {wins:0,losses:0}}
+}
+function saveSessionStats(x){
+ try{localStorage.setItem(SESSION_STATS_KEY,JSON.stringify(x))}catch(_){}
+}
+function renderSessionStats(){
+ const x=sessionStats(),w=Number(x.wins||0),l=Number(x.losses||0),t=w+l;
+ $('wonSessions').textContent=w;
+ $('lostSessions').textContent=l;
+ $('totalSessions').textContent=t;
+ $('sessionWinRate').textContent=t?('Éxito '+((100*w/t).toFixed(1))+'%'):'Éxito –';
+}
+function countFinishedSession(outcome){
+ const x=sessionStats();
+ if(outcome==='WIN')x.wins=Number(x.wins||0)+1;
+ else if(outcome==='LOSS')x.losses=Number(x.losses||0)+1;
+ saveSessionStats(x);renderSessionStats();
+}
 function trace(msg,good=false){
  const el=$('tradeTrace'); if(!el)return;
  el.textContent='TRACE: '+msg; el.style.color=good?'#6affb6':'#8ca4c8';
@@ -230,10 +255,12 @@ function applyProfitLadder(profit){
  }
  renderProfitSession();
  if(sessionPnl>=SESSION_TARGET){
+   countFinishedSession('WIN');
    sessionStopped=true;autoDemo=false;syncAutoDemoUI();
    $('autoDemoState').textContent='META ALCANZADA: +$'+sessionPnl.toFixed(2)+' netos · AUTO-DEMO detenido.';
    trace('OBJETIVO +$20 NETOS ALCANZADO · sesión detenida',true);
  }else if(sessionPnl<=-sessionStopLoss()){
+   countFinishedSession('LOSS');
    sessionStopped=true;autoDemo=false;syncAutoDemoUI();
    $('autoDemoState').textContent='STOP-LOSS DE SESIÓN alcanzado: $'+sessionPnl.toFixed(2)+' · sesión detenida.';
    trace('STOP-LOSS -$'+sessionStopLoss().toFixed(2)+' ALCANZADO · no perseguir pérdidas');
@@ -601,7 +628,7 @@ $('sessionStopLoss').addEventListener('change',()=>{renderProfitSession()});
 $('derivConnect').onclick=connectDerivDemo;
 
 async function bootstrap(){
- await load();await loadLiveModel();resetProfitSession();startPublicDiffer();
+ await load();await loadLiveModel();renderSessionStats();resetProfitSession();startPublicDiffer();
  setInterval(()=>{load();loadLiveModel()},30000);
 }
 bootstrap();
