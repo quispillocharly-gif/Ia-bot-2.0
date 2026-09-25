@@ -34,6 +34,7 @@ button:disabled{opacity:.55;cursor:not-allowed}.formgrid{display:grid;grid-templ
   <div><div class="mini">PAT</div><input id="derivPat" type="password" autocomplete="new-password" placeholder="Personal Access Token"></div>
   <div><button id="derivConnect">CONECTAR DEMO</button></div>
  </div>
+ <div style="margin-top:8px"><button id="bridgeAutoDemo">AUTO-DEMO OFF</button></div>
  <div id="derivStatus" class="statusline mini">DESCONECTADO · solo demo · auto-buy OFF</div>
  <div id="derivAccount" class="mini">El PAT se usa solo en esta pestaña y no se guarda en GitHub.</div>
 </div>
@@ -98,6 +99,40 @@ function trace(msg,good=false){
  const el=$('tradeTrace'); if(!el)return;
  el.textContent='TRACE: '+msg; el.style.color=good?'#6affb6':'#8ca4c8';
 }
+function syncAutoDemoUI(){
+ const label=autoDemo?'AUTO-DEMO ON':'AUTO-DEMO OFF';
+ for(const id of ['autoDemoToggle','bridgeAutoDemo']){
+   const b=$(id); if(!b)continue;
+   b.textContent=label;
+   b.style.color=autoDemo?'#6affb6':'#4ddcff';
+ }
+ if(derivSocket&&derivSocket.readyState===WebSocket.OPEN){
+   derivMsg('CONECTADO A DERIV DEMO · '+(autoDemo?'AUTO-BUY ON':'AUTO-BUY OFF'),true);
+ }
+}
+function setAutoDemo(next){
+ if(next){
+   if(!derivSocket||derivSocket.readyState!==WebSocket.OPEN||!derivDemoAccount){
+     $('autoDemoState').textContent='Primero conecta una cuenta DERIV DEMO con App ID + PAT.';
+     trace('NO HAY CUENTA DEMO CONECTADA');
+     return false;
+   }
+   if(!liveModel){
+     $('autoDemoState').textContent='Modelo neural live todavía no disponible.';
+     trace('MODELO LIVE NO DISPONIBLE');
+     return false;
+   }
+   autoDemo=true;
+   $('autoDemoState').textContent='AUTO-DEMO activo · una operación a la vez · solo cuenta demo.';
+   trace('AUTO-DEMO ARMADO · esperando señal válida',true);
+ }else{
+   autoDemo=false;
+   $('autoDemoState').textContent='AUTO-DEMO apagado. La IA sigue analizando.';
+   trace('AUTO-DEMO OFF');
+ }
+ syncAutoDemoUI();
+ return autoDemo;
+}
 function derivMsg(msg,ok=false){
  const el=$('derivStatus'); el.textContent=msg; el.style.color=ok?'#6affb6':'#ffe66d';
 }
@@ -132,8 +167,13 @@ async function connectDerivDemo(){
   if(!wsUrl)throw Error('Deriv no devolvió la URL WebSocket demo');
   if(derivSocket)try{derivSocket.close()}catch(_){}
   derivSocket=new WebSocket(wsUrl);
-  derivSocket.onopen=()=>{derivMsg('CONECTADO A DERIV DEMO · AUTO-BUY OFF',true);trace('DEMO CONECTADA · activa AUTO-DEMO para operar',true);btn.textContent='RECONECTAR DEMO';btn.disabled=false};
-  derivSocket.onclose=()=>{derivMsg('CONEXIÓN DEMO CERRADA');btn.disabled=false};
+  derivSocket.onopen=()=>{
+   btn.textContent='RECONECTAR DEMO';btn.disabled=false;
+   derivMsg('CONECTADO A DERIV DEMO · PREPARANDO AUTO-DEMO',true);
+   trace('DEMO CONECTADA · activando AUTO-DEMO',true);
+   setTimeout(()=>setAutoDemo(true),150);
+};
+  derivSocket.onclose=()=>{autoDemo=false;syncAutoDemoUI();derivMsg('CONEXIÓN DEMO CERRADA');btn.disabled=false};
   derivSocket.onerror=()=>{derivMsg('ERROR EN WEBSOCKET DEMO');btn.disabled=false};
   derivSocket.onmessage=e=>{
    try{
@@ -299,20 +339,8 @@ function startPublicDiffer(){
   }catch(_){}
  };
 }
-$('autoDemoToggle').onclick=()=>{
- if(!autoDemo){
-  if(!derivSocket||derivSocket.readyState!==WebSocket.OPEN||!derivDemoAccount){
-   $('autoDemoState').textContent='Primero conecta una cuenta DERIV DEMO con App ID + PAT.';return;
-  }
-  if(!liveModel){$('autoDemoState').textContent='Modelo neural live todavía no disponible.';return}
-  autoDemo=true;$('autoDemoToggle').textContent='AUTO-DEMO ON';$('autoDemoToggle').style.color='#6affb6';
-  $('autoDemoState').textContent='AUTO-DEMO activo · una operación a la vez · solo cuenta demo.';
-  trace('AUTO-DEMO ARMADO · esperando señal válida',true);
- }else{
-  autoDemo=false;$('autoDemoToggle').textContent='AUTO-DEMO OFF';$('autoDemoToggle').style.color='';
-  $('autoDemoState').textContent='AUTO-DEMO apagado. La IA sigue analizando.';
- }
-};
+$('autoDemoToggle').onclick=()=>setAutoDemo(!autoDemo);
+$('bridgeAutoDemo').onclick=()=>setAutoDemo(!autoDemo);
 
 $('derivConnect').onclick=connectDerivDemo;
 
