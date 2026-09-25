@@ -1,0 +1,39 @@
+name: TOPO AIROMEN - +20 Session Lab
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "topo-airomen/differ_session_eval.py"
+      - ".github/workflows/topo-airomen-session-lab.yml"
+  schedule:
+    - cron: "8,28,48 * * * *"
+permissions:
+  contents: write
+concurrency:
+  group: topo-airomen-session-lab
+  cancel-in-progress: false
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - run: pip install -r topo-airomen/requirements-ai.txt
+      - name: Evaluate +20 session target
+        run: python topo-airomen/differ_session_eval.py
+      - name: Persist session research
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add topo-airomen/memory/differ_session_eval_latest.json
+          git diff --cached --quiet || git commit -m "TOPO AIROMEN +20 session research"
+          for attempt in 1 2 3; do
+            git pull --rebase origin main
+            if git push; then break; fi
+            if [ "$attempt" -eq 3 ]; then exit 1; fi
+            sleep 3
+          done
