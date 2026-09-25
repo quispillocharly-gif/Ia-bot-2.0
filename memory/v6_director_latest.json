@@ -1,12 +1,12 @@
 {
   "version": "6.0-autonomous-research-director",
-  "timestamp": 1790295728,
+  "timestamp": 1790296050,
   "decision": "NO_CONFIRMED_EDGE_CONTINUE_RESEARCH",
   "forward_confirmed_systems": [],
   "economic_status": "PAYOUT_READY_FORWARD_NOT_CONFIRMED",
   "payout_status": "OK",
   "break_even_rate": 0.11198208286674133,
-  "payout_age_seconds": 2966,
+  "payout_age_seconds": 3288,
   "payout_fresh": true,
   "payout_max_age_seconds": 7200,
   "drift_status": "STABLE",
@@ -25,14 +25,23 @@
     "v4_1_p": 0.4240942770575632,
     "v5_2_p": 0.23414480412218475,
     "v6_1_p": 0.32119825661811197,
-    "v7_economic_placebo_p": 0.9906
+    "v7_economic_placebo_p": 0.9936
   },
   "adaptive_v7": {
     "status": "NOT_CONFIRMED",
     "current_regime": "UNIFORM",
-    "shadow_pnl": -230.74999999999952,
-    "ev_per_signal": -0.17130660727542651,
-    "calibration_ece": 0.07596171619987749
+    "shadow_pnl": -273.4499999999994,
+    "ev_per_signal": -0.18488843813387384,
+    "calibration_ece": 0.07677318539411741
+  },
+  "challenger_v8": {
+    "status": "RESEARCHING",
+    "leader_id": "agree3_all",
+    "leader_signals": 0,
+    "leader_hit_rate": null,
+    "leader_wilson": 0.0,
+    "leader_bonferroni_p": 1.0,
+    "confirmed_variants": []
   },
   "evidence_sprint": {
     "status": "RESEARCHING_EDGE",
@@ -41,13 +50,14 @@
     "core_gates_total": 4,
     "projected_signals_at_deadline": null
   },
-  "registry_total": 14,
+  "registry_total": 15,
   "graveyard_size": 1,
   "priorities": [
     "Do not reuse the rejected V4.1 transition_3 candidate without new independent evidence.",
     "Rotate from the failed neural candidate after cooldown and test a materially different challenger.",
     "Treat V5 historical gains as exploratory after multiple-testing correction.",
     "V7 adaptive shadow strategy did not confirm economic edge; use its regime and calibration diagnostics only.",
+    "Continue V8 prospective challenger tournament; do not select a winner before independent forward evidence and Bonferroni correction.",
     "Current conservative MATCH break-even is 0.1120; wait for forward confirmation before economic evaluation."
   ],
   "note": "V6 records evidence, corrects exploratory multiple testing, monitors drift and failed candidates, and does not equate hit rate with profitability."
