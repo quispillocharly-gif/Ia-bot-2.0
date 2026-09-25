@@ -13,6 +13,8 @@ OUT=M/"differ_strategy_search_latest.json"
 
 MAX_EXAMPLES=5000
 MIN_HISTORY=220
+MIN_SIGNAL_RATE=.30
+MAX_IDLE_TICKS=18
 CADENCE_MODES=['ctx3','ctx4','ctx3_nr']
 
 def load_json(path, default=None):
@@ -156,8 +158,12 @@ def eval_strategy(cfg,examples):
     prev_wait=0
     current_wait=cadence_wait(mode,examples[0],0,None,0) if examples else 1
     chain=[]
+    idle=0
+    max_idle=0
     for ex in examples:
         ticks_waited+=1
+        idle+=1
+        max_idle=max(max_idle,idle)
         if ticks_waited<current_wait:
             continue
         d=choose(cfg,ex,last_barrier)
@@ -170,11 +176,14 @@ def eval_strategy(cfg,examples):
         prev_wait=current_wait
         current_wait=cadence_wait(mode,ex,emitted,last_barrier,prev_wait)
         ticks_waited=0
+        idle=0
     m=metrics(out,len(examples))
     m["cadence_mode"]=mode
     m["cadence_preview"]=chain[:30]
     m["no_repeat_digit"]=True
     m["signals_emitted"]=emitted
+    m["max_idle_ticks"]=int(max_idle)
+    m["frequency_ok"]=bool((m["signal_rate"] or 0)>=MIN_SIGNAL_RATE and max_idle<=MAX_IDLE_TICKS)
     return m,out
 
 def main():
@@ -222,24 +231,28 @@ def main():
     ranked=[]
     for cfg in grid:
         m,_=eval_strategy(cfg,discovery)
-        if m["signals"]<50:continue
-        ranked.append((m["wilson_lower"],m["hit_rate"] or 0,m["signals"],cfg,m))
-    ranked.sort(reverse=True,key=lambda x:(x[0],x[1],x[2]))
-    top=[x[3] for x in ranked[:12]]
+        if m["signals"]<50 or not m.get("frequency_ok"):continue
+        ranked.append((m["wilson_lower"],m["hit_rate"] or 0,m["signal_rate"] or 0,m["signals"],cfg,m))
+    ranked.sort(reverse=True,key=lambda x:(x[0],x[1],x[2],x[3]))
+    top=[x[4] for x in ranked[:18]]
 
     validated=[]
     for cfg in top:
         md,_=eval_strategy(cfg,discovery)
         mv,_=eval_strategy(cfg,validation)
-        if mv["signals"]<30:continue
-        validated.append((mv["wilson_lower"],mv["hit_rate"] or 0,mv["signals"],cfg,md,mv))
-    validated.sort(reverse=True,key=lambda x:(x[0],x[1],x[2]))
-    finalists=validated[:6]
+        if mv["signals"]<40 or not mv.get("frequency_ok"):continue
+        validated.append((mv["wilson_lower"],mv["hit_rate"] or 0,mv["signal_rate"] or 0,mv["signals"],cfg,md,mv))
+    validated.sort(reverse=True,key=lambda x:(x[0],x[1],x[2],x[3]))
+    finalists=validated[:10]
 
     results=[]
-    for _,_,_,cfg,md,mv in finalists:
+    for _,_,_,_,cfg,md,mv in finalists:
         mh,oh=eval_strategy(cfg,holdout)
-        perfect=bool(mv["signals"]>=50 and mh["signals"]>=50 and mv["losses"]==0 and mh["losses"]==0)
+        perfect=bool(
+            mv["signals"]>=50 and mh["signals"]>=50 and
+            mv["losses"]==0 and mh["losses"]==0 and
+            mv.get("frequency_ok") and mh.get("frequency_ok")
+        )
         results.append({
             "id":cfg["id"],"config":cfg,
             "discovery":md,"validation":mv,"holdout":mh,
@@ -267,8 +280,8 @@ def main():
         "leader":leader,
         "perfect_candidates":perfect,
         "status":"PERFECT_FORWARD_CANDIDATE" if perfect else "SEARCHING",
-        "target":"Find dynamic cadence + no-repeat-digit strategies with 0 MATCH in both chronological validation and holdout with >=50 signals in each block. This is evidence, not a guarantee of future 100%.",
-        "note":"Cadence families tested: dynamic 1-3, dynamic 1-4, and dynamic 1-3 without repeating the same wait. All block the previous barrier digit. Strategy choice is made before the final holdout; sparse samples are rejected."
+        "target":"Find dynamic cadence + no-repeat-digit strategies with 0 MATCH in validation and holdout, while keeping signal_rate >= 30% and max idle <= 18 ticks. Evidence, not a guarantee.",
+        "note":"Sparse or frozen strategies are rejected. A 100% result only counts if it keeps buying often enough: signal_rate >= 30% and no gap above 18 ticks in validation/holdout."
     }
     OUT.write_text(json.dumps(out,indent=2)); print(json.dumps(out,indent=2))
 
