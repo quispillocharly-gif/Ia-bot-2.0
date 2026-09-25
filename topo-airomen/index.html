@@ -223,7 +223,7 @@ button:disabled{opacity:.45;cursor:not-allowed;filter:grayscale(.4)}
   <div><div class="lab">MEJOR RACHA</div><div id="streakBest" class="big green">0</div><div id="streakBestMeta" class="mini">Sin racha registrada</div></div>
   <div><div class="lab">46 WIN STREAK LAB</div><div id="streakLabState" class="big yellow">BUSCANDO 46</div><div id="streakLabMeta" class="mini">Filtro progresivo segun la racha.</div></div>
  </div>
- <div id="ladderInfo" class="mini statusline">ANTI-MATCH POR BLOQUES: cada 10 WIN, pausa adaptativa de 4-8 ticks para recalibrar sin comprar; luego retoma buscando el menos probable. +$20 detiene la sesión. Stake maximo USD 6.</div>
+ <div id="ladderInfo" class="mini statusline">ANTI-MATCH DIVERSIFICADO: cada ciclo usa los 10 dígitos una vez, siempre empezando por el menos riesgoso entre los que faltan. Después de un MATCH observa 5-10 ticks y recalibra. Cada 10 WIN protege la racha. +$20 detiene la sesión.</div>
  <div id="autoDemoState" class="mini statusline">La IA analiza continuamente los 10 dígitos y solo compra cuando detecta una oportunidad anti-MATCH que además supera el margen económico. Sin espera fija. Solo demo.</div>
  <div id="tradeTrace" class="mini statusline">TRACE: esperando AUTO-DEMO…</div>
 </div>
@@ -306,7 +306,8 @@ let latestPublicTickEpoch=0,latestPublicTickDigit=null,latestPublicTickQuote=nul
 let lastAvoidDecision=null,pendingLearnSnapshot=null;
 let pendingBuyBarrier=null,activeTradeBarrier=null;
 let lastBoughtBarrier=null,sameBarrierBuyStreak=0;
-const MAX_SAME_BARRIER_BUYS=2;
+const MAX_SAME_BARRIER_BUYS=1;
+let coverageUsedDigits=[],coverageCycle=1,matchRecoveryTicks=0;
 const ALT_RISK_TOLERANCE=.0075;
 const ONLINE_LEARNER_KEY='topo_airomen_avoidmatch_learner_v2';
 const ADV_RANKER_KEY='topo_airomen_adv_ranker_v1';
@@ -366,6 +367,34 @@ function adaptiveOpportunityThreshold(){
 function loadStreakLab(){try{const x=JSON.parse(localStorage.getItem(STREAK_LAB_KEY)||'null');if(x){bestWinStreak=Math.max(0,Number(x.bestWinStreak)||0);bestStreakContext=x.bestStreakContext||null}}catch(_){}}
 function saveStreakLab(){try{localStorage.setItem(STREAK_LAB_KEY,JSON.stringify({bestWinStreak:bestWinStreak,bestStreakContext:bestStreakContext}))}catch(_){}}
 function streakPhase(){if(currentWinStreak>=40)return {name:'FASE 5 - PROTEGER 40+',score:72,edge:.0050,consensus:3,maxUnc:.035};if(currentWinStreak>=30)return {name:'FASE 4 - PROTEGER 30+',score:66,edge:.0035,consensus:3,maxUnc:.040};if(currentWinStreak>=20)return {name:'FASE 3 - PROTEGER 20+',score:60,edge:.0022,consensus:2,maxUnc:.045};if(currentWinStreak>=10)return {name:'FASE 2 - PROTEGER 10+',score:54,edge:.0012,consensus:2,maxUnc:.050};return {name:'FASE 1 - BUSCANDO VENTAJA',score:48,edge:.0003,consensus:1,maxUnc:.060};}
+function adaptiveMatchRecoveryTicks(){
+ const r100=rollingMatchRate(100);
+ const ec=executionCalibration();
+ if(r100!=null&&r100>=.12)return 10;
+ if(ec.hit!=null&&ec.hit<.92)return 9;
+ if(r100!=null&&r100<=.07)return 5;
+ return 7;
+}
+function coverageRemaining(){
+ return Array.from({length:10},(_,d)=>d).filter(d=>!coverageUsedDigits.includes(d));
+}
+function selectCoverageDigit(rows){
+ let remaining=coverageRemaining();
+ if(!remaining.length){
+   coverageUsedDigits=[];
+   coverageCycle++;
+   remaining=Array.from({length:10},(_,d)=>d);
+ }
+ const candidates=rows.filter(x=>remaining.includes(Number(x.digit)));
+ candidates.sort((a,b)=>Number(a.matchProb)-Number(b.matchProb)||Number(a.uncertainty||0)-Number(b.uncertainty||0)||Number(b.sourceConsensus||0)-Number(a.sourceConsensus||0));
+ let pick=candidates[0]||rows[0];
+ if(pick&&Number(pick.digit)===Number(lastBoughtBarrier)&&candidates.length>1)pick=candidates.find(x=>Number(x.digit)!==Number(lastBoughtBarrier))||pick;
+ return pick;
+}
+function markCoverageDigit(d){
+ d=Number(d);
+ if(d>=0&&d<=9&&!coverageUsedDigits.includes(d))coverageUsedDigits.push(d);
+}
 function adaptiveBlockPauseTicks(){
  const r100=rollingMatchRate(100);
  const ec=executionCalibration();
@@ -457,6 +486,7 @@ function resetProfitSession(){
  currentWinStreak=0;streakTargetHit=false;activeSignalSnapshot=null;pendingSignalSnapshot=null;
  blockPauseTicks=0;lastProtectedBlock=0;
  lastBoughtBarrier=null;sameBarrierBuyStreak=0;
+ coverageUsedDigits=[];coverageCycle=1;matchRecoveryTicks=0;
  currentStake=baseStake();lastSettledContractId=null;
  sessionPolicy={source:'v3',rule:'avoid_match_adaptive_all_digits',mode:'RESEARCH_DEMO',candidate_id:(latestLiveEnsemble?.ensemble_id||researchPolicy.candidate_id||'–')};
  activeMoneyPolicy=researchPolicy.money_policy?{...researchPolicy.money_policy}:{promoted:false,compound_fraction:1,pause_after_match:0,batch_size:5,stage_size:5};
@@ -467,7 +497,7 @@ function resetProfitSession(){
  if(latestLiveEnsemble)liveEnsemble=latestLiveEnsemble;
  liveRuleId='avoid_match_adaptive_all_digits';
  $('sessionPolicy').textContent='V3 · AVOID MATCH';
- $('policyMeta').textContent='MENOS PROBABLE PRO · bloques de 10 WIN · pausa adaptativa anti-MATCH · objetivo +$20 · max 2 seguidas/numero · stake max USD 6';
+ $('policyMeta').textContent='ANTI-MATCH DIVERSIFICADO · ciclo 0-9 completo · cada dígito 1 vez por ciclo · pausa post-MATCH · bloques de 10 WIN · objetivo +$20 · stake max USD 6';
  renderProfitSession();renderStreakLab();
  trace('SESIÓN NUEVA · meta +$20.00 · stop -$'+sessionStopLoss().toFixed(2)+' · '+$('sessionPolicy').textContent,true);
 }
@@ -630,6 +660,7 @@ async function connectDerivDemo(){
       pendingSignalSnapshot=null;
       if(activeTradeBarrier===lastBoughtBarrier)sameBarrierBuyStreak++;
       else{lastBoughtBarrier=activeTradeBarrier;sameBarrierBuyStreak=1;}
+      markCoverageDigit(activeTradeBarrier);
       trace('BUY OK · contrato '+activeContractId+' · DIFFER '+activeTradeBarrier+' · repetición '+sameBarrierBuyStreak+'/'+MAX_SAME_BARRIER_BUYS+' · racha '+currentWinStreak+'/'+WIN_STREAK_TARGET,true);
       $('lastDemoBuy').textContent='DIFFER '+activeTradeBarrier;
       $('lastDemoBuy').className='big yellow';
@@ -649,6 +680,7 @@ async function connectDerivDemo(){
         activeContractId=null; pendingTrade=false;activeTradeBarrier=null;
         recentTradeResults.push(profit>=0?1:0);if(recentTradeResults.length>50)recentTradeResults.shift();
         consecutiveDemoLosses=profit<0?consecutiveDemoLosses+1:0;
+        if(profit<0)matchRecoveryTicks=adaptiveMatchRecoveryTicks();
         updateWinStreak(profit);
         recordExecutedTrade(profit,activeSignalSnapshot);
         applyProfitLadder(profit);
@@ -979,7 +1011,7 @@ function renderAvoidMatchScanner(){
  $('safetyStatus').textContent=d.ok?'DYNAMIC':'LEARNING';
  $('safetyStatus').className='big '+(d.ok?'green':'yellow');
  const ec=executionCalibration();
- $('safetyMeta').textContent='0-9 siempre · max 2 seguidas · MATCH 100/250/500 '+(r100==null?'–':pct(r100))+' / '+(r250==null?'–':pct(r250))+' / '+(r500==null?'–':pct(r500))+' · HIT real '+(ec.hit==null?'–':pct(ec.hit))+' ('+ec.n+')';
+ $('safetyMeta').textContent='ciclo 0-9 completo · usados '+coverageUsedDigits.length+'/10 · MATCH 100/250/500 '+(r100==null?'–':pct(r100))+' / '+(r250==null?'–':pct(r250))+' / '+(r500==null?'–':pct(r500))+' · HIT real '+(ec.hit==null?'–':pct(ec.hit))+' ('+ec.n+')';
  $('safetyGap').textContent=d.opportunityScore+' / '+d.opportunityThreshold;
  $('safetyRecent').textContent=r100==null?'–':pct(r100);
  $('safetyTransition').textContent='D'+d.digit+' · T1 '+pct(d.transition)+' · T2 '+pct(d.transition2)+' · micro '+pct(d.micro)+' · neural '+pct(d.neuralRisk)+' · memoria MATCH '+pct(d.executionRisk);
@@ -1040,8 +1072,15 @@ function tryNextTickTrade(){
    const before=blockPauseTicks;
    blockPauseTicks=Math.max(0,blockPauseTicks-1);
    $('autoDemoState').textContent='PROTECCIÓN DE RACHA · '+before+' tick'+(before===1?'':'s')+' de recalibración · sigue aprendiendo sin comprar.';
-   trace('RECALIBRANDO · '+before+' tick'+(before===1?'':'s')+' · ranking anti-MATCH actualizado');
+   trace('RECALIBRANDO BLOQUE · '+before+' tick'+(before===1?'':'s'));
    renderStreakLab();
+   return;
+ }
+ if(matchRecoveryTicks>0){
+   const before=matchRecoveryTicks;
+   matchRecoveryTicks=Math.max(0,matchRecoveryTicks-1);
+   $('autoDemoState').textContent='RECUPERACIÓN ANTI-MATCH · observando '+before+' tick'+(before===1?'':'s')+' · sin perseguir pérdidas.';
+   trace('RECUPERACIÓN POST-MATCH · '+before+' tick'+(before===1?'':'s')+' · ranking sigue aprendiendo');
    return;
  }
  maybeAutoBuy(ok,latestPublicTickEpoch);
@@ -1055,29 +1094,19 @@ function maybeAutoBuy(signalOk,tickEpoch=Date.now()){
  if(!derivSocket||derivSocket.readyState!==WebSocket.OPEN){trace('WEBSOCKET DEMO NO LISTO');return}
  if(liveBarrier==null){trace('SIN DÍGITO DIFFER');return}
 
- let chosenBarrier=Number(liveBarrier);
- let chosenRisk=Number(liveBarrierProb??lastAvoidDecision?.matchProb??1);
- let chosenScore=Number(lastAvoidDecision?.opportunityScore||0);
- let chosenConsensus=Number(lastAvoidDecision?.sourceConsensus||0);
- let chosenUncertainty=Number(lastAvoidDecision?.uncertainty||0);
- if(chosenBarrier===lastBoughtBarrier && sameBarrierBuyStreak>=MAX_SAME_BARRIER_BUYS){
-   const rows=lastAvoidDecision?.rows||[];
-   const alt=rows.find(x=>Number(x.digit)!==Number(lastBoughtBarrier));
-   if(!alt){
-     trace('ANTI-REPETICIÓN · sin alternativa disponible');
-     return;
-   }
-   chosenBarrier=Number(alt.digit);
-   liveBarrier=chosenBarrier;
-   liveBarrierProb=Number(alt.matchProb);
-   chosenRisk=Number(alt.matchProb);
-   chosenScore=Number(lastAvoidDecision?.opportunityScore||0);
-   chosenConsensus=Number(alt.sourceConsensus||0);
-   chosenUncertainty=Number(alt.uncertainty||0);
-   $('liveDiffer').textContent='DIFFER '+chosenBarrier;
-   $('liveProb').textContent=pct(liveBarrierProb);
-   $('liveReason').textContent='D'+lastBoughtBarrier+' llegó a 2 compras seguidas · usa el siguiente MENOS PROBABLE: D'+chosenBarrier;
- }
+ const rows=lastAvoidDecision?.rows||[];
+ const pick=selectCoverageDigit(rows);
+ if(!pick){trace('SIN RANKING 0-9 DISPONIBLE');return}
+ let chosenBarrier=Number(pick.digit);
+ let chosenRisk=Number(pick.matchProb??1);
+ let chosenScore=candidateOpportunityScore(pick,Number(lastAvoidDecision?.gap||0),Number(lastAvoidDecision?.maxMatchRisk||.085));
+ let chosenConsensus=Number(pick.sourceConsensus||0);
+ let chosenUncertainty=Number(pick.uncertainty||0);
+ liveBarrier=chosenBarrier;
+ liveBarrierProb=chosenRisk;
+ $('liveDiffer').textContent='DIFFER '+chosenBarrier;
+ $('liveProb').textContent=pct(chosenRisk);
+ $('liveReason').textContent='CICLO '+coverageCycle+' · usados '+coverageUsedDigits.length+'/10 · elige el MENOS RIESGOSO entre los dígitos aún no usados: D'+chosenBarrier;
  if(tickEpoch===lastSignalEpoch){trace('TICK YA PROCESADO');return}
  lastSignalEpoch=tickEpoch;
  const stake=Math.min(HARD_MAX_STAKE,Math.max(.35,currentStake||baseStake()));
