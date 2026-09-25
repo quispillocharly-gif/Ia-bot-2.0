@@ -103,7 +103,7 @@ button:disabled{opacity:.45;cursor:not-allowed}
 <script>
 'use strict';
 
-const BUILD='CLEAN-1.6-CONNECTION-GUARD';
+const BUILD='CLEAN-1.7-ANTI-FREEZE';
 const CADENCE_MIN=1,CADENCE_MAX=3;
 const SYMBOL='R_75';
 const TARGET=10;
@@ -134,6 +134,7 @@ let antiMatchStreak=0,bestAntiMatchStreak=0;
 let currentDecision=null,stableDigit=null,stableTicks=0,lastStabilityEpoch=0;
 let recoveryTicks=0;
 let cadenceStep=0,ticksIntoCadence=0,currentCadenceWait=1,lastCadenceWait=0,lastBoughtDigit=null;
+let idleTradeTicks=0;
 
 let execHistory=[];
 try{
@@ -196,6 +197,7 @@ function resetSession(){
   currentStake=baseStake();pending=false;pendingOrder=null;
   stableDigit=null;stableTicks=0;recoveryTicks=0;
   cadenceStep=0;ticksIntoCadence=0;lastCadenceWait=0;currentCadenceWait=deriveCadenceWait(0,null,0);lastBoughtDigit=null;
+  idleTradeTicks=0;
   renderSession();
   $('contractView').textContent='–';
   $('contractView').className='big';
@@ -224,6 +226,7 @@ function applyResult(profit,snapshot){
 
   if(snapshot){
     lastBoughtDigit=Number(snapshot.barrier);
+    idleTradeTicks=0;
     cadenceStep++;
     lastCadenceWait=currentCadenceWait;
     currentCadenceWait=deriveCadenceWait(cadenceStep,lastBoughtDigit,lastCadenceWait);
@@ -535,6 +538,34 @@ function analyze(){
     maxStructure=Math.min(maxStructure,.112);
   }
 
+  // ANTI-FREEZE: no permite que los filtros secundarios bloqueen para siempre.
+  // Los límites principales (riesgo total, neural y estructura) permanecen duros.
+  let freezePhase='NORMAL';
+  if(idleTradeTicks>=36){
+    freezePhase='RECOVERY 36+';
+    maxRisk=Math.max(maxRisk,.108);
+    maxNeural=Math.max(maxNeural,.096);
+    maxNeuralRank=Math.max(maxNeuralRank,2);
+    maxHot=Math.max(maxHot,3);
+    minCold=Math.min(minCold,1);
+    minGap=Math.min(minGap,.00005);
+    maxContext=Math.max(maxContext,.106);
+    maxStructure=Math.max(maxStructure,.114);
+  }else if(idleTradeTicks>=22){
+    freezePhase='RECOVERY 22+';
+    maxNeuralRank=Math.max(maxNeuralRank,2);
+    maxHot=Math.max(maxHot,3);
+    minCold=Math.min(minCold,1);
+    minGap=Math.min(minGap,.00012);
+    maxContext=Math.max(maxContext,.104);
+    maxStructure=Math.max(maxStructure,.113);
+  }else if(idleTradeTicks>=12){
+    freezePhase='RECOVERY 12+';
+    maxHot=Math.max(maxHot,2);
+    minCold=Math.min(minCold,2);
+    minGap=Math.min(minGap,.00020);
+  }
+
   const structureRisk=Math.max(best.t2,best.t3,best.off);
   const veryStrong=
     best.combined<=.097 &&
@@ -544,7 +575,7 @@ function analyze(){
     best.cold>=3 &&
     gap>=.0008;
 
-  const stableNeed=(veryStrong&&antiMatchStreak<8)?1:2;
+  const stableNeed=(veryStrong&&antiMatchStreak<8)?1:(idleTradeTicks>=18?1:2);
   if(lastEpoch!==lastStabilityEpoch){
     lastStabilityEpoch=lastEpoch;
     if(stableDigit===best.digit)stableTicks++;
@@ -567,12 +598,23 @@ function analyze(){
     stable:stableTicks>=stableNeed
   };
 
-  const ok=Object.values(checks).every(Boolean);
+  const normalOk=Object.values(checks).every(Boolean);
+  const safeFallback=
+    idleTradeTicks>=48 &&
+    memoryReady &&
+    (lastBoughtDigit==null||Number(best.digit)!==Number(lastBoughtDigit)) &&
+    best.combined<=.110 &&
+    best.calibratedNeural<=.098 &&
+    best.structHot===0 &&
+    best.context<=.108 &&
+    structureRisk<=.116;
+
+  const ok=normalOk||safeFallback;
 
   return {
     best,rows,gap,mr,ok,stableNeed,checks,
     thresholds:{maxRisk,maxNeural,maxNeuralRank,maxStructHot,maxHot,minCold,minGap,maxContext,maxStructure},
-    structureRisk,streakPhase,antiMatchStreak,bestAntiMatchStreak,
+    structureRisk,streakPhase,freezePhase,idleTradeTicks,safeFallback,antiMatchStreak,bestAntiMatchStreak,
     cadenceWait:currentCadenceWait,cadenceStep,ticksIntoCadence,lastBoughtDigit
   };
 }
@@ -596,6 +638,8 @@ function renderDecision(){
     ' · gap '+pct(d.gap)+
     ' · MATCH real '+(d.mr==null?'–':pct(d.mr))+
     ' · racha '+antiMatchStreak+' · '+d.streakPhase+
+    ' · idle '+d.idleTradeTicks+' · '+d.freezePhase+
+    (d.safeFallback?' · SAFE FALLBACK':'')+
     ' · cadena dinámica paso '+d.cadenceStep+' · espera '+d.ticksIntoCadence+'/'+d.cadenceWait+
     (d.lastBoughtDigit==null?'':' · bloqueado D'+d.lastBoughtDigit)+
     ' · estabilidad '+stableTicks+'/'+d.stableNeed+
@@ -637,6 +681,7 @@ function sendTrade(payload){
 function requestProposal(decision){
   if(!canTrade()||pending||activeContract||!decision?.ok)return false;
   pending=true;
+  idleTradeTicks=0;
   const barrier=decision.best.digit;
   const stake=money(Math.min(HARD_MAX,maxStake(),Math.max(.35,currentStake)));
   const currency=tradeAccount.currency||tradeAccount.currency_code||'USD';
@@ -677,6 +722,7 @@ function requestProposal(decision){
     if(pending&&pendingOrder&&pendingOrder.requestId===requestId&&!activeContract){
       log('TIMEOUT PROPUESTA · liberando');
       pending=false;pendingOrder=null;
+      idleTradeTicks=0;
       $('contractView').textContent='REINTENTAR';
     }
   },5000);
@@ -953,6 +999,7 @@ function handleMarket(m){
 
     if(auto&&!sessionStopped&&!pending&&!activeContract){
       ticksIntoCadence=Math.min(999,ticksIntoCadence+1);
+      idleTradeTicks=Math.min(999,idleTradeTicks+1);
     }
 
     $('lastTick').textContent=quote+' · '+digit;
