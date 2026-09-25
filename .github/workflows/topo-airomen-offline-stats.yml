@@ -1,0 +1,58 @@
+name: TOPO AIROMEN - Offline Statistical Memory
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "topo-airomen/differ_offline_stats.py"
+      - ".github/workflows/topo-airomen-offline-stats.yml"
+  schedule:
+    - cron: "5,25,45 * * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: topo-airomen-offline-stats
+  cancel-in-progress: false
+
+jobs:
+  learn:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install collector dependency
+        run: pip install websockets==13.1
+
+      - name: Collect latest 10000 R_75 ticks
+        env:
+          TICK_COUNT: "10000"
+          SYMBOL: "R_75"
+        run: python topo-airomen/collect_ticks.py
+
+      - name: Update persistent statistical memory
+        env:
+          SYMBOL: "R_75"
+          OFFLINE_DECAY: "0.985"
+        run: python topo-airomen/differ_offline_stats.py
+
+      - name: Persist offline memory
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add topo-airomen/memory/differ_offline_state.json topo-airomen/memory/differ_offline_stats.json
+          git diff --cached --quiet || git commit -m "TOPO AIROMEN offline statistical memory"
+          rm -f topo-airomen/ticks.json topo-airomen/audit.json
+          for attempt in 1 2 3; do
+            git pull --rebase origin main
+            if git push; then break; fi
+            if [ "$attempt" -eq 3 ]; then exit 1; fi
+            sleep 3
+          done
