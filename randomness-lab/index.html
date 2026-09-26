@@ -5,36 +5,27 @@ body{margin:0;background:#07111c;color:#eaf5ff;font-family:system-ui;padding:16p
 <div class="c g"><div><span class="m">P&L neto</span><div id="pnl" class="n">$0.00</div></div><div><span class="m">Meta</span><div class="n">+$5.00</div></div><div><span class="m">Stake actual</span><div id="stake" class="n">$0.50</div></div><div><span class="m">Acierto</span><div id="rate" class="n">–</div></div></div>
 <div class="c"><div class="bar"><i id="progress"></i></div><p class="m">Una sola sesión: MATCH resta del neto y vuelve el stake a $0.50; WIN reinvierte. Solo se detiene automáticamente al alcanzar +$5 netos.</p></div>
 <div class="c g"><div><span class="m">WIN</span><div id="wins" class="n ok">0</div></div><div><span class="m">MATCH</span><div id="loss" class="n bad">0</div></div><div><span class="m">Operaciones</span><div id="trades" class="n">0</div></div><div><span class="m">Entropía</span><div id="entropy" class="n">–</div></div></div>
-<div class="c"><div class="m">Distribución reciente / candidato de menor frecuencia ajustada</div><div id="digits" class="digits"></div></div>
+<div class="c g"><div><span class="m">DECISIÓN</span><div id="decision" class="n">ESPERAR</div></div><div><span class="m">LECTURA</span><div id="reason" class="m">Analizando aleatoriedad…</div></div></div><div class="c"><div class="m">Distribución calculada</div><div id="digits" class="digits"></div></div>
 <div class="c"><b>REGISTRO</b><div id="log" class="log m">Esperando datos…</div></div></div>
 <script>
 const $=x=>document.getElementById(x);
 const BASE=.50,TARGET=5;
-let seq=[],run=false,pnl=0,stake=BASE,w=0,l=0,pending=null,lastEpoch=0,lastMatch=null;
+let seq=[],run=false,pnl=0,stake=BASE,w=0,l=0,pending=null,lastEpoch=0,lastMatch=null,wait=0;
 function log(s){$('log').textContent=s+'\\n'+$('log').textContent.slice(0,3500)}
 function stats(){const t=w+l;$('pnl').textContent=(pnl>=0?'+':'')+'$'+pnl.toFixed(2);$('stake').textContent='$'+stake.toFixed(2);$('wins').textContent=w;$('loss').textContent=l;$('trades').textContent=t;$('rate').textContent=t?(100*w/t).toFixed(2)+'%':'–';$('progress').style.width=Math.max(0,Math.min(100,pnl/TARGET*100))+'%'}
 function calc(){
- if(seq.length<20)return null;
- const windows=[20,50,100,200],avg=Array(10).fill(0);
- for(const size of windows){
-   const z=seq.slice(-size),c=Array(10).fill(1);z.forEach(d=>c[d]++);
-   const n=c.reduce((x,y)=>x+y,0);
-   for(let d=0;d<10;d++)avg[d]+=c[d]/n/windows.length;
- }
- const z=seq.slice(-200),c=Array(10).fill(0);z.forEach(d=>c[d]++);
- let H=0,n=Math.max(1,z.length);c.forEach(x=>{if(x){const p=x/n;H-=p*Math.log(p)}});H/=Math.log(10);
- $('entropy').textContent=(H*100).toFixed(1)+'%';
- $('digits').innerHTML=avg.map((p,d)=>'<div class="d">D'+d+'<br><b>'+(p*100).toFixed(1)+'%</b></div>').join('');
- // Todos los dígitos participan. Base aleatoria fuerte + inclinación estadística suave.
- const weights=avg.map((p,d)=>{
-   const under=Math.max(-.03,Math.min(.03,.10-p));
-   let weight=1+under*5;
-   if(lastMatch&&d===lastMatch.digit)weight*=.90;
-   return Math.max(.70,weight);
- });
- let total=weights.reduce((x,y)=>x+y,0),r=Math.random()*total;
- for(let d=0;d<10;d++){r-=weights[d];if(r<=0)return d}
- return Math.floor(Math.random()*10)
+ if(seq.length<100)return null;
+ const windows=[20,50,100,200],avg=Array(10).fill(0),spread=Array(10).fill(0),all=[];
+ for(const size of windows){const z=seq.slice(-size),c=Array(10).fill(1);z.forEach(d=>c[d]++);const n=c.reduce((a,b)=>a+b,0),p=c.map(x=>x/n);all.push(p);for(let d=0;d<10;d++)avg[d]+=p[d]/windows.length}
+ for(let d=0;d<10;d++)spread[d]=Math.max(...all.map(p=>p[d]))-Math.min(...all.map(p=>p[d]));
+ const z=seq.slice(-200),c=Array(10).fill(0);z.forEach(d=>c[d]++);let H=0;c.forEach(x=>{if(x){const p=x/z.length;H-=p*Math.log(p)}});H/=Math.log(10);
+ $('entropy').textContent=(H*100).toFixed(1)+'%';$('digits').innerHTML=avg.map((p,d)=>'<div class="d">D'+d+'<br><b>'+(p*100).toFixed(1)+'%</b></div>').join('');
+ const rank=avg.map((p,d)=>({d,p,s:spread[d]})).sort((a,b)=>a.p-b.p),best=rank[0],gap=rank[1].p-best.p;
+ let score=(best.p<.09?2:0)+(gap>.004?1:0)+(best.s<.04?1:0)+(H>.94?1:0);
+ if(lastMatch&&best.d===lastMatch.digit)score-=2;
+ const buy=score>=4&&wait===0,reason='D'+best.d+' · estimado '+(best.p*100).toFixed(2)+'% · score '+score+'/5';
+ $('decision').textContent=buy?'COMPRAR DIFFER '+best.d:'ESPERAR';$('reason').textContent=reason;
+ return {buy,digit:best.d,reason}
 }
 function settle(d){
  if(!pending)return;
@@ -46,7 +37,7 @@ function settle(d){
    log('WIN · DIFFER '+pending.barrier+' · +$'+profit.toFixed(2)+' · próximo $'+stake.toFixed(2))
  }else{
    lastMatch={digit:pending.barrier};
-   pnl-=pending.stake;stake=BASE;l++;
+   pnl-=pending.stake;stake=BASE;l++;wait=3;
    log('MATCH · D'+pending.barrier+' · -$'+pending.stake.toFixed(2)+' · reinicio $0.50')
  }
  pending=null;stats();
@@ -54,10 +45,10 @@ function settle(d){
 }
 function onDigit(d){
  if(pending){settle(d);return}
+ if(wait>0){wait--;calc();return}
  if(!run||seq.length<100)return;
- const b=calc();if(b===null)return;
- pending={barrier:b,stake};
- log('COMPRA SIM · DIFFER '+b+' · $'+stake.toFixed(2)+' · aleatoria 0–9 con sesgo suave')
+ const q=calc();if(!q||!q.buy)return;
+ pending={barrier:q.digit,stake};log('ESTRATEGIA · DIFFER '+q.digit+' · $'+stake.toFixed(2)+' · '+q.reason)
 }
 function connect(){
  const ws=new WebSocket('wss://api.derivws.com/trading/v1/options/ws/public');
@@ -77,7 +68,7 @@ function connect(){
  ws.onclose=()=>{$('status').textContent='Feed desconectado';run=false};
  ws.onerror=()=>{$('status').textContent='Error de conexión al feed'}
 }
-$('go').onclick=()=>{pnl=0;stake=BASE;w=0;l=0;pending=null;lastMatch=null;run=true;stats();log('SESIÓN CONTINUA INICIADA · base $0.50 · objetivo NETO +$5')};
+$('go').onclick=()=>{pnl=0;stake=BASE;w=0;l=0;pending=null;lastMatch=null;wait=0;run=true;stats();log('SESIÓN CONTINUA INICIADA · base $0.50 · objetivo NETO +$5')};
 $('stop').onclick=()=>{run=false;pending=null;$('status').textContent='Sesión detenida manualmente';log('STOP MANUAL')};
 stats();connect();
 </script></body></html>
