@@ -10,6 +10,7 @@ body{margin:0;background:#07111c;color:#eaf5ff;font-family:system-ui;padding:16p
 <script>
 const $=x=>document.getElementById(x);
 const BASE=.50,TARGET=5;
+// Regla permanente: 0-9 siempre elegibles; sin bloqueo ni cooldown tras MATCH.
 let seq=[],run=false,pnl=0,stake=BASE,w=0,l=0,pending=null,lastEpoch=0,lastMatch=null,wait=0,perf=Array.from({length:10},()=>({w:1,l:1})),sessions=0,modelMemory={};
 function log(s){$('log').textContent=s+'\\n'+$('log').textContent.slice(0,3500)}
 function stats(){const t=w+l;$('sessions').textContent=sessions;$('pnl').textContent=(pnl>=0?'+':'')+'$'+pnl.toFixed(2);$('stake').textContent='$'+stake.toFixed(2);$('wins').textContent=w;$('loss').textContent=l;$('trades').textContent=t;$('rate').textContent=t?(100*w/t).toFixed(2)+'%':'–';$('progress').style.width=Math.max(0,Math.min(100,pnl/TARGET*100))+'%'}
@@ -48,11 +49,11 @@ function settle(d){
    pnl+=profit;stake=pending.stake+profit;w++;perf[pending.barrier].w++;
    log('WIN · DIFFER '+pending.barrier+' · +$'+profit.toFixed(2)+' · próximo $'+stake.toFixed(2))
  }else{
-   lastMatch={digit:pending.barrier};
+   lastMatch=null;
    pnl-=pending.stake;stake=BASE;l++;perf[pending.barrier].l++;
    log('MATCH · D'+pending.barrier+' · -$'+pending.stake.toFixed(2)+' · reinicio $0.50')
  }
- pending=null;stats();
+ pending=null;wait=0;stats();
  if(pnl>=TARGET){sessions++;stats();run=false;$('status').textContent='META ALCANZADA · sesión detenida';log('OBJETIVO +$5 ALCANZADO')}
 }
 function onDigit(d){
