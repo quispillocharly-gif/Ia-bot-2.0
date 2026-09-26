@@ -15,7 +15,7 @@ function log(s){$('log').textContent=s+'\\n'+$('log').textContent.slice(0,3500)}
 function stats(){const t=w+l;$('pnl').textContent=(pnl>=0?'+':'')+'$'+pnl.toFixed(2);$('stake').textContent='$'+stake.toFixed(2);$('wins').textContent=w;$('loss').textContent=l;$('trades').textContent=t;$('rate').textContent=t?(100*w/t).toFixed(2)+'%':'–';$('progress').style.width=Math.max(0,Math.min(100,pnl/TARGET*100))+'%'}
 function calc(){
  if(seq.length<180)return null;
- const train=seq.slice(-180,-50),test=seq.slice(-50),now=seq[seq.length-1];
+ const train=seq.slice(-180,-40),test=seq.slice(-40),now=seq[seq.length-1];
  const freqPick=(arr,n)=>{const c=Array(10).fill(0);arr.slice(-n).forEach(d=>c[d]++);return c.indexOf(Math.min(...c))};
  const transPick=(arr)=>{const m=Array.from({length:10},()=>Array(10).fill(1));for(let i=1;i<arr.length;i++)m[arr[i-1]][arr[i]]++;const row=m[arr[arr.length-1]],mn=Math.min(...row);return row.indexOf(mn)};
  const antiRun=(arr)=>{const c=Array(10).fill(0);arr.slice(-35).forEach(d=>c[d]++);const last=arr[arr.length-1];c[last]+=2;return c.indexOf(Math.min(...c))};
@@ -26,12 +26,12 @@ function calc(){
   {name:'TRANSICIÓN',pick:transPick},
   {name:'ANTI-RACHA',pick:antiRun}
  ];
- const scored=models.map(m=>{let hit=0,total=0,weightedHit=0,weightTotal=0,ctx=train.slice();for(let i=0;i<test.length;i++){const actual=test[i],p=m.pick(ctx),wt=.5+.5*(i+1)/test.length;if(p===actual){hit++;weightedHit+=wt}total++;weightTotal+=wt;ctx.push(actual)}return {...m,match:hit/Math.max(1,total),weighted:weightedHit/Math.max(.001,weightTotal)}});
- scored.sort((x,y)=>(x.weighted+.35*x.match)-(y.weighted+.35*y.match));const champ=scored[0],runner=scored[1],digit=champ.pick(seq);
+ const scored=models.map(m=>{let hit=0,total=0,ctx=train.slice();for(const actual of test){const p=m.pick(ctx);if(p===actual)hit++;total++;ctx.push(actual)}return {...m,match:hit/Math.max(1,total)}});
+ scored.sort((x,y)=>x.match-y.match);const champ=scored[0],runner=scored[1],digit=champ.pick(seq);
  const z=seq.slice(-200),c=Array(10).fill(0);z.forEach(d=>c[d]++);let H=0;c.forEach(x=>{if(x){const p=x/z.length;H-=p*Math.log(p)}});H/=Math.log(10);
  $('entropy').textContent=(H*100).toFixed(1)+'%';$('digits').innerHTML=c.map((x,d)=>'<div class="d">D'+d+'<br><b>'+(100*x/z.length).toFixed(1)+'%</b></div>').join('');
- const champRisk=champ.weighted+.35*champ.match,runnerRisk=runner.weighted+.35*runner.match,edge=runnerRisk-champRisk,buy=champ.match<=.10&&champ.weighted<=.105&&edge>=.002;
- const reason=champ.name+' · MATCH '+(champ.match*100).toFixed(1)+'% · reciente '+(champ.weighted*100).toFixed(1)+'% · ventaja '+(edge*100).toFixed(2);
+ const edge=runner.match-champ.match,buy=champ.match<=.10&&edge>=0;
+ const reason=champ.name+' · MATCH validación '+(champ.match*100).toFixed(1)+'% · siguiente '+(runner.match*100).toFixed(1)+'%';
  $('decision').textContent=buy?'COMPRAR DIFFER '+digit:'ESPERAR';$('reason').textContent=reason;
  return {buy,digit,reason}
 }
