@@ -25,8 +25,8 @@ function calc(){
  const tt=trans[last].reduce((x,y)=>x+y,0);
  const rows=avg.map((p,d)=>{const tp=trans[last][d]/tt,cons=Math.max(...probs.map(x=>x[d]))-Math.min(...probs.map(x=>x[d])),hist=perf[d].l/(perf[d].w+perf[d].l);return {d,risk:p*.45+tp*.35+hist*.20,cons,tp,hist}});
  rows.sort((x,y)=>x.risk-y.risk);const best=rows[0],gap=rows[1].risk-best.risk;
- let score=0;if(best.risk<.105)score+=2;if(gap>.006)score++;if(best.cons<.035)score++;if(H>.95)score++;if(best.tp<.10)score++;if(best.d===last||best.d===prev)score--;if(lastMatch&&best.d===lastMatch.digit)score-=2;
- const buy=score>=5&&wait===0;
+ let score=0;if(best.risk<.105)score+=2;if(gap>.006)score++;if(best.cons<.035)score++;if(H>.95)score++;if(best.tp<.10)score++;
+ const buy=score>=5;
  const reason='D'+best.d+' · riesgo combinado '+(best.risk*100).toFixed(2)+'% · transición '+(best.tp*100).toFixed(1)+'% · score '+score+'/6';
  $('decision').textContent=buy?'COMPRAR DIFFER '+best.d:'ESPERAR';$('reason').textContent=reason;
  return {buy,digit:best.d,reason}
@@ -41,7 +41,7 @@ function settle(d){
    log('WIN · DIFFER '+pending.barrier+' · +$'+profit.toFixed(2)+' · próximo $'+stake.toFixed(2))
  }else{
    lastMatch={digit:pending.barrier};
-   pnl-=pending.stake;stake=BASE;l++;perf[pending.barrier].l++;wait=5;
+   pnl-=pending.stake;stake=BASE;l++;perf[pending.barrier].l++;
    log('MATCH · D'+pending.barrier+' · -$'+pending.stake.toFixed(2)+' · reinicio $0.50')
  }
  pending=null;stats();
@@ -49,7 +49,7 @@ function settle(d){
 }
 function onDigit(d){
  if(pending){settle(d);return}
- if(wait>0){wait--;calc();return}
+ 
  if(!run||seq.length<100)return;
  const q=calc();if(!q||!q.buy)return;
  pending={barrier:q.digit,stake};log('ESTRATEGIA · DIFFER '+q.digit+' · $'+stake.toFixed(2)+' · '+q.reason)
