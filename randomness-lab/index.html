@@ -14,30 +14,29 @@ const BASE=.50,TARGET=5;
 let seq=[],run=false,pnl=0,stake=BASE,w=0,l=0,pending=null,lastEpoch=0,lastMatch=null,wait=0,perf=Array.from({length:10},()=>({w:1,l:1})),sessions=0,modelMemory={};
 function log(s){$('log').textContent=s+'\\n'+$('log').textContent.slice(0,3500)}
 function stats(){const t=w+l;$('sessions').textContent=sessions;$('pnl').textContent=(pnl>=0?'+':'')+'$'+pnl.toFixed(2);$('stake').textContent='$'+stake.toFixed(2);$('wins').textContent=w;$('loss').textContent=l;$('trades').textContent=t;$('rate').textContent=t?(100*w/t).toFixed(2)+'%':'–';$('progress').style.width=Math.max(0,Math.min(100,pnl/TARGET*100))+'%'}
-function calc(){
- if(seq.length<180)return null;
- const hist=seq.slice(-180),last=hist[hist.length-1];
- const risk=Array(10).fill(0);
+function pickRisk(arr){
+ const hist=arr.slice(-180),last=hist[hist.length-1],risk=Array(10).fill(0);
  const c20=Array(10).fill(0),c50=Array(10).fill(0),c100=Array(10).fill(0),trans=Array(10).fill(1);
- hist.slice(-20).forEach(d=>c20[d]++);
- hist.slice(-50).forEach(d=>c50[d]++);
- hist.slice(-100).forEach(d=>c100[d]++);
+ hist.slice(-20).forEach(d=>c20[d]++);hist.slice(-50).forEach(d=>c50[d]++);hist.slice(-100).forEach(d=>c100[d]++);
  for(let i=1;i<hist.length;i++)if(hist[i-1]===last)trans[hist[i]]++;
  const tsum=trans.reduce((a,b)=>a+b,0);
- for(let d=0;d<10;d++){
-   const p20=(c20[d]+1)/30,p50=(c50[d]+1)/60,p100=(c100[d]+1)/110,pt=trans[d]/tsum;
-   risk[d]=.30*p20+.25*p50+.20*p100+.25*pt;
- }
- const min=Math.min(...risk),candidates=risk.map((r,d)=>({r,d})).filter(x=>Math.abs(x.r-min)<1e-12);
- const digit=candidates[Math.floor(Math.random()*candidates.length)].d;
+ for(let d=0;d<10;d++)risk[d]=.30*((c20[d]+1)/30)+.25*((c50[d]+1)/60)+.20*((c100[d]+1)/110)+.25*(trans[d]/tsum);
+ const min=Math.min(...risk),cand=risk.map((r,d)=>({r,d})).filter(x=>Math.abs(x.r-min)<1e-12);
+ return {digit:cand[Math.floor(Math.random()*cand.length)].d,risk}
+}
+function calc(){
+ if(seq.length<300)return null;
+ const sample=seq.slice(-300),testStart=200;let matches=0,total=0;
+ for(let i=testStart;i<sample.length;i++){const p=pickRisk(sample.slice(0,i));if(p.digit===sample[i])matches++;total++}
+ const rate=matches/Math.max(1,total),se=Math.sqrt(.1*.9/Math.max(1,total)),upper=rate+1.64*se;
+ const q=pickRisk(seq),digit=q.digit,risk=q.risk;
  const sorted=risk.map((r,d)=>({r,d})).sort((a,b)=>a.r-b.r);
- const gap=sorted[1].r-sorted[0].r;
- const buy=true;
+ const evidence=total>=80&&upper<.10;
  const z=seq.slice(-200),c=Array(10).fill(0);z.forEach(d=>c[d]++);let H=0;c.forEach(x=>{if(x){const p=x/z.length;H-=p*Math.log(p)}});H/=Math.log(10);
  $('entropy').textContent=(H*100).toFixed(1)+'%';$('digits').innerHTML=risk.map((r,d)=>'<div class="d">D'+d+'<br><b>'+(r*100).toFixed(1)+'%</b></div>').join('');
- const reason='MENOR RIESGO · D'+digit+' '+(risk[digit]*100).toFixed(1)+'% · siguiente '+(sorted[1].r*100).toFixed(1)+'% · margen '+(gap*100).toFixed(2);
- $('decision').textContent='COMPRAR DIFFER '+digit;$('reason').textContent=reason;
- return {buy,digit,reason,risk}
+ const reason='PRUEBA OOS '+total+' · MATCH '+(rate*100).toFixed(1)+'% · límite '+(upper*100).toFixed(1)+'% · mínimo D'+digit;
+ $('decision').textContent=evidence?'COMPRAR DIFFER '+digit:'ESPERAR · SIN VENTAJA VALIDADA';$('reason').textContent=reason;
+ return {buy:evidence,digit,reason,risk}
 }
 function settle(d){
  if(!pending)return;
@@ -58,13 +57,13 @@ function settle(d){
 function onDigit(d){
  if(pending){settle(d);return}
  
- if(!run||seq.length<100)return;
+ if(!run||seq.length<300)return;
  const q=calc();if(!q||!q.buy)return;
  pending={barrier:q.digit,stake,risk:q.risk||[]};log('ESTRATEGIA · DIFFER '+q.digit+' · $'+stake.toFixed(2)+' · '+q.reason)
 }
 function connect(){
  const ws=new WebSocket('wss://api.derivws.com/trading/v1/options/ws/public');
- ws.onopen=()=>ws.send(JSON.stringify({ticks_history:'R_75',count:300,end:'latest',style:'ticks',req_id:1}));
+ ws.onopen=()=>ws.send(JSON.stringify({ticks_history:'R_75',count:500,end:'latest',style:'ticks',req_id:1}));
  ws.onmessage=e=>{
    const m=JSON.parse(e.data);
    if(m.history&&m.history.prices){
@@ -74,7 +73,7 @@ function connect(){
    }else if(m.tick){
      const ep=Number(m.tick.epoch);if(ep===lastEpoch)return;lastEpoch=ep;
      const p=Number(m.tick.pip_size||4),d=Number(Number(m.tick.quote).toFixed(p).slice(-1));
-     seq.push(d);if(seq.length>600)seq.shift();calc();onDigit(d)
+     seq.push(d);if(seq.length>800)seq.shift();calc();onDigit(d)
    }
  };
  ws.onclose=()=>{$('status').textContent='Feed desconectado';run=false};
