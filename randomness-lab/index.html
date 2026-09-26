@@ -10,20 +10,24 @@ body{margin:0;background:#07111c;color:#eaf5ff;font-family:system-ui;padding:16p
 <script>
 const $=x=>document.getElementById(x);
 const BASE=.50,TARGET=5;
-let seq=[],run=false,pnl=0,stake=BASE,w=0,l=0,pending=null,lastEpoch=0,lastMatch=null,wait=0;
+let seq=[],run=false,pnl=0,stake=BASE,w=0,l=0,pending=null,lastEpoch=0,lastMatch=null,wait=0,perf=Array.from({length:10},()=>({w:1,l:1}));
 function log(s){$('log').textContent=s+'\\n'+$('log').textContent.slice(0,3500)}
 function stats(){const t=w+l;$('pnl').textContent=(pnl>=0?'+':'')+'$'+pnl.toFixed(2);$('stake').textContent='$'+stake.toFixed(2);$('wins').textContent=w;$('loss').textContent=l;$('trades').textContent=t;$('rate').textContent=t?(100*w/t).toFixed(2)+'%':'–';$('progress').style.width=Math.max(0,Math.min(100,pnl/TARGET*100))+'%'}
 function calc(){
- if(seq.length<100)return null;
- const windows=[20,50,100,200],avg=Array(10).fill(0),spread=Array(10).fill(0),all=[];
- for(const size of windows){const z=seq.slice(-size),c=Array(10).fill(1);z.forEach(d=>c[d]++);const n=c.reduce((a,b)=>a+b,0),p=c.map(x=>x/n);all.push(p);for(let d=0;d<10;d++)avg[d]+=p[d]/windows.length}
- for(let d=0;d<10;d++)spread[d]=Math.max(...all.map(p=>p[d]))-Math.min(...all.map(p=>p[d]));
+ if(seq.length<120)return null;
+ const sizes=[20,50,100,200],probs=sizes.map(n=>{const c=Array(10).fill(1);seq.slice(-n).forEach(d=>c[d]++);const t=c.reduce((x,y)=>x+y,0);return c.map(x=>x/t)});
+ const avg=Array.from({length:10},(_,d)=>probs.reduce((x,p)=>x+p[d],0)/probs.length);
  const z=seq.slice(-200),c=Array(10).fill(0);z.forEach(d=>c[d]++);let H=0;c.forEach(x=>{if(x){const p=x/z.length;H-=p*Math.log(p)}});H/=Math.log(10);
  $('entropy').textContent=(H*100).toFixed(1)+'%';$('digits').innerHTML=avg.map((p,d)=>'<div class="d">D'+d+'<br><b>'+(p*100).toFixed(1)+'%</b></div>').join('');
- const rank=avg.map((p,d)=>({d,p,s:spread[d]})).sort((a,b)=>a.p-b.p),best=rank[0],gap=rank[1].p-best.p;
- let score=(best.p<.09?2:0)+(gap>.004?1:0)+(best.s<.04?1:0)+(H>.94?1:0);
- if(lastMatch&&best.d===lastMatch.digit)score-=2;
- const buy=score>=4&&wait===0,reason='D'+best.d+' · estimado '+(best.p*100).toFixed(2)+'% · score '+score+'/5';
+ const last=seq[seq.length-1],prev=seq[seq.length-2];
+ const trans=Array.from({length:10},()=>Array(10).fill(1));
+ for(let i=Math.max(1,seq.length-240);i<seq.length;i++)trans[seq[i-1]][seq[i]]++;
+ const tt=trans[last].reduce((x,y)=>x+y,0);
+ const rows=avg.map((p,d)=>{const tp=trans[last][d]/tt,cons=Math.max(...probs.map(x=>x[d]))-Math.min(...probs.map(x=>x[d])),hist=perf[d].l/(perf[d].w+perf[d].l);return {d,risk:p*.45+tp*.35+hist*.20,cons,tp,hist}});
+ rows.sort((x,y)=>x.risk-y.risk);const best=rows[0],gap=rows[1].risk-best.risk;
+ let score=0;if(best.risk<.105)score+=2;if(gap>.006)score++;if(best.cons<.035)score++;if(H>.95)score++;if(best.tp<.10)score++;if(best.d===last||best.d===prev)score--;if(lastMatch&&best.d===lastMatch.digit)score-=2;
+ const buy=score>=5&&wait===0;
+ const reason='D'+best.d+' · riesgo combinado '+(best.risk*100).toFixed(2)+'% · transición '+(best.tp*100).toFixed(1)+'% · score '+score+'/6';
  $('decision').textContent=buy?'COMPRAR DIFFER '+best.d:'ESPERAR';$('reason').textContent=reason;
  return {buy,digit:best.d,reason}
 }
@@ -33,11 +37,11 @@ function settle(d){
  if(won){
    lastMatch=null;
    const profit=pending.stake*.10;
-   pnl+=profit;stake=pending.stake+profit;w++;
+   pnl+=profit;stake=pending.stake+profit;w++;perf[pending.barrier].w++;
    log('WIN · DIFFER '+pending.barrier+' · +$'+profit.toFixed(2)+' · próximo $'+stake.toFixed(2))
  }else{
    lastMatch={digit:pending.barrier};
-   pnl-=pending.stake;stake=BASE;l++;wait=3;
+   pnl-=pending.stake;stake=BASE;l++;perf[pending.barrier].l++;wait=5;
    log('MATCH · D'+pending.barrier+' · -$'+pending.stake.toFixed(2)+' · reinicio $0.50')
  }
  pending=null;stats();
@@ -68,7 +72,7 @@ function connect(){
  ws.onclose=()=>{$('status').textContent='Feed desconectado';run=false};
  ws.onerror=()=>{$('status').textContent='Error de conexión al feed'}
 }
-$('go').onclick=()=>{pnl=0;stake=BASE;w=0;l=0;pending=null;lastMatch=null;wait=0;run=true;stats();log('SESIÓN CONTINUA INICIADA · base $0.50 · objetivo NETO +$5')};
+$('go').onclick=()=>{pnl=0;stake=BASE;w=0;l=0;pending=null;lastMatch=null;wait=0;perf=Array.from({length:10},()=>({w:1,l:1}));run=true;stats();log('SESIÓN CONTINUA INICIADA · base $0.50 · objetivo NETO +$5')};
 $('stop').onclick=()=>{run=false;pending=null;$('status').textContent='Sesión detenida manualmente';log('STOP MANUAL')};
 stats();connect();
 </script></body></html>
