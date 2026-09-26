@@ -1,40 +1,31 @@
 {
   "version": "7.0-adaptive-shadow-lab",
-  "timestamp": 1790448355,
+  "timestamp": 1790449144,
   "model_id": "4d99ca520bf96c63",
   "search_version": null,
-  "runs": 145,
-  "new_ticks_this_run": 583,
+  "runs": 146,
+  "new_ticks_this_run": 394,
   "window": 10,
   "hidden": [
     32
   ],
   "confidence_threshold": 0.0,
-  "current_regime": "TRANSITIONAL",
+  "current_regime": "UNIFORM",
   "regime_features": {
-    "entropy": 0.995421354395806,
-    "repeat_rate": 0.10552763819095477,
-    "max_share": 0.125,
-    "transition_peak": 0.18379926217154324
+    "entropy": 0.9902384928391912,
+    "repeat_rate": 0.09547738693467336,
+    "max_share": 0.145,
+    "transition_peak": 0.1780263189438
   },
   "regime_performance": [
     {
       "regime": "TRANSITIONAL",
-      "opportunities": 17590,
-      "signals": 3896,
-      "wins": 402,
-      "hit_rate": 0.10318275154004107,
-      "wilson_lower": 0.09401817812113092,
-      "shadow_pnl": -306.1399999999974
-    },
-    {
-      "regime": "REPEAT_HEAVY",
-      "opportunities": 10780,
-      "signals": 2344,
-      "wins": 237,
-      "hit_rate": 0.10110921501706485,
-      "wilson_lower": 0.08954975424292086,
-      "shadow_pnl": -227.58999999999855
+      "opportunities": 17640,
+      "signals": 3904,
+      "wins": 404,
+      "hit_rate": 0.10348360655737705,
+      "wilson_lower": 0.09431546929348397,
+      "shadow_pnl": -296.2799999999974
     },
     {
       "regime": "CONCENTRATED",
@@ -46,94 +37,103 @@
       "shadow_pnl": -66.32999999999956
     },
     {
+      "regime": "REPEAT_HEAVY",
+      "opportunities": 10954,
+      "signals": 2388,
+      "wins": 238,
+      "hit_rate": 0.09966499162479062,
+      "wilson_lower": 0.08828574337233024,
+      "shadow_pnl": -262.65999999999855
+    },
+    {
       "regime": "UNIFORM",
-      "opportunities": 53675,
-      "signals": 4310,
+      "opportunities": 53845,
+      "signals": 4321,
       "wins": 398,
-      "hit_rate": 0.09234338747099768,
-      "wilson_lower": 0.08405931234929952,
-      "shadow_pnl": -755.8600000000096
+      "hit_rate": 0.0921083082619764,
+      "wilson_lower": 0.08384439814815516,
+      "shadow_pnl": -766.8600000000096
     }
   ],
-  "opportunities": 87068,
-  "predictions": 11679,
-  "wins": 1156,
-  "losses": 10523,
-  "hit_rate": 0.09898107714701601,
-  "wilson_lower": 0.09369600730278299,
-  "coverage": 0.13413653695961777,
+  "opportunities": 87462,
+  "predictions": 11742,
+  "wins": 1159,
+  "losses": 10583,
+  "hit_rate": 0.09870550161812297,
+  "wilson_lower": 0.09344106448929312,
+  "coverage": 0.1342525896960966,
   "skipped_confidence": 0,
-  "skipped_agreement": 75389,
-  "mean_confidence": 0.1764405824799674,
-  "mean_expert_agreement": 2.7424437023717783,
+  "skipped_agreement": 75720,
+  "mean_confidence": 0.1764323062854647,
+  "mean_expert_agreement": 2.741611309827968,
   "calibration": {
-    "ece": 0.07712855609367024,
-    "brier_binary": 0.09660640144571281,
-    "brier_multiclass": 0.0924749524367754,
-    "brier_multiclass_samples": 76305,
+    "ece": 0.07722773038910406,
+    "brier_binary": 0.09654411344569433,
+    "brier_multiclass": 0.09247435118635787,
+    "brier_multiclass_samples": 76699,
     "bins": [
       {
         "bin": "0.00-0.12",
-        "n": 213,
-        "wins": 15,
-        "hit_rate": 0.07042253521126761,
-        "avg_confidence": 0.11741128493922418
+        "n": 215,
+        "wins": 16,
+        "hit_rate": 0.07441860465116279,
+        "avg_confidence": 0.11742529110159985
       },
       {
         "bin": "0.12-0.14",
-        "n": 9069,
-        "wins": 837,
-        "hit_rate": 0.09229242474363215,
-        "avg_confidence": 0.13318381711720684
+        "n": 9109,
+        "wins": 842,
+        "hit_rate": 0.09243605225601054,
+        "avg_confidence": 0.13318452750164875
       },
       {
         "bin": "0.14-0.16",
-        "n": 22914,
-        "wins": 2282,
-        "hit_rate": 0.09958977044601554,
-        "avg_confidence": 0.1505332776646324
+        "n": 23029,
+        "wins": 2292,
+        "hit_rate": 0.0995266837465804,
+        "avg_confidence": 0.15053744858389717
       },
       {
         "bin": "0.16-0.18",
-        "n": 22206,
-        "wins": 2247,
-        "hit_rate": 0.1011888678735477,
-        "avg_confidence": 0.1694967245982862
+        "n": 22304,
+        "wins": 2253,
+        "hit_rate": 0.10101327116212339,
+        "avg_confidence": 0.16949888070045813
       },
       {
         "bin": "0.18-0.22",
-        "n": 23166,
-        "wins": 2315,
-        "hit_rate": 0.0999309332642666,
-        "avg_confidence": 0.19636967085121126
+        "n": 23262,
+        "wins": 2321,
+        "hit_rate": 0.09977645946178317,
+        "avg_confidence": 0.19636431631197596
       },
       {
         "bin": "0.22-1.01",
-        "n": 9500,
-        "wins": 957,
-        "hit_rate": 0.10073684210526315,
-        "avg_confidence": 0.24982241000627217
+        "n": 9543,
+        "wins": 959,
+        "hit_rate": 0.10049250759719165,
+        "avg_confidence": 0.24981775039942225
       }
     ],
-    "samples": 87068
+    "samples": 87462
   },
   "placebo": {
-    "random_10pct_p": 0.311,
-    "economic_break_even_p": 0.8952,
+    "random_10pct_p": 0.478,
+    "economic_break_even_p": 0.955,
     "bootstrap_95_rate": [
-      0.0905,
-      0.1165
+      0.087,
+      0.1145
     ],
     "recent_samples": 2000
   },
   "economic": {
     "break_even_rate": 0.11198208286674133,
-    "shadow_pnl": -1355.9199999999903,
-    "shadow_staked": 11679.0,
-    "shadow_roi": -0.11609898107714618,
-    "ev_per_signal": -0.11609898107714618,
+    "shadow_pnl": -1392.12999999999,
+    "shadow_staked": 11742.0,
+    "shadow_roi": -0.11855987055016097,
+    "ev_per_signal": -0.11855987055016097,
     "payout_snapshot_available": true,
-    "payout_snapshot_age_seconds": 541,
+    "payout_snapshot_age_seconds": 1330,
     "payout_snapshot_fresh": true,
     "payout_max_age_seconds": 7200
   },
