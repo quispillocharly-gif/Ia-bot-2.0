@@ -1,0 +1,24 @@
+name: Randomness Math Learning
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/15 * * * *"
+permissions:
+  contents: write
+jobs:
+  learn:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run walk-forward math lab
+        run: python randomness-2usd/learner.py
+      - name: Save learned state
+        run: |
+          git config user.name "math-lab-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add randomness-2usd/learned-state.json
+          git diff --cached --quiet || git commit -m "Update Math Lab learned state"
+          git push
