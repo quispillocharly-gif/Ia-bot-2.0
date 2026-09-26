@@ -73,15 +73,15 @@ button:disabled{opacity:.55;cursor:not-allowed}.formgrid{display:grid;grid-templ
  </div>
  <div class="controls">
   <div><div class="mini">STAKE BASE REAL</div><input id="realStake" type="number" inputmode="decimal" min="0.35" step="0.01" value="1.00"></div>
-  <div><div class="mini">AUTO REAL</div><button id="autoRealToggle">AUTO-REAL OFF</button></div>
+  <div><div class="mini">REAL MONITOR</div><button id="autoRealToggle">REAL MONITOR</button></div>
  </div>
  <div class="grid" style="margin-top:10px">
   <div><div class="mini">STAKE MÁXIMO REAL</div><input id="realMaxStake" type="number" inputmode="decimal" min="0.35" step="0.01" value="2.00"></div>
   <div><div class="mini">STOP-LOSS REAL</div><input id="realStopLoss" type="number" inputmode="decimal" min="1" step="0.50" value="2.00"></div>
   <div><div class="mini">MODO</div><div id="executionModeView" class="big yellow">DEMO</div></div>
  </div>
- <div id="realStatus" class="statusline mini">DESCONECTADO · conectar no activa compras.</div>
- <div id="realAccount" class="mini">AUTO-REAL requiere activación manual.</div>
+ <div id="realStatus" class="statusline mini">DESCONECTADO · REAL solo monitoreo; no activa compras.</div>
+ <div id="realAccount" class="mini">REAL disponible para monitoreo de señales; sin auto-compra.</div>
 </div>
 <div class="card signalbox">
  <div class="lab">DECISIÓN LIVE · ESPERA DINÁMICA 1–5 TICKS</div>
@@ -106,13 +106,13 @@ button:disabled{opacity:.55;cursor:not-allowed}.formgrid{display:grid;grid-templ
   <div><div class="mini">STOP-LOSS SESIÓN</div><input id="sessionStopLoss" type="number" inputmode="decimal" min="1" step="0.50" value="5.00"></div>
   <div><div class="mini">SESIÓN</div><button id="resetSession">REINICIAR CICLO +$2</button></div>
  </div>
- <div id="ladderInfo" class="mini statusline">TP +$2 AUTO-RESET · cada WIN suma su ganancia al siguiente stake; MATCH vuelve al stake base. El aprendizaje continúa entre ciclos.</div>
+ <div id="ladderInfo" class="mini statusline">TP +$2 MANUAL · al llegar a +$2 se detiene. Pulsa REINICIAR CICLO +$2 para continuar.</div>
  <div id="autoDemoState" class="mini statusline">Cada tick cruza 6 lecturas, recalcula los 10 dígitos y compra el candidato de menor riesgo. Espera máxima: 5 ticks.</div>
  <div id="tradeTrace" class="mini statusline">TRACE: esperando AUTO-DEMO…</div>
 </div>
-<div class="footer">CLEAN 4.5 · TP +$2 AUTO-RESET · CONSENSUS GUARD · DEMO / REAL</div>
+<div class="footer">CLEAN 4.6 · TP +$2 MANUAL STOP · CONSENSUS GUARD · DEMO / REAL</div>
 </div><script>
-const BUILD='CLEAN-4.5-DEMO-REAL-SPLIT';
+const BUILD='CLEAN-4.6-TP2-MANUAL-STOP';
 const DYNAMIC_WAIT_MIN=1;
 const DYNAMIC_WAIT_MAX=5;
 let dlCounts=Array(10).fill(1);
@@ -346,7 +346,6 @@ function syncModeView(){
 }
 function resetFinancialMode(){
  sessionPnl=0;sessionWins=0;sessionLosses=0;sessionStopped=false;
- completedTpCycles=0;bankedTpProfit=0;
  currentStake=baseStake();lastSettledContractId=null;
  pendingTrade=false;activeContractId=null;lastProposalReq=null;dlTradeBarrier=null;
  dlTicksSinceClose=0;dlReadyForNext=true;
@@ -389,23 +388,25 @@ function applyProfitLadder(profit){
    completedTpCycles++;
    bankedTpProfit+=closedCycleProfit;
 
-   // AUTO-RESET financiero: conserva el aprendizaje del motor.
-   sessionPnl=0;
-   sessionWins=0;
-   sessionLosses=0;
+   // TP MANUAL: se detiene aquí y espera al usuario.
+   sessionStopped=true;
+   autoDemo=false;
+   autoReal=false;
    currentStake=baseStake();
-   sessionStopped=false;
    dlTicksSinceClose=0;
-   dlReadyForNext=true;
+   dlReadyForNext=false;
 
+   syncAutoDemoUI();
+   syncAutoRealUI();
    renderProfitSession();
+
    $('autoDemoState').textContent=
-     'TP +$2 COMPLETADO · ciclo '+completedTpCycles+
+     'TP +$2 ALCANZADO · ciclo '+completedTpCycles+
      ' · acumulado $'+bankedTpProfit.toFixed(2)+
-     ' · nuevo ciclo automático';
+     ' · DETENIDO · pulsa REINICIAR CICLO +$2';
    trace('TP +$'+closedCycleProfit.toFixed(2)+
      ' · CICLO '+completedTpCycles+
-     ' COMPLETADO · stake base · aprendizaje conservado',true);
+     ' COMPLETADO · STOP MANUAL',true);
  }else if(sessionPnl<=-sessionStopLoss()){
    sessionStopped=true;
    if(executionMode==='REAL')autoReal=false; else autoDemo=false;
@@ -426,11 +427,11 @@ function syncAutoDemoUI(){
 }
 function syncAutoRealUI(){
  const b=$('autoRealToggle');if(b){
-   b.textContent=autoReal?'AUTO-REAL ON':'AUTO-REAL OFF';
+   b.textContent=autoReal?'AUTO-REAL ON':'REAL MONITOR';
    b.style.color=autoReal?'#ff6b82':'#4ddcff';
  }
  if(derivRealSocket&&derivRealSocket.readyState===WebSocket.OPEN){
-   realMsg('CONECTADO A DERIV REAL · '+(autoReal?'AUTO-REAL ON':'AUTO-REAL OFF'),true);
+   realMsg('CONECTADO A DERIV REAL · '+(autoReal?'AUTO-REAL ON':'REAL MONITOR'),true);
  }
  syncModeView();
 }
@@ -457,27 +458,19 @@ function setAutoDemo(next){
  syncAutoDemoUI();syncAutoRealUI();return autoDemo;
 }
 function setAutoReal(next){
+ autoReal=false;
  if(next){
-   if(pendingTrade||activeContractId){realMsg('Hay un contrato activo. Espera a que cierre.');return false}
-   if(sessionStopped){realMsg('Sesión detenida por stop-loss. Reinicia el ciclo.');return false}
-   if(!derivRealSocket||derivRealSocket.readyState!==WebSocket.OPEN||!derivRealAccount){
-     realMsg('Primero conecta una cuenta REAL.');
-     return false;
-   }
-   autoDemo=false;
    executionMode='REAL';
-   autoReal=true;
-   resetFinancialMode();
-   dlTicksSinceClose=0;dlReadyForNext=true;
-   const q=dlDecision();
-   $('autoDemoState').textContent='AUTO-REAL activo · TP +$2 · esperando '+q.wait+' tick(s).';
-   realMsg('AUTO-REAL ACTIVO · dinero real · TP +$2 / ciclo',true);
-   trace('MODO REAL ACTIVO · contador 0/'+q.wait);
+   autoDemo=false;
+   syncAutoDemoUI();
+   syncAutoRealUI();
+   realMsg('REAL conectado en modo MONITOREO · sin auto-compra.',true);
+   $('autoDemoState').textContent='MODO REAL MONITOREO · señales visibles · sin ejecución automática.';
+   trace('REAL MONITOREO · sin compras automáticas');
  }else{
-   autoReal=false;
-   realMsg('AUTO-REAL OFF · cuenta conectada sin compras.');
+   realMsg('REAL MONITOREO OFF.');
  }
- syncAutoDemoUI();syncAutoRealUI();return autoReal;
+ return false;
 }
 function derivMsg(msg,ok=false){
  const el=$('derivStatus'); el.textContent=msg; el.style.color=ok?'#6affb6':'#ffe66d';
@@ -625,7 +618,7 @@ async function connectDerivReal(){
   derivRealSocket=new WebSocket(wsUrl);
   derivRealSocket.onopen=()=>{
     btn.textContent='RECONECTAR REAL';btn.disabled=false;
-    realMsg('REAL CONECTADO · AUTO-REAL OFF · activación manual obligatoria',true);
+    realMsg('REAL CONECTADO · REAL MONITOR · activación manual obligatoria',true);
     syncAutoRealUI();
   };
   derivRealSocket.onclose=()=>{autoReal=false;syncAutoRealUI();realMsg('CONEXIÓN REAL CERRADA');btn.disabled=false};
@@ -841,11 +834,29 @@ $('autoDemoToggle').onclick=()=>setAutoDemo(!autoDemo);
 $('bridgeAutoDemo').onclick=()=>setAutoDemo(!autoDemo);
 $('autoRealToggle').onclick=()=>setAutoReal(!autoReal);
 $('resetSession').onclick=()=>{
-  resetProfitSession();
-  if(executionMode==='REAL'){
-    if(derivRealSocket&&derivRealSocket.readyState===WebSocket.OPEN)setAutoReal(true);
+  sessionPnl=0;
+  sessionWins=0;
+  sessionLosses=0;
+  sessionStopped=false;
+  currentStake=baseStake();
+  lastSettledContractId=null;
+  pendingTrade=false;
+  activeContractId=null;
+  lastProposalReq=null;
+  dlTradeBarrier=null;
+  dlTicksSinceClose=0;
+  dlReadyForNext=true;
+  renderProfitSession();
+
+  if(executionMode==='DEMO' && derivSocket&&derivSocket.readyState===WebSocket.OPEN){
+    setAutoDemo(true);
   }else{
-    if(derivSocket&&derivSocket.readyState===WebSocket.OPEN)setAutoDemo(true);
+    autoDemo=false;
+    autoReal=false;
+    syncAutoDemoUI();
+    syncAutoRealUI();
+    $('autoDemoState').textContent='CICLO +$2 REINICIADO · listo para iniciar manualmente.';
+    trace('CICLO +$2 REINICIADO · esperando inicio',true);
   }
 };
 $('demoStake').addEventListener('change',()=>{if(sessionWins===0&&sessionLosses===0){currentStake=baseStake();renderProfitSession()}});
