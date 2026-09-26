@@ -27,17 +27,21 @@ function calc(){
   {name:'ANTI-RACHA',pick:antiRun}
  ];
  const scored=models.map(m=>{let hit=0,total=0,ctx=train.slice();for(const actual of test){const p=m.pick(ctx);if(p===actual)hit++;total++;ctx.push(actual)}const mem=modelMemory[m.name]||{hit:0,total:0};const recent=hit/Math.max(1,total),learned=mem.hit/Math.max(1,mem.total);return {...m,match:mem.total>=20?recent*.75+learned*.25:recent}});
- scored.sort((x,y)=>x.match-y.match);const champ=scored[0],runner=scored[1],digit=champ.pick(seq);
+ scored.sort((x,y)=>x.match-y.match);
+ const preds=scored.map(m=>({name:m.name,digit:m.pick(seq),risk:m.match}));
+ const votes=Array.from({length:10},(_,d)=>({digit:d,models:preds.filter(p=>p.digit===d)})).filter(v=>v.models.length>=2);
+ votes.sort((a,b)=>b.models.length-a.models.length||((a.models.reduce((q,x)=>q+x.risk,0)/a.models.length)-(b.models.reduce((q,x)=>q+x.risk,0)/b.models.length)));
+ const champ=scored[0],runner=scored[1],cons=votes[0],digit=cons?cons.digit:champ.pick(seq);
  const z=seq.slice(-200),c=Array(10).fill(0);z.forEach(d=>c[d]++);let H=0;c.forEach(x=>{if(x){const p=x/z.length;H-=p*Math.log(p)}});H/=Math.log(10);
  $('entropy').textContent=(H*100).toFixed(1)+'%';$('digits').innerHTML=c.map((x,d)=>'<div class="d">D'+d+'<br><b>'+(100*x/z.length).toFixed(1)+'%</b></div>').join('');
- const edge=runner.match-champ.match,buy=champ.match<=.10&&edge>=0;
- const reason=champ.name+' · MATCH validación '+(champ.match*100).toFixed(1)+'% · siguiente '+(runner.match*100).toFixed(1)+'%';
+ const edge=runner.match-champ.match,buy=!!cons&&cons.models.some(x=>x.name===champ.name)&&champ.match<=.10;
+ const reason=cons?('CONSENSO '+cons.models.length+'/5 · '+cons.models.map(x=>x.name).join('+')+' · MATCH líder '+(champ.match*100).toFixed(1)+'%'):('SIN CONSENSO · esperando');
  $('decision').textContent=buy?'COMPRAR DIFFER '+digit:'ESPERAR';$('reason').textContent=reason;
- return {buy,digit,reason}
+ return {buy,digit,reason,preds}
 }
 function settle(d){
  if(!pending)return;
- const won=d!==pending.barrier;if(pending.model){const mm=modelMemory[pending.model]||(modelMemory[pending.model]={hit:0,total:0});mm.total++;if(!won)mm.hit++;}
+ const won=d!==pending.barrier;(pending.preds||[]).forEach(p=>{const mm=modelMemory[p.name]||(modelMemory[p.name]={hit:0,total:0});mm.total++;if(p.digit===d)mm.hit++;});
  if(won){
    lastMatch=null;
    const profit=pending.stake*.10;
@@ -56,7 +60,7 @@ function onDigit(d){
  
  if(!run||seq.length<100)return;
  const q=calc();if(!q||!q.buy)return;
- pending={barrier:q.digit,stake,model:(q.reason||'').split(' · ')[0]};log('ESTRATEGIA · DIFFER '+q.digit+' · $'+stake.toFixed(2)+' · '+q.reason)
+ pending={barrier:q.digit,stake,preds:q.preds||[]};log('ESTRATEGIA · DIFFER '+q.digit+' · $'+stake.toFixed(2)+' · '+q.reason)
 }
 function connect(){
  const ws=new WebSocket('wss://api.derivws.com/trading/v1/options/ws/public');
