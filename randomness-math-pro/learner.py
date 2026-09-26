@@ -49,8 +49,13 @@ def main():
         pick=choose(hist,last_bought,discard,0)
         if pick is not None:
             last_bought=pick
-            if d!=pick:wins+=1;watch.add(pick)
-            else:matches+=1
+            if d!=pick:
+                wins+=1
+                if discard[pick]<=0:watch.add(pick)
+            else:
+                matches+=1
+                watch.discard(pick)
+                discard[pick]=10
         last_epoch=ep;processed+=1
     state={"updated_epoch":int(time.time()),"last_epoch":last_epoch,"symbol":"R_75","history":hist[-2500:],"watch_digits":sorted(watch),"discard_remaining":discard,"last_bought":last_bought,"repeat_blocked":repeat_block(hist),"sim_wins":wins,"sim_matches":matches,"new_ticks_processed":processed,"mode":"cloud simulation learning","guarantee":False}
     with open(STATE,"w") as f:json.dump(state,f,separators=(",",":"))
