@@ -19,7 +19,7 @@ button:disabled{opacity:.55;cursor:not-allowed}.formgrid{display:grid;grid-templ
 </style></head><body><div class="wrap">
 <div class="head">
   <div class="logo">TOPO AIROMEN</div>
-  <div class="sub">CLEAN 4.4 · CONSENSUS GUARD · R_75 · DEMO</div>
+  <div class="sub">CLEAN 4.8 · CONSENSUS GUARD · R_75 · DEMO / REAL</div>
 </div>
 
 <div class="grid">
@@ -60,7 +60,7 @@ button:disabled{opacity:.55;cursor:not-allowed}.formgrid{display:grid;grid-templ
 </div>
 
 <div class="card">
- <div class="lab">DERIV REAL · MONITOR DE SEÑAL</div>
+ <div class="lab">DERIV REAL · AUTO-COMPRA PROTEGIDA</div>
  <div class="formgrid">
   <div><div class="mini">APP ID REAL</div><input id="realAppId" inputmode="numeric" autocomplete="off" placeholder="Tu Deriv App ID"></div>
   <div><div class="mini">PAT REAL</div><input id="realPat" type="password" autocomplete="new-password" placeholder="Personal Access Token"></div>
@@ -73,15 +73,15 @@ button:disabled{opacity:.55;cursor:not-allowed}.formgrid{display:grid;grid-templ
  </div>
  <div class="controls">
   <div><div class="mini">STAKE DE REFERENCIA</div><input id="realStake" type="number" inputmode="decimal" min="0.35" step="0.01" value="1.00"></div>
-  <div><div class="mini">REAL MONITOR</div><button id="autoRealToggle">REAL MONITOR</button></div>
+  <div><div class="mini">AUTO-REAL OFF</div><button id="autoRealToggle">REAL MONITOR</button></div>
  </div>
  <div class="grid" style="margin-top:10px">
-  <div><div class="mini">STAKE MÁXIMO REFERENCIA</div><input id="realMaxStake" type="number" inputmode="decimal" min="0.35" step="0.01" value="2.00"></div>
-  <div><div class="mini">STOP REFERENCIA</div><input id="realStopLoss" type="number" inputmode="decimal" min="1" step="0.50" value="2.00"></div>
+  <div><div class="mini">STAKE MÁXIMO REAL · TOPE DURO $6</div><input id="realMaxStake" type="number" inputmode="decimal" min="0.35" step="0.01" value="6.00" max="6.00"></div>
+  <div><div class="mini">STOP REAL</div><input id="realStopLoss" type="number" inputmode="decimal" min="1" step="0.50" value="2.00"></div>
   <div><div class="mini">MODO</div><div id="executionModeView" class="big yellow">DEMO</div></div>
  </div>
- <div id="realStatus" class="statusline mini">DESCONECTADO · REAL solo monitoreo; no activa compras.</div>
- <div id="realAccount" class="mini">REAL muestra la misma señal del motor; la orden se ejecuta manualmente en Deriv.</div>
+ <div id="realStatus" class="statusline mini">DESCONECTADO · AUTO-REAL OFF · activación manual obligatoria.</div>
+ <div id="realAccount" class="mini">REAL usa la misma señal anti-MATCH. Tope duro $6 · máximo 2 compras seguidas por dígito.</div>
 </div>
 <div class="card signalbox">
  <div class="lab">DECISIÓN LIVE · ESPERA DINÁMICA 1–5 TICKS</div>
@@ -110,9 +110,12 @@ button:disabled{opacity:.55;cursor:not-allowed}.formgrid{display:grid;grid-templ
  <div id="autoDemoState" class="mini statusline">Cada tick cruza 6 lecturas, recalcula los 10 dígitos y compra el candidato de menor riesgo. Espera máxima: 5 ticks.</div>
  <div id="tradeTrace" class="mini statusline">TRACE: esperando AUTO-DEMO…</div>
 </div>
-<div class="footer">CLEAN 4.7 · TP +$2 MANUAL STOP · REAL SIGNAL MONITOR</div>
+<div class="footer">CLEAN 4.8 · TP +$2 MANUAL STOP · REAL AUTO-BUY PROTECTED</div>
 </div><script>
-const BUILD='CLEAN-4.7-REAL-MONITOR-LOCK';
+const BUILD='CLEAN-4.8-REAL-AUTOBUY-PROTECTED';
+const HARD_REAL_MAX_STAKE=6;
+const MAX_REAL_SAME_DIGIT=2;
+let lastRealBarrier=null,realSameDigitCount=0;
 const DYNAMIC_WAIT_MIN=1;
 const DYNAMIC_WAIT_MAX=5;
 let dlCounts=Array(10).fill(1);
@@ -458,7 +461,7 @@ function setAutoDemo(next){
  syncAutoDemoUI();syncAutoRealUI();return autoDemo;
 }
 function setAutoReal(next){
- autoReal=false;
+ autoReal=!!next;
  if(next){
    executionMode='REAL';
    autoDemo=false;
@@ -467,14 +470,14 @@ function setAutoReal(next){
    syncAutoDemoUI();
    syncAutoRealUI();
    const q=dlDecision();
-   realMsg('REAL MONITOR ACTIVO · próxima señal en '+q.wait+' tick(s) máximo 5.',true);
+   realMsg('AUTO-REAL ACTIVO · próxima compra en '+q.wait+' tick(s) máximo 5 · stake ≤ $6.',true);
    $('autoDemoState').textContent=
-     'MODO REAL MONITOR · al cumplirse la espera mostrará DIFFER X · ejecución manual.';
-   trace('REAL MONITOR · contador 0/'+q.wait+' · sin auto-compra');
+     'MODO AUTO-REAL · compra DIGITDIFF automática · stake ≤ $6 · máximo 2 seguidas por dígito.';
+   trace('AUTO-REAL · contador 0/'+q.wait+' · protecciones activas');
  }else{
    realMsg('REAL MONITOR OFF.');
  }
- return false;
+ return autoReal;
 }
 function derivMsg(msg,ok=false){
  const el=$('derivStatus'); el.textContent=msg; el.style.color=ok?'#6affb6':'#ffe66d';
@@ -500,15 +503,17 @@ function handleTradeMessage(m,mode,ws){
   if(m.proposal && lastProposalReq && m.req_id===lastProposalReq.req){
     const p=m.proposal||{};
     if(!p.id){pendingTrade=false;lastProposalReq=null;trace('PROPUESTA SIN ID');return}
-    if(isReal){
-      pendingTrade=false;
-      lastProposalReq=null;
-      realMsg('PROPUESTA REAL RECIBIDA · BUY BLOQUEADO · ejecución manual.',true);
-      trace('REAL BUY BLOQUEADO · señal solamente');
+    const requestedStake=Number(lastProposalReq.stake);
+    const maxPrice=isReal
+      ? Math.min(HARD_REAL_MAX_STAKE, requestedStake, Number(p.ask_price??requestedStake))
+      : Number(p.ask_price??requestedStake);
+    if(isReal && (!autoReal || requestedStake>HARD_REAL_MAX_STAKE)){
+      pendingTrade=false;lastProposalReq=null;dlTradeBarrier=null;
+      realMsg('BUY REAL CANCELADO POR PROTECCIÓN DE STAKE/MODO.');
+      trace('REAL BUY CANCELADO · protección activa');
       return;
     }
-    const maxPrice=Number(p.ask_price??lastProposalReq.stake);
-    trace('PROPUESTA DEMO OK · enviando BUY',true);
+    trace('PROPUESTA '+mode+' OK · enviando BUY protegido',true);
     ws.send(JSON.stringify({buy:p.id,price:maxPrice,req_id:++tradeReq}));
     $('lastDemoBuy').textContent='COMPRANDO DEMO…';
     lastProposalReq=null;return;
@@ -629,7 +634,7 @@ async function connectDerivReal(){
   derivRealSocket=new WebSocket(wsUrl);
   derivRealSocket.onopen=()=>{
     btn.textContent='RECONECTAR REAL';btn.disabled=false;
-    realMsg('REAL CONECTADO · REAL MONITOR · activación manual obligatoria',true);
+    realMsg('REAL CONECTADO · AUTO-REAL OFF · activación manual obligatoria',true);
     syncAutoRealUI();
   };
   derivRealSocket.onclose=()=>{autoReal=false;syncAutoRealUI();realMsg('CONEXIÓN REAL CERRADA');btn.disabled=false};
@@ -778,21 +783,7 @@ function tryNextTickTrade(){
   maybeAutoBuy(true,latestPublicTickEpoch);
 }
 function maybeAutoBuy(signalOk,tickEpoch=Date.now()){
- if(executionMode==='REAL'){
-   const d=dlDecision();
-   if(d && dlTicksSinceClose>=d.wait){
-     liveBarrier=d.best.digit;
-     liveBarrierProb=d.best.prob;
-     if($('lastDemoBuy'))$('lastDemoBuy').textContent='REAL LISTO · DIFFER '+liveBarrier;
-     if($('autoDemoState'))$('autoDemoState').textContent=
-       'SEÑAL REAL LISTA · DIFFER '+liveBarrier+
-       ' · prob. estimada '+pct(liveBarrierProb)+
-       ' · ejecución manual en Deriv';
-     realMsg('SEÑAL REAL LISTA · DIFFER '+liveBarrier+' · sin auto-compra.',true);
-     trace('REAL SIGNAL · DIFFER '+liveBarrier+' · ejecución manual');
-   }
-   return;
- }
+ if(executionMode==='REAL' && !autoReal)return;
  if(sessionStopped||!activeAuto()||!signalOk)return;
  if(pendingTrade||activeContractId)return;
  const ws=activeTradeSocket(),acct=activeTradeAccount();
@@ -800,7 +791,17 @@ function maybeAutoBuy(signalOk,tickEpoch=Date.now()){
  if(liveBarrier==null)return;
  if(tickEpoch===lastSignalEpoch)return;
  lastSignalEpoch=tickEpoch;
- const stake=Math.max(.35,currentStake||baseStake());
+ let stake=Math.max(.35,currentStake||baseStake());
+ if(executionMode==='REAL'){
+   stake=Math.min(HARD_REAL_MAX_STAKE,stake);
+   const b=Number(liveBarrier);
+   if(lastRealBarrier===b && realSameDigitCount>=MAX_REAL_SAME_DIGIT){
+     const ranked=dlDecision().rows.filter(x=>x.digit!==b);
+     if(ranked.length){liveBarrier=ranked[0].digit;liveBarrierProb=ranked[0].prob;}
+   }
+   if(lastRealBarrier===Number(liveBarrier))realSameDigitCount++;
+   else {lastRealBarrier=Number(liveBarrier);realSameDigitCount=1;}
+ }
  const currency=acct?.currency||acct?.currency_code||'USD';
  pendingTrade=true;dlReadyForNext=false;dlTradeBarrier=Number(liveBarrier);
  const req=++tradeReq;
@@ -890,7 +891,7 @@ $('demoStake').addEventListener('change',()=>{if(sessionWins===0&&sessionLosses=
 $('maxStake').addEventListener('change',()=>{currentStake=Math.min(currentStake,maxSessionStake());renderProfitSession()});
 $('sessionStopLoss').addEventListener('change',()=>{renderProfitSession()});
 $('realStake').addEventListener('change',()=>{if(executionMode==='REAL'&&sessionWins===0&&sessionLosses===0){currentStake=baseStake();renderProfitSession()}});
-$('realMaxStake').addEventListener('change',()=>{if(executionMode==='REAL'){currentStake=Math.min(currentStake,maxSessionStake());renderProfitSession()}});
+$('realMaxStake').addEventListener('change',()=>{const el=$('realMaxStake');el.value=Math.min(HARD_REAL_MAX_STAKE,Math.max(.35,Number(el.value)||HARD_REAL_MAX_STAKE)).toFixed(2);if(executionMode==='REAL'){currentStake=Math.min(currentStake,HARD_REAL_MAX_STAKE,maxSessionStake());renderProfitSession()}});
 $('realStopLoss').addEventListener('change',()=>{renderProfitSession()});
 
 $('derivConnect').onclick=connectDerivDemo;
