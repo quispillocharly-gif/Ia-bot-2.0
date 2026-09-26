@@ -60,7 +60,7 @@ button:disabled{opacity:.55;cursor:not-allowed}.formgrid{display:grid;grid-templ
 </div>
 
 <div class="card">
- <div class="lab">DERIV REAL · ACTIVACIÓN MANUAL</div>
+ <div class="lab">DERIV REAL · MONITOR DE SEÑAL</div>
  <div class="formgrid">
   <div><div class="mini">APP ID REAL</div><input id="realAppId" inputmode="numeric" autocomplete="off" placeholder="Tu Deriv App ID"></div>
   <div><div class="mini">PAT REAL</div><input id="realPat" type="password" autocomplete="new-password" placeholder="Personal Access Token"></div>
@@ -72,16 +72,16 @@ button:disabled{opacity:.55;cursor:not-allowed}.formgrid{display:grid;grid-templ
   </select>
  </div>
  <div class="controls">
-  <div><div class="mini">STAKE BASE REAL</div><input id="realStake" type="number" inputmode="decimal" min="0.35" step="0.01" value="1.00"></div>
+  <div><div class="mini">STAKE DE REFERENCIA</div><input id="realStake" type="number" inputmode="decimal" min="0.35" step="0.01" value="1.00"></div>
   <div><div class="mini">REAL MONITOR</div><button id="autoRealToggle">REAL MONITOR</button></div>
  </div>
  <div class="grid" style="margin-top:10px">
-  <div><div class="mini">STAKE MÁXIMO REAL</div><input id="realMaxStake" type="number" inputmode="decimal" min="0.35" step="0.01" value="2.00"></div>
-  <div><div class="mini">STOP-LOSS REAL</div><input id="realStopLoss" type="number" inputmode="decimal" min="1" step="0.50" value="2.00"></div>
+  <div><div class="mini">STAKE MÁXIMO REFERENCIA</div><input id="realMaxStake" type="number" inputmode="decimal" min="0.35" step="0.01" value="2.00"></div>
+  <div><div class="mini">STOP REFERENCIA</div><input id="realStopLoss" type="number" inputmode="decimal" min="1" step="0.50" value="2.00"></div>
   <div><div class="mini">MODO</div><div id="executionModeView" class="big yellow">DEMO</div></div>
  </div>
  <div id="realStatus" class="statusline mini">DESCONECTADO · REAL solo monitoreo; no activa compras.</div>
- <div id="realAccount" class="mini">REAL disponible para monitoreo de señales; sin auto-compra.</div>
+ <div id="realAccount" class="mini">REAL muestra la misma señal del motor; la orden se ejecuta manualmente en Deriv.</div>
 </div>
 <div class="card signalbox">
  <div class="lab">DECISIÓN LIVE · ESPERA DINÁMICA 1–5 TICKS</div>
@@ -110,9 +110,9 @@ button:disabled{opacity:.55;cursor:not-allowed}.formgrid{display:grid;grid-templ
  <div id="autoDemoState" class="mini statusline">Cada tick cruza 6 lecturas, recalcula los 10 dígitos y compra el candidato de menor riesgo. Espera máxima: 5 ticks.</div>
  <div id="tradeTrace" class="mini statusline">TRACE: esperando AUTO-DEMO…</div>
 </div>
-<div class="footer">CLEAN 4.6 · TP +$2 MANUAL STOP · CONSENSUS GUARD · DEMO / REAL</div>
+<div class="footer">CLEAN 4.7 · TP +$2 MANUAL STOP · REAL SIGNAL MONITOR</div>
 </div><script>
-const BUILD='CLEAN-4.6-TP2-MANUAL-STOP';
+const BUILD='CLEAN-4.7-REAL-MONITOR-LOCK';
 const DYNAMIC_WAIT_MIN=1;
 const DYNAMIC_WAIT_MAX=5;
 let dlCounts=Array(10).fill(1);
@@ -427,7 +427,7 @@ function syncAutoDemoUI(){
 }
 function syncAutoRealUI(){
  const b=$('autoRealToggle');if(b){
-   b.textContent=autoReal?'AUTO-REAL ON':'REAL MONITOR';
+   b.textContent='REAL MONITOR';
    b.style.color=autoReal?'#ff6b82':'#4ddcff';
  }
  if(derivRealSocket&&derivRealSocket.readyState===WebSocket.OPEN){
@@ -462,13 +462,17 @@ function setAutoReal(next){
  if(next){
    executionMode='REAL';
    autoDemo=false;
+   dlTicksSinceClose=0;
+   dlReadyForNext=true;
    syncAutoDemoUI();
    syncAutoRealUI();
-   realMsg('REAL conectado en modo MONITOREO · sin auto-compra.',true);
-   $('autoDemoState').textContent='MODO REAL MONITOREO · señales visibles · sin ejecución automática.';
-   trace('REAL MONITOREO · sin compras automáticas');
+   const q=dlDecision();
+   realMsg('REAL MONITOR ACTIVO · próxima señal en '+q.wait+' tick(s) máximo 5.',true);
+   $('autoDemoState').textContent=
+     'MODO REAL MONITOR · al cumplirse la espera mostrará DIFFER X · ejecución manual.';
+   trace('REAL MONITOR · contador 0/'+q.wait+' · sin auto-compra');
  }else{
-   realMsg('REAL MONITOREO OFF.');
+   realMsg('REAL MONITOR OFF.');
  }
  return false;
 }
@@ -496,10 +500,17 @@ function handleTradeMessage(m,mode,ws){
   if(m.proposal && lastProposalReq && m.req_id===lastProposalReq.req){
     const p=m.proposal||{};
     if(!p.id){pendingTrade=false;lastProposalReq=null;trace('PROPUESTA SIN ID');return}
+    if(isReal){
+      pendingTrade=false;
+      lastProposalReq=null;
+      realMsg('PROPUESTA REAL RECIBIDA · BUY BLOQUEADO · ejecución manual.',true);
+      trace('REAL BUY BLOQUEADO · señal solamente');
+      return;
+    }
     const maxPrice=Number(p.ask_price??lastProposalReq.stake);
-    trace('PROPUESTA '+mode+' OK · enviando BUY',true);
+    trace('PROPUESTA DEMO OK · enviando BUY',true);
     ws.send(JSON.stringify({buy:p.id,price:maxPrice,req_id:++tradeReq}));
-    $('lastDemoBuy').textContent='COMPRANDO '+mode+'…';
+    $('lastDemoBuy').textContent='COMPRANDO DEMO…';
     lastProposalReq=null;return;
   }
   if(m.buy){
@@ -752,9 +763,10 @@ function renderLiveDecision(){
   return true;
 }
 function tryNextTickTrade(){
-  if(!latestPublicTickEpoch||!activeAuto()||sessionStopped)return;
+  if(!latestPublicTickEpoch||sessionStopped)return;
   if(pendingTrade||activeContractId)return;
   const d=dlDecision();
+  if(executionMode!=='REAL' && !activeAuto())return;
   renderLiveDecision();
   if(!dlReadyForNext)return;
   if(dlTicksSinceClose<d.wait){
@@ -766,6 +778,21 @@ function tryNextTickTrade(){
   maybeAutoBuy(true,latestPublicTickEpoch);
 }
 function maybeAutoBuy(signalOk,tickEpoch=Date.now()){
+ if(executionMode==='REAL'){
+   const d=dlDecision();
+   if(d && dlTicksSinceClose>=d.wait){
+     liveBarrier=d.best.digit;
+     liveBarrierProb=d.best.prob;
+     if($('lastDemoBuy'))$('lastDemoBuy').textContent='REAL LISTO · DIFFER '+liveBarrier;
+     if($('autoDemoState'))$('autoDemoState').textContent=
+       'SEÑAL REAL LISTA · DIFFER '+liveBarrier+
+       ' · prob. estimada '+pct(liveBarrierProb)+
+       ' · ejecución manual en Deriv';
+     realMsg('SEÑAL REAL LISTA · DIFFER '+liveBarrier+' · sin auto-compra.',true);
+     trace('REAL SIGNAL · DIFFER '+liveBarrier+' · ejecución manual');
+   }
+   return;
+ }
  if(sessionStopped||!activeAuto()||!signalOk)return;
  if(pendingTrade||activeContractId)return;
  const ws=activeTradeSocket(),acct=activeTradeAccount();
