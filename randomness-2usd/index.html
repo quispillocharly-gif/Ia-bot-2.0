@@ -25,7 +25,7 @@ function analyze(){
 function ui(){ $('pnl').textContent=(pnl>=0?'+':'')+'$'+pnl.toFixed(2);$('stake').textContent='$'+stake.toFixed(2);$('win').textContent=w;$('match').textContent=l;$('sessions').textContent=sessions;$('ops').textContent=ops;$('bar').style.width=Math.max(0,Math.min(100,pnl/TARGET*100))+'%';$('digits').innerHTML=outcomes.map((s,d)=>'<div class="d">D'+d+'<b>'+(s.n?(100*s.m/s.n).toFixed(1):'–')+'%</b><small>'+s.n+' pruebas · '+choices[d]+' entradas</small></div>').join('')}
 function settle(d){if(!pending)return;pending.left--;if(pending.left>0){$('status').innerHTML='<b>OPERACIÓN ABIERTA · '+pending.left+' tick(s) restantes</b>';return}const p=pending,s=outcomes[p.digit];s.n++;if(d!==p.digit){const gain=p.stake*.10;pnl+=gain;stake=p.stake+gain;w++;log('WIN D'+p.digit+' +$'+gain.toFixed(2))}else{s.m++;pnl-=p.stake;stake=BASE;l++;log('MATCH D'+p.digit+' -$'+p.stake.toFixed(2))}pending=null;ui();if(pnl>=TARGET){sessions++;running=false;$('status').innerHTML='<b>META +$5 · DETENIDO</b>';log('SESIÓN +$5 COMPLETADA');ui()}}
 function decide(){if(!running||pending)return;const q=analyze();if(!q){$('status').innerHTML='<b>CALIBRANDO · '+seq.length+'/120 ticks</b>';return}
- const candidates=q.ranked.filter(x=>x.s>=2.6&&x.ev.length>=2&&x.d!==lastBought);
+ const candidates=q.ranked.filter(x=>x.d%2===1&&x.s>=2.6&&x.ev.length>=2&&x.d!==lastBought);
  if(!candidates.length){skips++;$('decision').textContent='SIN ENTRADA';$('status').innerHTML='<b>SIN ENTRADA · evidencia insuficiente</b>';return}
  const maxScore=candidates[0].s,band=candidates.filter(x=>x.s>=maxScore-.75);
  const pick=band[Math.floor(Math.random()*band.length)];
