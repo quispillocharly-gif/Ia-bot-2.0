@@ -1,9 +1,9 @@
 <!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Randomness Lab Demo</title><style>
 body{margin:0;background:#07111c;color:#eaf5ff;font-family:system-ui;padding:16px}.w{max-width:900px;margin:auto}.c{background:#0e1d2c;border:1px solid #28445d;border-radius:16px;padding:15px;margin:12px 0}.g{display:grid;grid-template-columns:repeat(auto-fit,minmax(135px,1fr));gap:10px}.n{font-size:27px;font-weight:800}.m{color:#8fa9bd}button{padding:13px 17px;border:0;border-radius:11px;font-weight:800;margin:4px}#go{background:#dfefff;color:#07111c}#stop{background:#26394b;color:#fff}.bar{height:12px;background:#172a3a;border-radius:20px;overflow:hidden}.bar i{display:block;height:100%;background:#dfefff;width:0}.digits{display:grid;grid-template-columns:repeat(5,1fr);gap:7px}.d{text-align:center;background:#091725;padding:9px;border-radius:9px}.log{max-height:180px;overflow:auto;white-space:pre-wrap}.ok{color:#69e3a7}.bad{color:#ff8795}</style></head><body><div class="w">
-<h1>RANDOMNESS LAB · DEMO</h1><div class="m">SESIÓN CONTINUA · aleatoriedad ponderada · DIGITDIFF · ticks públicos R_75</div>
+<h1>RANDOMNESS LAB · DEMO</h1><div class="m">MULTIMODELO ADAPTATIVO · DIGITDIFF · ticks públicos R_75</div>
 <div class="c"><button id="go">INICIAR SESIÓN</button><button id="stop">PARAR</button><div id="status" class="m">Cargando ticks públicos…</div></div>
 <div class="c g"><div><span class="m">P&L neto</span><div id="pnl" class="n">$0.00</div></div><div><span class="m">Meta</span><div class="n">+$5.00</div></div><div><span class="m">Stake actual</span><div id="stake" class="n">$0.50</div></div><div><span class="m">Acierto</span><div id="rate" class="n">–</div></div></div>
-<div class="c"><div class="bar"><i id="progress"></i></div><p class="m">Una sola sesión: WIN reinvierte con límite $1.25; MATCH vuelve a $0.50. El motor puede ESPERAR si no ve una entrada suficientemente filtrada. Meta +$5 netos.</p></div>
+<div class="c"><div class="bar"><i id="progress"></i></div><p class="m">Cinco modelos compiten sobre validación reciente. Compra con el modelo que haya mostrado menor MATCH; WIN reinvierte hasta $1.25 y MATCH vuelve a $0.50. Meta +$5 netos.</p></div>
 <div class="c g"><div><span class="m">WIN</span><div id="wins" class="n ok">0</div></div><div><span class="m">MATCH</span><div id="loss" class="n bad">0</div></div><div><span class="m">Operaciones</span><div id="trades" class="n">0</div></div><div><span class="m">Entropía</span><div id="entropy" class="n">–</div></div></div>
 <div class="c g"><div><span class="m">DECISIÓN</span><div id="decision" class="n">ESPERAR</div></div><div><span class="m">LECTURA</span><div id="reason" class="m">Analizando aleatoriedad…</div></div></div><div class="c"><div class="m">Distribución calculada</div><div id="digits" class="digits"></div></div>
 <div class="c"><b>REGISTRO</b><div id="log" class="log m">Esperando datos…</div></div></div>
@@ -14,22 +14,26 @@ let seq=[],run=false,pnl=0,stake=BASE,w=0,l=0,pending=null,lastEpoch=0,lastMatch
 function log(s){$('log').textContent=s+'\\n'+$('log').textContent.slice(0,3500)}
 function stats(){const t=w+l;$('pnl').textContent=(pnl>=0?'+':'')+'$'+pnl.toFixed(2);$('stake').textContent='$'+stake.toFixed(2);$('wins').textContent=w;$('loss').textContent=l;$('trades').textContent=t;$('rate').textContent=t?(100*w/t).toFixed(2)+'%':'–';$('progress').style.width=Math.max(0,Math.min(100,pnl/TARGET*100))+'%'}
 function calc(){
- if(seq.length<120)return null;
- const sizes=[20,50,100,200],probs=sizes.map(n=>{const c=Array(10).fill(1);seq.slice(-n).forEach(d=>c[d]++);const t=c.reduce((x,y)=>x+y,0);return c.map(x=>x/t)});
- const avg=Array.from({length:10},(_,d)=>probs.reduce((x,p)=>x+p[d],0)/probs.length);
+ if(seq.length<260)return null;
+ const train=seq.slice(-260,-60),test=seq.slice(-60),now=seq[seq.length-1];
+ const freqPick=(arr,n)=>{const c=Array(10).fill(0);arr.slice(-n).forEach(d=>c[d]++);return c.indexOf(Math.min(...c))};
+ const transPick=(arr)=>{const m=Array.from({length:10},()=>Array(10).fill(1));for(let i=1;i<arr.length;i++)m[arr[i-1]][arr[i]]++;const row=m[arr[arr.length-1]],mn=Math.min(...row);return row.indexOf(mn)};
+ const antiRun=(arr)=>{const c=Array(10).fill(0);arr.slice(-35).forEach(d=>c[d]++);const last=arr[arr.length-1];c[last]+=2;return c.indexOf(Math.min(...c))};
+ const models=[
+  {name:'FREQ20',pick:x=>freqPick(x,20)},
+  {name:'FREQ50',pick:x=>freqPick(x,50)},
+  {name:'FREQ100',pick:x=>freqPick(x,100)},
+  {name:'TRANSICIÓN',pick:transPick},
+  {name:'ANTI-RACHA',pick:antiRun}
+ ];
+ const scored=models.map(m=>{let hit=0,total=0,ctx=train.slice();for(const actual of test){const p=m.pick(ctx);if(p===actual)hit++;total++;ctx.push(actual)}return {...m,match:hit/Math.max(1,total)}});
+ scored.sort((x,y)=>x.match-y.match);const champ=scored[0],runner=scored[1],digit=champ.pick(seq);
  const z=seq.slice(-200),c=Array(10).fill(0);z.forEach(d=>c[d]++);let H=0;c.forEach(x=>{if(x){const p=x/z.length;H-=p*Math.log(p)}});H/=Math.log(10);
- $('entropy').textContent=(H*100).toFixed(1)+'%';$('digits').innerHTML=avg.map((p,d)=>'<div class="d">D'+d+'<br><b>'+(p*100).toFixed(1)+'%</b></div>').join('');
- const last=seq[seq.length-1],prev=seq[seq.length-2];
- const trans=Array.from({length:10},()=>Array(10).fill(1));
- for(let i=Math.max(1,seq.length-240);i<seq.length;i++)trans[seq[i-1]][seq[i]]++;
- const tt=trans[last].reduce((x,y)=>x+y,0);
- const rows=avg.map((p,d)=>{const tp=trans[last][d]/tt,cons=Math.max(...probs.map(x=>x[d]))-Math.min(...probs.map(x=>x[d])),hist=perf[d].l/(perf[d].w+perf[d].l);return {d,risk:p*.45+tp*.35+hist*.20,cons,tp,hist}});
- rows.sort((x,y)=>x.risk-y.risk);const best=rows[0],gap=rows[1].risk-best.risk;
- let score=0;if(best.risk<.105)score+=2;if(gap>.006)score++;if(best.cons<.035)score++;if(H>.95)score++;if(best.tp<.10)score++;
- const buy=score>=5 && (gap>.004 || best.tp<.085);
- const reason='D'+best.d+' · riesgo '+(best.risk*100).toFixed(2)+'% · transición '+(best.tp*100).toFixed(1)+'% · gap '+(gap*100).toFixed(2)+' · score '+score+'/6';
- $('decision').textContent=buy?'COMPRAR DIFFER '+best.d:'ESPERAR';$('reason').textContent=reason;
- return {buy,digit:best.d,reason}
+ $('entropy').textContent=(H*100).toFixed(1)+'%';$('digits').innerHTML=c.map((x,d)=>'<div class="d">D'+d+'<br><b>'+(100*x/z.length).toFixed(1)+'%</b></div>').join('');
+ const edge=runner.match-champ.match,buy=champ.match<=.10&&edge>=0;
+ const reason=champ.name+' · MATCH validación '+(champ.match*100).toFixed(1)+'% · siguiente '+(runner.match*100).toFixed(1)+'%';
+ $('decision').textContent=buy?'COMPRAR DIFFER '+digit:'ESPERAR';$('reason').textContent=reason;
+ return {buy,digit,reason}
 }
 function settle(d){
  if(!pending)return;
