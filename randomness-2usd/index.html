@@ -17,8 +17,8 @@ function analyze(){
  for(const z of wins){const c=Array(10).fill(0);z.forEach(d=>c[d]++);const n=z.length,sd=Math.sqrt(n*.1*.9);for(let d=0;d<10;d++){const zz=(c[d]-n*.1)/sd;if(zz<0){score[d]+=Math.min(3,-zz);ev[d].push('Z'+n+'='+zz.toFixed(2))}}}
  const last=seq[seq.length-1],tr=Array.from({length:10},()=>Array(10).fill(1));for(let i=1;i<seq.length;i++)tr[seq[i-1]][seq[i]]++;const ts=tr[last].reduce((a,x)=>a+x,0);for(let d=0;d<10;d++){const p=tr[last][d]/ts;if(p<.1){score[d]+=(.1-p)*20;ev[d].push('M1='+(p*100).toFixed(1)+'%')}}
  if(seq.length>2){const a=seq[seq.length-2],bb=seq[seq.length-1],cnt=Array(10).fill(1);let n=10;for(let i=2;i<seq.length;i++)if(seq[i-2]===a&&seq[i-1]===bb){cnt[seq[i]]++;n++}for(let d=0;d<10;d++){const p=cnt[d]/n;if(n>=20&&p<.1){score[d]+=(.1-p)*25;ev[d].push('M2='+(p*100).toFixed(1)+'%')}}}
- for(let d=0;d<10;d++){let dist=0;for(let i=seq.length-1;i>=0&&seq[i]!==d;i--)dist++;if(dist>=15){score[d]+=Math.min(2,(dist-14)/10);ev[d].push('gap='+dist)}}
- const ranked=score.map((s,d)=>({d,s,ev:ev[d]})).sort((x,y)=>y.s-x.s),best=ranked[0],second=ranked[1],H=entropy10(seq.slice(-100));
+ for(let d=0;d<10;d++){let dist=0;for(let i=seq.length-1;i>=0&&seq[i]!==d;i--)dist++;if(dist>=15)ev[d].push('gap='+dist)}
+ const ranked=score.map((s,d)=>({d,s,ev:ev[d],j:Math.random()*1e-6})).sort((x,y)=>(y.s-x.s)||(y.j-x.j)),best=ranked[0],second=ranked[1],H=entropy10(seq.slice(-100));
  const confidence=Math.min(100,Math.round(best.s*12)),margin=best.s-second.s;
  return {digit:best.d,score:best.s,confidence,margin,H,ev:best.ev,ranked,trade:best.s>=2.6&&best.ev.length>=2&&margin>=.15}
 }
