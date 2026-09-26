@@ -26,7 +26,7 @@ function calc(){
   {name:'TRANSICIÓN',pick:transPick},
   {name:'ANTI-RACHA',pick:antiRun}
  ];
- const scored=models.map(m=>{let hit=0,total=0,ctx=train.slice();for(const actual of test){const p=m.pick(ctx);if(p===actual)hit++;total++;ctx.push(actual)}const mem=modelMemory[m.name]||{hit:0,total:0};const recent=hit/Math.max(1,total),learned=mem.hit/Math.max(1,mem.total);return {...m,match:mem.total>=20?recent*.75+learned*.25:recent,recent}});
+ const scored=models.map(m=>{let hit=0,total=0,ctx=train.slice();for(const actual of test){const p=m.pick(ctx);if(p===actual)hit++;total++;ctx.push(actual)}const mem=modelMemory[m.name]||{hit:0,total:0};const recent=hit/Math.max(1,total),learned=mem.hit/Math.max(1,mem.total);return {...m,match:mem.total>=20?recent*.75+learned*.25:recent}});
  scored.sort((x,y)=>x.match-y.match);const champ=scored[0],runner=scored[1],digit=champ.pick(seq);
  const z=seq.slice(-200),c=Array(10).fill(0);z.forEach(d=>c[d]++);let H=0;c.forEach(x=>{if(x){const p=x/z.length;H-=p*Math.log(p)}});H/=Math.log(10);
  $('entropy').textContent=(H*100).toFixed(1)+'%';$('digits').innerHTML=c.map((x,d)=>'<div class="d">D'+d+'<br><b>'+(100*x/z.length).toFixed(1)+'%</b></div>').join('');
@@ -56,7 +56,7 @@ function onDigit(d){
  
  if(!run||seq.length<100)return;
  const q=calc();if(!q||!q.buy)return;
- pending={barrier:q.digit,stake,model:(q.reason||'').split(' · ')[0]};log('ESTRATEGIA · DIFFER '+q.digit+' · 
+ pending={barrier:q.digit,stake,model:(q.reason||'').split(' · ')[0]};log('ESTRATEGIA · DIFFER '+q.digit+' · $'+stake.toFixed(2)+' · '+q.reason)
 }
 function connect(){
  const ws=new WebSocket('wss://api.derivws.com/trading/v1/options/ws/public');
@@ -77,29 +77,6 @@ function connect(){
  ws.onerror=()=>{$('status').textContent='Error de conexión al feed'}
 }
 $('go').onclick=()=>{pnl=0;stake=BASE;w=0;l=0;pending=null;lastMatch=null;wait=0;run=true;stats();log('SESIÓN CONTINUA INICIADA · base $0.50 · objetivo NETO +$5')};
-$('stop').onclick=()=>{run=false;pending=null;$('status').textContent='Sesión detenida manualmente';log('STOP MANUAL')};
-stats();connect();
-</script></body></html>+stake.toFixed(2)+' · '+q.reason)
-}
-function connect(){
- const ws=new WebSocket('wss://api.derivws.com/trading/v1/options/ws/public');
- ws.onopen=()=>ws.send(JSON.stringify({ticks_history:'R_75',count:300,end:'latest',style:'ticks',req_id:1}));
- ws.onmessage=e=>{
-   const m=JSON.parse(e.data);
-   if(m.history&&m.history.prices){
-     const p=Number(m.pip_size||4);
-     seq=m.history.prices.map(x=>Number(Number(x).toFixed(p).slice(-1)));
-     calc();ws.send(JSON.stringify({ticks:'R_75',subscribe:1,req_id:2}));$('status').textContent='Ticks R_75 conectados · listo'
-   }else if(m.tick){
-     const ep=Number(m.tick.epoch);if(ep===lastEpoch)return;lastEpoch=ep;
-     const p=Number(m.tick.pip_size||4),d=Number(Number(m.tick.quote).toFixed(p).slice(-1));
-     seq.push(d);if(seq.length>600)seq.shift();calc();onDigit(d)
-   }
- };
- ws.onclose=()=>{$('status').textContent='Feed desconectado';run=false};
- ws.onerror=()=>{$('status').textContent='Error de conexión al feed'}
-}
-$('go').onclick=()=>{pnl=0;stake=BASE;w=0;l=0;pending=null;lastMatch=null;wait=0;perf=Array.from({length:10},()=>({w:1,l:1}));run=true;stats();log('SESIÓN CONTINUA INICIADA · base $0.50 · objetivo NETO +$5')};
 $('stop').onclick=()=>{run=false;pending=null;$('status').textContent='Sesión detenida manualmente';log('STOP MANUAL')};
 stats();connect();
 </script></body></html>
