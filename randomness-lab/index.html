@@ -8,8 +8,8 @@
 <div class="card"><div class="grid">
 <div class="metric"><span class="muted">P&L neto</span><b id="pnl">+$0.00</b></div><div class="metric"><span class="muted">Stake actual</span><b id="stake">$0.50</b></div>
 <div class="metric"><span class="muted">WIN</span><b id="wins" class="ok">0</b></div><div class="metric"><span class="muted">MATCH</span><b id="loss" class="bad">0</b></div>
-<div class="metric"><span class="muted">Operaciones</span><b id="trades">0</b></div><div class="metric"><span class="muted">Sesiones +$5</span><b id="sessions" class="ok">0</b></div>
-<div class="wide"><span class="muted">Meta +$5</span><div class="bar"><i id="progress"></i></div></div>
+<div class="metric"><span class="muted">Operaciones</span><b id="trades">0</b></div><div class="metric"><span class="muted">Sesiones +$2</span><b id="sessions" class="ok">0</b></div>
+<div class="wide"><span class="muted">Meta +$2</span><div class="bar"><i id="progress"></i></div></div>
 </div></div>
 <div class="card"><div class="grid"><div><span class="muted">DECISIÓN</span><div id="decision" class="decision">INVESTIGANDO</div></div><div><span class="muted">LECTURA</span><div id="reason" class="read">Reuniendo evidencia...</div></div></div></div>
 <div class="card"><div class="muted">GEN 2 selectiva · mejores MATCH / señales</div><div id="models" class="models"></div></div>
@@ -17,7 +17,7 @@
 <div class="card"><b>REGISTRO</b><div id="log" class="log">Esperando datos...</div></div>
 </main><script>
 const $=id=>document.getElementById(id);
-const BASE=.50,TARGET=5;
+const BASE=.50,TARGET=2;
 const FREQ_WINDOWS=Array.from({length:40},(_,i)=>10+i*5);
 const TRANS_WINDOWS=Array.from({length:30},(_,i)=>20+i*10);
 const ANTI_WINDOWS=Array.from({length:20},(_,i)=>15+i*5);
@@ -51,11 +51,11 @@ function evaluate(){
  $('reason').textContent='GEN 2 · '+champ.name+' MATCH '+(champ.rate*100).toFixed(2)+'% · señales '+champ.n+' · control '+(control?(control.rate*100).toFixed(2)+'%':'–')+' · RANDOM '+(random*100).toFixed(2)+'%';
  return {buy:ready,digit}
 }
-function settle(actual){if(!pending)return;const won=actual!==pending.digit;if(won){const profit=pending.stake*.10;pnl+=profit;stake=pending.stake+profit;wins++;log('WIN · DIFFER '+pending.digit+' · +$'+profit.toFixed(2))}else{pnl-=pending.stake;stake=BASE;losses++;log('MATCH · D'+pending.digit+' · -$'+pending.stake.toFixed(2)+' · vuelve $0.50')}pending=null;stats();if(pnl>=TARGET){sessions++;running=false;stats();$('status').textContent='META +$5 ALCANZADA · detenida';log('OBJETIVO +$5 ALCANZADO')}}
+function settle(actual){if(!pending)return;const won=actual!==pending.digit;if(won){const profit=pending.stake*.10;pnl+=profit;stake=pending.stake+profit;wins++;log('WIN · DIFFER '+pending.digit+' · +$'+profit.toFixed(2))}else{pnl-=pending.stake;stake=BASE;losses++;log('MATCH · D'+pending.digit+' · -$'+pending.stake.toFixed(2)+' · vuelve $0.50')}pending=null;stats();if(pnl>=TARGET){sessions++;running=false;stats();$('status').textContent='META +$2 ALCANZADA · detenida';log('OBJETIVO +$2 ALCANZADO')}}
 function processDigit(d){if(pending){settle(d);return}if(!running||seq.length<300)return;const q=evaluate();if(!q.buy)return;pending={digit:q.digit,stake};$('status').textContent='OPERACIÓN SIMULADA ABIERTA · DIFFER '+q.digit+' · $'+stake.toFixed(2);log('COMPRA SIMULADA · DIFFER '+q.digit+' · $'+stake.toFixed(2)+' · liquida próximo tick')}
 function onTick(d){recordVirtual(d);recordSelective(d);seq.push(d);if(seq.length>1800)seq.shift();if(seq.length>=200){nextVirtual=predictions(seq);nextSelective=selectivePredictions(seq)}evaluate();processDigit(d)}
 function connect(){const ws=new WebSocket('wss://api.derivws.com/trading/v1/options/ws/public');ws.onopen=()=>ws.send(JSON.stringify({ticks_history:'R_75',count:700,end:'latest',style:'ticks',req_id:1}));ws.onmessage=e=>{const m=JSON.parse(e.data);if(m.history&&m.history.prices){const p=Number(m.pip_size||4);seq=m.history.prices.map(x=>Number(Number(x).toFixed(p).slice(-1)));nextVirtual=predictions(seq);nextSelective=selectivePredictions(seq);evaluate();ws.send(JSON.stringify({ticks:'R_75',subscribe:1,req_id:2}));$('status').textContent='Ticks R_75 conectados · listo'}else if(m.tick){const ep=Number(m.tick.epoch);if(ep===lastEpoch)return;lastEpoch=ep;const p=Number(m.tick.pip_size||4),d=Number(Number(m.tick.quote).toFixed(p).slice(-1));onTick(d)}};ws.onclose=()=>{$('status').textContent='Feed desconectado';running=false};ws.onerror=()=>{$('status').textContent='Error de conexión al feed'}}
-$('go').onclick=()=>{pnl=0;stake=BASE;wins=0;losses=0;pending=null;running=true;stats();$('status').textContent='SESIÓN ACTIVA · torneo continúa aprendiendo';log('SESIÓN INICIADA · base $0.50 · meta +$5')};
+$('go').onclick=()=>{pnl=0;stake=BASE;wins=0;losses=0;pending=null;running=true;stats();$('status').textContent='SESIÓN ACTIVA · torneo continúa aprendiendo';log('SESIÓN INICIADA · base $0.50 · meta +$2')};
 $('stop').onclick=()=>{running=false;pending=null;$('status').textContent='Sesión detenida manualmente';log('STOP MANUAL')};
 stats();connect();
 </script></body></html>
