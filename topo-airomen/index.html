@@ -431,7 +431,7 @@ function syncAutoDemoUI(){
 }
 function syncAutoRealUI(){
  const b=$('autoRealToggle');if(b){
-   b.textContent='REAL MONITOR';
+   b.textContent=autoReal?'AUTO-REAL ON':'INICIAR REAL';
    b.style.color=autoReal?'#ff6b82':'#4ddcff';
  }
  if(derivRealSocket&&derivRealSocket.readyState===WebSocket.OPEN){
@@ -452,6 +452,7 @@ function setAutoDemo(next){
    autoDemo=true;
    resetFinancialMode();
    dlTicksSinceClose=0;dlReadyForNext=true;
+   lastSignalEpoch=null;
    const q=dlDecision();
    $('autoDemoState').textContent='AUTO-DEMO activo · esperando '+q.wait+' tick(s).';
    trace('MODO DEMO ACTIVO · contador 0/'+q.wait,true);
@@ -471,8 +472,10 @@ function setAutoReal(next){
    autoReal=true;
    executionMode='REAL';
    autoDemo=false;
+   sessionStopped=false;
    dlTicksSinceClose=0;
    dlReadyForNext=true;
+   lastSignalEpoch=null;
    syncAutoDemoUI();
    syncAutoRealUI();
    const q=dlDecision();
@@ -871,11 +874,15 @@ $('autoDemoToggle').onclick=()=>setAutoDemo(!autoDemo);
 $('bridgeAutoDemo').onclick=()=>setAutoDemo(!autoDemo);
 $('autoRealToggle').onclick=()=>setAutoReal(!autoReal);
 $('manualStop').onclick=()=>{
+  autoDemo=false;
   autoReal=false;
   dlReadyForNext=false;
+  dlTicksSinceClose=0;
+  syncAutoDemoUI();
   syncAutoRealUI();
-  realMsg('STOP MANUAL · nuevas compras detenidas. El contrato ya abierto, si existe, se deja cerrar normalmente.');
-  trace('STOP MANUAL · AUTO-REAL OFF',true);
+  realMsg('STOP MANUAL · compras detenidas · conexión REAL permanece abierta.',true);
+  derivMsg('STOP MANUAL · compras detenidas · conexión DEMO permanece abierta.',true);
+  trace('STOP MANUAL · compras OFF · conexiones conservadas',true);
 };
 $('resetSession').onclick=()=>{
   sessionPnl=0;
