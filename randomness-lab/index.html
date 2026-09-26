@@ -1,9 +1,9 @@
 <!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Randomness Lab Demo</title><style>
 body{margin:0;background:#07111c;color:#eaf5ff;font-family:system-ui;padding:16px}.w{max-width:900px;margin:auto}.c{background:#0e1d2c;border:1px solid #28445d;border-radius:16px;padding:15px;margin:12px 0}.g{display:grid;grid-template-columns:repeat(auto-fit,minmax(135px,1fr));gap:10px}.n{font-size:27px;font-weight:800}.m{color:#8fa9bd}button{padding:13px 17px;border:0;border-radius:11px;font-weight:800;margin:4px}#go{background:#dfefff;color:#07111c}#stop{background:#26394b;color:#fff}.bar{height:12px;background:#172a3a;border-radius:20px;overflow:hidden}.bar i{display:block;height:100%;background:#dfefff;width:0}.digits{display:grid;grid-template-columns:repeat(5,1fr);gap:7px}.d{text-align:center;background:#091725;padding:9px;border-radius:9px}.log{max-height:180px;overflow:auto;white-space:pre-wrap}.ok{color:#69e3a7}.bad{color:#ff8795}</style></head><body><div class="w">
-<h1>RANDOMNESS LAB · DEMO</h1><div class="m">Calculadora de aleatoriedad + simulación DIGITDIFF sobre ticks públicos R_75</div>
+<h1>RANDOMNESS LAB · DEMO</h1><div class="m">SESIÓN CONTINUA · aleatoriedad ponderada · DIGITDIFF · ticks públicos R_75</div>
 <div class="c"><button id="go">INICIAR SESIÓN</button><button id="stop">PARAR</button><div id="status" class="m">Cargando ticks públicos…</div></div>
 <div class="c g"><div><span class="m">P&L neto</span><div id="pnl" class="n">$0.00</div></div><div><span class="m">Meta</span><div class="n">+$5.00</div></div><div><span class="m">Stake actual</span><div id="stake" class="n">$0.50</div></div><div><span class="m">Acierto</span><div id="rate" class="n">–</div></div></div>
-<div class="c"><div class="bar"><i id="progress"></i></div><p class="m">Al alcanzar +$5 netos, la sesión se detiene automáticamente.</p></div>
+<div class="c"><div class="bar"><i id="progress"></i></div><p class="m">Una sola sesión: MATCH resta del neto y vuelve el stake a $0.50; WIN reinvierte. Solo se detiene automáticamente al alcanzar +$5 netos.</p></div>
 <div class="c g"><div><span class="m">WIN</span><div id="wins" class="n ok">0</div></div><div><span class="m">MATCH</span><div id="loss" class="n bad">0</div></div><div><span class="m">Operaciones</span><div id="trades" class="n">0</div></div><div><span class="m">Entropía</span><div id="entropy" class="n">–</div></div></div>
 <div class="c"><div class="m">Distribución reciente / candidato de menor frecuencia ajustada</div><div id="digits" class="digits"></div></div>
 <div class="c"><b>REGISTRO</b><div id="log" class="log m">Esperando datos…</div></div></div>
@@ -73,7 +73,7 @@ function connect(){
  ws.onclose=()=>{$('status').textContent='Feed desconectado';run=false};
  ws.onerror=()=>{$('status').textContent='Error de conexión al feed'}
 }
-$('go').onclick=()=>{pnl=0;stake=BASE;w=0;l=0;pending=null;lastMatch=null;run=true;stats();log('SESIÓN INICIADA · base $0.50 · objetivo +$5')};
+$('go').onclick=()=>{pnl=0;stake=BASE;w=0;l=0;pending=null;lastMatch=null;run=true;stats();log('SESIÓN CONTINUA INICIADA · base $0.50 · objetivo NETO +$5')};
 $('stop').onclick=()=>{run=false;pending=null;$('status').textContent='Sesión detenida manualmente';log('STOP MANUAL')};
 stats();connect();
 </script></body></html>
