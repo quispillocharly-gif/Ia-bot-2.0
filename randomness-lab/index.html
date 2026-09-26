@@ -14,8 +14,8 @@ let seq=[],run=false,pnl=0,stake=BASE,w=0,l=0,pending=null,lastEpoch=0,lastMatch
 function log(s){$('log').textContent=s+'\\n'+$('log').textContent.slice(0,3500)}
 function stats(){const t=w+l;$('pnl').textContent=(pnl>=0?'+':'')+'$'+pnl.toFixed(2);$('stake').textContent='$'+stake.toFixed(2);$('wins').textContent=w;$('loss').textContent=l;$('trades').textContent=t;$('rate').textContent=t?(100*w/t).toFixed(2)+'%':'–';$('progress').style.width=Math.max(0,Math.min(100,pnl/TARGET*100))+'%'}
 function calc(){
- if(seq.length<260)return null;
- const train=seq.slice(-260,-60),test=seq.slice(-60),now=seq[seq.length-1];
+ if(seq.length<180)return null;
+ const train=seq.slice(-180,-40),test=seq.slice(-40),now=seq[seq.length-1];
  const freqPick=(arr,n)=>{const c=Array(10).fill(0);arr.slice(-n).forEach(d=>c[d]++);return c.indexOf(Math.min(...c))};
  const transPick=(arr)=>{const m=Array.from({length:10},()=>Array(10).fill(1));for(let i=1;i<arr.length;i++)m[arr[i-1]][arr[i]]++;const row=m[arr[arr.length-1]],mn=Math.min(...row);return row.indexOf(mn)};
  const antiRun=(arr)=>{const c=Array(10).fill(0);arr.slice(-35).forEach(d=>c[d]++);const last=arr[arr.length-1];c[last]+=2;return c.indexOf(Math.min(...c))};
@@ -60,7 +60,7 @@ function onDigit(d){
 }
 function connect(){
  const ws=new WebSocket('wss://api.derivws.com/trading/v1/options/ws/public');
- ws.onopen=()=>ws.send(JSON.stringify({ticks_history:'R_75',count:220,end:'latest',style:'ticks',req_id:1}));
+ ws.onopen=()=>ws.send(JSON.stringify({ticks_history:'R_75',count:300,end:'latest',style:'ticks',req_id:1}));
  ws.onmessage=e=>{
    const m=JSON.parse(e.data);
    if(m.history&&m.history.prices){
