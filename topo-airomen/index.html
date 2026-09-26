@@ -35,9 +35,9 @@ button:disabled{opacity:.55;cursor:not-allowed}.formgrid{display:grid;grid-templ
     <div id="dynamicWaitMeta" class="mini">Máximo 5 ticks · no sigue orden fijo</div>
   </div>
   <div class="card">
-    <div class="lab">META DE SESIÓN</div>
-    <div class="big green">+$20.00</div>
-    <div class="mini">Una operación a la vez · DEMO</div>
+    <div class="lab">TP POR CICLO</div>
+    <div class="big green">+$2.00</div>
+    <div id="tpCyclesTop" class="mini">0 ciclos · acumulado $0.00</div>
   </div>
 </div>
 
@@ -72,22 +72,22 @@ button:disabled{opacity:.55;cursor:not-allowed}.formgrid{display:grid;grid-templ
   <div><div class="mini">AUTO-COMPRA</div><button id="autoDemoToggle">AUTO-DEMO OFF</button></div>
  </div>
  <div class="grid" style="margin-top:10px">
-  <div><div class="lab">META DE SESIÓN</div><div class="big green">+$20.00</div><div class="mini">P&L neto real de contratos demo</div></div>
+  <div><div class="lab">TP DEL CICLO</div><div class="big green">+$2.00</div><div id="cycleCounter" class="mini">0 ciclos completados · 10 = +$20</div></div>
   <div><div class="lab">P&L SESIÓN</div><div id="sessionPnl" class="big">+$0.00</div><div id="sessionProgress" class="mini">0.0% de la meta</div></div>
   <div><div class="lab">PRÓXIMO STAKE</div><div id="nextStake" class="big">$1.00</div><div id="sessionWL" class="mini">0 WIN · 0 LOSS</div></div>
  </div>
  <div class="grid" style="margin-top:10px">
   <div><div class="mini">STAKE MÁXIMO DEMO</div><input id="maxStake" type="number" inputmode="decimal" min="0.35" step="0.01" value="5.00"></div>
   <div><div class="mini">STOP-LOSS SESIÓN</div><input id="sessionStopLoss" type="number" inputmode="decimal" min="1" step="0.50" value="5.00"></div>
-  <div><div class="mini">SESIÓN</div><button id="resetSession">REINICIAR META +$20</button></div>
+  <div><div class="mini">SESIÓN</div><button id="resetSession">REINICIAR CICLO +$2</button></div>
  </div>
- <div id="ladderInfo" class="mini statusline">META +$20 · cada WIN suma su ganancia al siguiente stake; MATCH vuelve al stake base. Motor nuevo · espera dinámica 1–5 ticks.</div>
+ <div id="ladderInfo" class="mini statusline">TP +$2 AUTO-RESET · cada WIN suma su ganancia al siguiente stake; MATCH vuelve al stake base. El aprendizaje continúa entre ciclos.</div>
  <div id="autoDemoState" class="mini statusline">Cada tick recalcula los 10 dígitos. La espera cambia dinámicamente entre 1 y 5 ticks; compra el menos probable.</div>
  <div id="tradeTrace" class="mini statusline">TRACE: esperando AUTO-DEMO…</div>
 </div>
-<div class="footer">CLEAN 4.1 · DYNAMIC LEAST · DEMO ONLY · no garantiza ausencia de MATCH</div>
+<div class="footer">CLEAN 4.2 · TP +$2 AUTO-RESET · DYNAMIC LEAST · DEMO ONLY</div>
 </div><script>
-const BUILD='CLEAN-4.1-DYNAMIC-UI';
+const BUILD='CLEAN-4.2-TP2-AUTORESET';
 const DYNAMIC_WAIT_MIN=1;
 const DYNAMIC_WAIT_MAX=5;
 let dlCounts=Array(10).fill(1);
@@ -205,7 +205,9 @@ let derivSocket=null,derivDemoAccount=null,publicSocket=null,liveModel=null,live
 let latestPublicTickEpoch=0,latestPublicTickDigit=null,latestPublicTickQuote=null;
 let researchPolicy={source:'v1',rule:'neural_argmin',mode:'RESEARCH_DEMO'},sessionPolicy={source:'v1',rule:'neural_argmin',mode:'RESEARCH_DEMO'},currentBreakEven=.9174311926605504;
 let activeMoneyPolicy={promoted:false,compound_fraction:1,pause_after_match:0,batch_size:5,stage_size:5};
-const SESSION_TARGET=20;
+const SESSION_TARGET=2;
+let completedTpCycles=0;
+let bankedTpProfit=0;
 let sessionPnl=0,sessionWins=0,sessionLosses=0,currentStake=1,sessionStopped=false,lastSettledContractId=null;
 let sessionBatchTrades=0,sessionBatchWins=0,sessionStage=1,sessionPauseLeft=0;
 function trace(msg,good=false){
@@ -222,6 +224,10 @@ function renderProfitSession(){
  $('sessionProgress').textContent=progress.toFixed(1)+'% de la meta';
  $('nextStake').textContent='$'+currentStake.toFixed(2);
  $('sessionWL').textContent=sessionWins+' WIN · '+sessionLosses+' LOSS';
+ if($('cycleCounter'))$('cycleCounter').textContent=
+   completedTpCycles+' ciclos completados · acumulado $'+bankedTpProfit.toFixed(2);
+ if($('tpCyclesTop'))$('tpCyclesTop').textContent=
+   completedTpCycles+' ciclos · acumulado $'+bankedTpProfit.toFixed(2);
 }
 function resetProfitSession(){
  sessionPnl=0;sessionWins=0;sessionLosses=0;sessionStopped=false;
@@ -231,7 +237,7 @@ function resetProfitSession(){
  if($('sessionPolicy'))$('sessionPolicy').textContent='DYNAMIC LEAST · 1-5 TICKS';
  if($('policyMeta'))$('policyMeta').textContent='Motor nuevo · recalcula 10 dígitos cada tick · sin modelos anteriores';
  renderProfitSession();
- trace('SESIÓN NUEVA · motor dinámico 1-5 ticks · meta +$20.00',true);
+ trace('CICLO NUEVO · motor dinámico 1-5 ticks · TP +$2.00',true);
 }
 function applyProfitLadder(profit){
  sessionPnl+=profit;
@@ -244,9 +250,27 @@ function applyProfitLadder(profit){
  }
  renderProfitSession();
  if(sessionPnl>=SESSION_TARGET){
-   sessionStopped=true;autoDemo=false;syncAutoDemoUI();
-   $('autoDemoState').textContent='META ALCANZADA: +$'+sessionPnl.toFixed(2)+' netos · AUTO-DEMO detenido.';
-   trace('OBJETIVO +$20 NETOS ALCANZADO',true);
+   const closedCycleProfit=sessionPnl;
+   completedTpCycles++;
+   bankedTpProfit+=closedCycleProfit;
+
+   // AUTO-RESET financiero: conserva el aprendizaje del motor.
+   sessionPnl=0;
+   sessionWins=0;
+   sessionLosses=0;
+   currentStake=baseStake();
+   sessionStopped=false;
+   dlTicksSinceClose=0;
+   dlReadyForNext=true;
+
+   renderProfitSession();
+   $('autoDemoState').textContent=
+     'TP +$2 COMPLETADO · ciclo '+completedTpCycles+
+     ' · acumulado $'+bankedTpProfit.toFixed(2)+
+     ' · nuevo ciclo automático';
+   trace('TP +$'+closedCycleProfit.toFixed(2)+
+     ' · CICLO '+completedTpCycles+
+     ' COMPLETADO · stake base · aprendizaje conservado',true);
  }else if(sessionPnl<=-sessionStopLoss()){
    sessionStopped=true;autoDemo=false;syncAutoDemoUI();
    $('autoDemoState').textContent='STOP-LOSS alcanzado: $'+sessionPnl.toFixed(2);
@@ -267,7 +291,7 @@ function syncAutoDemoUI(){
 function setAutoDemo(next){
  if(next){
    if(sessionStopped){
-     $('autoDemoState').textContent='La sesión está finalizada por meta o stop-loss. Pulsa REINICIAR META +$20 para comenzar otra.';
+     $('autoDemoState').textContent='La sesión está finalizada por meta o stop-loss. Pulsa REINICIAR CICLO +$2 para comenzar otra.';
      trace('SESIÓN FINALIZADA · reinicia para volver a operar');
      return false;
    }
