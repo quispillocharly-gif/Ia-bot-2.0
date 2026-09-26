@@ -3,13 +3,13 @@ body{margin:0;background:#07111c;color:#eaf5ff;font-family:system-ui;padding:16p
 <h1>RANDOMNESS LAB · DEMO</h1><div class="m">MULTIMODELO ADAPTATIVO · DIGITDIFF · ticks públicos R_75</div>
 <div class="c"><button id="go">INICIAR SESIÓN</button><button id="stop">PARAR</button><div id="status" class="m">Cargando ticks públicos…</div></div>
 <div class="c g"><div><span class="m">P&L neto</span><div id="pnl" class="n">$0.00</div></div><div><span class="m">Meta</span><div class="n">+$5.00</div></div><div><span class="m">Stake actual</span><div id="stake" class="n">$0.50</div></div><div><span class="m">Acierto</span><div id="rate" class="n">–</div></div></div>
-<div class="c"><div class="bar"><i id="progress"></i></div><p class="m">Cinco modelos compiten sobre validación reciente. Compra con el modelo que haya mostrado menor MATCH; WIN reinvierte hasta $1.25 y MATCH vuelve a $0.50. Meta +$5 netos.</p></div>
+<div class="c"><div class="bar"><i id="progress"></i></div><p class="m">Cinco modelos compiten sobre validación reciente. Compra con el modelo que haya mostrado menor MATCH; WIN reinvierte sin límite fijo y MATCH vuelve a $0.50. Meta +$5 netos.</p></div>
 <div class="c g"><div><span class="m">WIN</span><div id="wins" class="n ok">0</div></div><div><span class="m">MATCH</span><div id="loss" class="n bad">0</div></div><div><span class="m">Operaciones</span><div id="trades" class="n">0</div></div><div><span class="m">Entropía</span><div id="entropy" class="n">–</div></div></div>
 <div class="c g"><div><span class="m">DECISIÓN</span><div id="decision" class="n">ESPERAR</div></div><div><span class="m">LECTURA</span><div id="reason" class="m">Analizando aleatoriedad…</div></div></div><div class="c"><div class="m">Distribución calculada</div><div id="digits" class="digits"></div></div>
 <div class="c"><b>REGISTRO</b><div id="log" class="log m">Esperando datos…</div></div></div>
 <script>
 const $=x=>document.getElementById(x);
-const BASE=.50,TARGET=5,MAX_STAKE=1.25;
+const BASE=.50,TARGET=5;
 let seq=[],run=false,pnl=0,stake=BASE,w=0,l=0,pending=null,lastEpoch=0,lastMatch=null,wait=0,perf=Array.from({length:10},()=>({w:1,l:1}));
 function log(s){$('log').textContent=s+'\\n'+$('log').textContent.slice(0,3500)}
 function stats(){const t=w+l;$('pnl').textContent=(pnl>=0?'+':'')+'$'+pnl.toFixed(2);$('stake').textContent='$'+stake.toFixed(2);$('wins').textContent=w;$('loss').textContent=l;$('trades').textContent=t;$('rate').textContent=t?(100*w/t).toFixed(2)+'%':'–';$('progress').style.width=Math.max(0,Math.min(100,pnl/TARGET*100))+'%'}
@@ -41,7 +41,7 @@ function settle(d){
  if(won){
    lastMatch=null;
    const profit=pending.stake*.10;
-   pnl+=profit;stake=Math.min(MAX_STAKE,pending.stake+profit);w++;perf[pending.barrier].w++;
+   pnl+=profit;stake=pending.stake+profit;w++;perf[pending.barrier].w++;
    log('WIN · DIFFER '+pending.barrier+' · +$'+profit.toFixed(2)+' · próximo $'+stake.toFixed(2))
  }else{
    lastMatch={digit:pending.barrier};
