@@ -72,7 +72,7 @@ button:disabled{opacity:.55;cursor:not-allowed}.formgrid{display:grid;grid-templ
   </select>
  </div>
  <div class="controls">
-  <div><div class="mini">STAKE DE REFERENCIA</div><input id="realStake" type="number" inputmode="decimal" min="0.35" step="0.01" value="0.35"></div>
+  <div><div class="mini">STAKE DE REFERENCIA</div><input id="realStake" type="number" inputmode="decimal" min="0.35" step="0.01" value="1.00"></div>
   <div><div class="mini">AUTO-REAL OFF</div><button id="autoRealToggle">REAL MONITOR</button></div>
   <div style="grid-column:1/-1"><button id="manualStop" style="border-color:#ff6b82;color:#ff9aaa">■ PARAR / STOP</button></div>
  </div>
@@ -94,7 +94,7 @@ button:disabled{opacity:.55;cursor:not-allowed}.formgrid{display:grid;grid-templ
   <div><div class="lab">ÚLTIMA OPERACIÓN</div><div id="lastDemoBuy" class="big">–</div></div>
  </div>
  <div class="controls">
-  <div><div class="mini">STAKE BASE DEMO</div><input id="demoStake" type="number" inputmode="decimal" min="0.35" step="0.01" value="0.35"></div>
+  <div><div class="mini">STAKE BASE DEMO</div><input id="demoStake" type="number" inputmode="decimal" min="0.35" step="0.01" value="1.00"></div>
   <div><div class="mini">AUTO-COMPRA</div><button id="autoDemoToggle">AUTO-DEMO OFF</button></div>
  </div>
  <div class="grid" style="margin-top:10px">
@@ -158,7 +158,7 @@ function dlObserveTrade(barrier,win){
     dlBarrierPenalty[d]*=.65;
   }else{
     // MATCH reciente: penaliza temporalmente, nunca excluye el dígito.
-    dlBarrierPenalty[d]=Math.min(.035,dlBarrierPenalty[d]+.018);
+    dlBarrierPenalty[d]=Math.min(.060,dlBarrierPenalty[d]+.030);
   }
 }
 
@@ -214,10 +214,10 @@ function dlDecision(){
     // Minimax: evita candidatos que una lectura considere muy probables.
     // El error real reciente añade un castigo temporal.
     const risk=
-      .58*worst+
-      .42*mean+
-      .0045*hotVotes-
-      .0012*bottomVotes+
+      .70*worst+
+      .30*mean+
+      .0070*hotVotes-
+      .0018*bottomVotes+
       Number(dlBarrierPenalty[d]||0);
 
     return {
@@ -246,10 +246,10 @@ function dlDecision(){
 
   // No es secuencia fija: más consenso => entra antes.
   let wait=5;
-  if(best.bottomVotes>=5 && best.hotVotes===0 && gap>=.0025)wait=1;
-  else if(best.bottomVotes>=4 && best.hotVotes===0)wait=2;
-  else if(best.bottomVotes>=4 && best.hotVotes<=1)wait=3;
-  else if(best.bottomVotes>=3 && best.hotVotes<=1)wait=4;
+  if(best.bottomVotes>=6 && best.hotVotes===0 && gap>=.0040)wait=1;
+  else if(best.bottomVotes>=5 && best.hotVotes===0 && gap>=.0025)wait=2;
+  else if(best.bottomVotes>=4 && best.hotVotes===0)wait=3;
+  else if(best.bottomVotes>=4 && best.hotVotes<=1)wait=4;
 
   return {best,rows,gap,wait,sources:6};
 }
