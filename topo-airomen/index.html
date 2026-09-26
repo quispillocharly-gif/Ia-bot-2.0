@@ -19,7 +19,7 @@ button:disabled{opacity:.55;cursor:not-allowed}.formgrid{display:grid;grid-templ
 </style></head><body><div class="wrap">
 <div class="head">
   <div class="logo">TOPO AIROMEN</div>
-  <div class="sub">CLEAN 4.1 · DYNAMIC LEAST · R_75 · DEMO</div>
+  <div class="sub">CLEAN 4.3 · DYNAMIC LEAST · R_75 · DEMO</div>
 </div>
 
 <div class="grid">
@@ -85,9 +85,9 @@ button:disabled{opacity:.55;cursor:not-allowed}.formgrid{display:grid;grid-templ
  <div id="autoDemoState" class="mini statusline">Cada tick recalcula los 10 dígitos. La espera cambia dinámicamente entre 1 y 5 ticks; compra el menos probable.</div>
  <div id="tradeTrace" class="mini statusline">TRACE: esperando AUTO-DEMO…</div>
 </div>
-<div class="footer">CLEAN 4.2 · TP +$2 AUTO-RESET · DYNAMIC LEAST · DEMO ONLY</div>
+<div class="footer">CLEAN 4.3 · TP +$2 AUTO-RESET · DYNAMIC LEAST · DEMO ONLY</div>
 </div><script>
-const BUILD='CLEAN-4.2-TP2-AUTORESET';
+const BUILD='CLEAN-4.3-TICK-COUNTER-FIX';
 const DYNAMIC_WAIT_MIN=1;
 const DYNAMIC_WAIT_MAX=5;
 let dlCounts=Array(10).fill(1);
@@ -301,8 +301,11 @@ function setAutoDemo(next){
      return false;
    }
    autoDemo=true;
-   $('autoDemoState').textContent='AUTO-DEMO activo · una operación a la vez · solo cuenta demo.';
-   trace('AUTO-DEMO ARMADO · esperando señal válida',true);
+   dlTicksSinceClose=0;
+   dlReadyForNext=true;
+   const q=dlDecision();
+   $('autoDemoState').textContent='AUTO-DEMO activo · esperando '+q.wait+' tick(s) para la próxima entrada.';
+   trace('AUTO-DEMO ARMADO · contador 0/'+q.wait+' · máximo 5',true);
  }else{
    autoDemo=false;
    $('autoDemoState').textContent='AUTO-DEMO apagado. La IA sigue analizando.';
@@ -597,11 +600,15 @@ function startPublicDiffer(){
     latestPublicTickDigit=digit;latestPublicTickQuote=q;
     liveSeq.push(digit);if(liveSeq.length>500)liveSeq.shift();
     dlObserve(prev,digit);
-    if(autoDemo&&!sessionStopped&&!pendingTrade&&!activeContractId&&dlReadyForNext){
-      dlTicksSinceClose=Math.min(5,dlTicksSinceClose+1);
+    if(!sessionStopped&&!pendingTrade&&!activeContractId&&dlReadyForNext){
+      dlTicksSinceClose=Math.min(DYNAMIC_WAIT_MAX,dlTicksSinceClose+1);
     }
     $('liveTick').textContent=q+' · '+digit;
     renderLiveDecision();
+    if(!autoDemo && $('tradeTrace')){
+      const z=dlDecision();
+      $('tradeTrace').textContent='TRACE: TICK LIVE · '+dlTicksSinceClose+'/'+z.wait+' · AUTO-DEMO OFF';
+    }
     tryNextTickTrade();
    }
   }catch(_){}
