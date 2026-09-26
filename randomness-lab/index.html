@@ -15,22 +15,26 @@ function log(s){$('log').textContent=s+'\\n'+$('log').textContent.slice(0,3500)}
 function stats(){const t=w+l;$('pnl').textContent=(pnl>=0?'+':'')+'$'+pnl.toFixed(2);$('stake').textContent='$'+stake.toFixed(2);$('wins').textContent=w;$('loss').textContent=l;$('trades').textContent=t;$('rate').textContent=t?(100*w/t).toFixed(2)+'%':'–';$('progress').style.width=Math.max(0,Math.min(100,pnl/TARGET*100))+'%'}
 function calc(){
  if(seq.length<20)return null;
- const windows=[20,50,100,200],risk=Array(10).fill(0),avg=Array(10).fill(0);
+ const windows=[20,50,100,200],avg=Array(10).fill(0);
  for(const size of windows){
-   const z=seq.slice(-size),c=Array(10).fill(1);
-   z.forEach(d=>c[d]++);
+   const z=seq.slice(-size),c=Array(10).fill(1);z.forEach(d=>c[d]++);
    const n=c.reduce((x,y)=>x+y,0);
-   for(let d=0;d<10;d++){const p=c[d]/n;avg[d]+=p/windows.length;risk[d]+=p}
+   for(let d=0;d<10;d++)avg[d]+=c[d]/n/windows.length;
  }
  const z=seq.slice(-200),c=Array(10).fill(0);z.forEach(d=>c[d]++);
  let H=0,n=Math.max(1,z.length);c.forEach(x=>{if(x){const p=x/n;H-=p*Math.log(p)}});H/=Math.log(10);
  $('entropy').textContent=(H*100).toFixed(1)+'%';
  $('digits').innerHTML=avg.map((p,d)=>'<div class="d">D'+d+'<br><b>'+(p*100).toFixed(1)+'%</b></div>').join('');
- let pool=[0,1,2,3,4,5,6,7,8,9].map(d=>({d,r:risk[d]/windows.length+(d===lastMatch?.digit?.005:0)})).sort((x,y)=>x.r-y.r).slice(0,4);
- const floor=Math.min(...pool.map(x=>x.r)),weights=pool.map(x=>1/Math.max(.004,x.r-floor+.004));
- let total=weights.reduce((x,y)=>x+y,0),pick=Math.random()*total;
- for(let i=0;i<pool.length;i++){pick-=weights[i];if(pick<=0)return pool[i].d}
- return pool[0].d
+ // Todos los dígitos participan. Base aleatoria fuerte + inclinación estadística suave.
+ const weights=avg.map((p,d)=>{
+   const under=Math.max(-.03,Math.min(.03,.10-p));
+   let weight=1+under*5;
+   if(lastMatch&&d===lastMatch.digit)weight*=.90;
+   return Math.max(.70,weight);
+ });
+ let total=weights.reduce((x,y)=>x+y,0),r=Math.random()*total;
+ for(let d=0;d<10;d++){r-=weights[d];if(r<=0)return d}
+ return Math.floor(Math.random()*10)
 }
 function settle(d){
  if(!pending)return;
@@ -53,7 +57,7 @@ function onDigit(d){
  if(!run||seq.length<100)return;
  const b=calc();if(b===null)return;
  pending={barrier:b,stake};
- log('COMPRA SIM · DIFFER '+b+' · $'+stake.toFixed(2)+' · aleatoria ponderada')
+ log('COMPRA SIM · DIFFER '+b+' · $'+stake.toFixed(2)+' · aleatoria 0–9 con sesgo suave')
 }
 function connect(){
  const ws=new WebSocket('wss://api.derivws.com/trading/v1/options/ws/public');
