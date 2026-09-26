@@ -6,6 +6,11 @@ def fetch():
     h=data.get("history",{}); prices=h.get("prices",[]); times=h.get("times",[])
     digs=[int(str(x).replace(".","")[-1]) for x in prices]
     return list(zip(times,digs))
+def repeat_block(hist):
+    a=hist[-20:]
+    if not a:return None
+    c=[a.count(d) for d in range(10)];m=max(c);leaders=[d for d,v in enumerate(c) if v==m]
+    return leaders[0] if m>=3 and len(leaders)==1 else None
 def choose(hist,last_bought,discard,step):
     if len(hist)<120:return None
     s=[0.0]*10
@@ -22,7 +27,8 @@ def choose(hist,last_bought,discard,step):
         if p<.1:s[d]+=(.1-p)*15
     rc=hist[-30:]
     for d in range(10):s[d]-=max(0,rc.count(d)-3)*.25
-    pool=[d for d in range(10) if d!=last_bought and discard[d]<=step]
+    rb=repeat_block(hist)
+    pool=[d for d in range(10) if d!=last_bought and discard[d]<=step and d!=rb]
     if not pool:return None
     return max(pool,key=lambda d:s[d])
 def main():
@@ -46,7 +52,7 @@ def main():
             if d!=pick:wins+=1;watch.add(pick)
             else:matches+=1
         last_epoch=ep;processed+=1
-    state={"updated_epoch":int(time.time()),"last_epoch":last_epoch,"symbol":"R_75","history":hist[-2500:],"watch_digits":sorted(watch),"discard_remaining":discard,"last_bought":last_bought,"sim_wins":wins,"sim_matches":matches,"new_ticks_processed":processed,"mode":"cloud simulation learning","guarantee":False}
+    state={"updated_epoch":int(time.time()),"last_epoch":last_epoch,"symbol":"R_75","history":hist[-2500:],"watch_digits":sorted(watch),"discard_remaining":discard,"last_bought":last_bought,"repeat_blocked":repeat_block(hist),"sim_wins":wins,"sim_matches":matches,"new_ticks_processed":processed,"mode":"cloud simulation learning","guarantee":False}
     with open(STATE,"w") as f:json.dump(state,f,separators=(",",":"))
     print(json.dumps({k:v for k,v in state.items() if k!="history"}))
 if __name__=="__main__":main()
