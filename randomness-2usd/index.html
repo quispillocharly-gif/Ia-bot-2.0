@@ -10,7 +10,7 @@ const $=x=>document.getElementById(x),BASE=1,TARGET=5;
 let seq=[],running=false,pending=null,pnl=0,stake=BASE,w=0,l=0,sessions=0,lastEpoch=0,ws,retry;
 const choices=Array(10).fill(0),outcomes=Array.from({length:10},()=>({m:0,n:0}));
 const FN=['freq','mark','bay','cond2','repeat','serial'],fs=Object.fromEntries(FN.map(n=>[n,{m:0,n:0,recent:[]}]));
-const SN=['MINIMO','BAJO_MEDIO','MEDIO'],ss=Object.fromEntries(SN.map(n=>[n,{m:0,n:0,recent:[]}));let virtualPicks=null,selectorPicks=null;
+const SN=['MINIMO','BAJO_MEDIO','MEDIO'],ss=Object.fromEntries(SN.map(n=>[n,{m:0,n:0,recent:[]}]));let virtualPicks=null,selectorPicks=null;
 const MN=['MARKOV','FRECUENCIA','BAYES','RACHAS','ENSEMBLE'],ms=Object.fromEntries(MN.map(n=>[n,{m:1,n:10,recent:[]}]));let modelPending=null;
 function log(x){$('log').textContent=x+'\n'+$('log').textContent.slice(0,3500)}
 function ui(){const n=w+l;$('pnl').textContent=(pnl>=0?'+':'')+'$'+pnl.toFixed(2);$('stake').textContent='$'+stake.toFixed(2);$('win').textContent=w;$('match').textContent=l;$('sessions').textContent=sessions;$('ops').textContent=n;$('bar').style.width=Math.max(0,Math.min(100,pnl/TARGET*100))+'%'}
