@@ -58,6 +58,31 @@ button:disabled{opacity:.55;cursor:not-allowed}.formgrid{display:grid;grid-templ
  <div id="derivStatus" class="statusline mini">DESCONECTADO · solo demo · auto-buy OFF</div>
  <div id="derivAccount" class="mini">El PAT se usa solo en esta pestaña y no se guarda en GitHub.</div>
 </div>
+
+<div class="card">
+ <div class="lab">DERIV REAL · ACTIVACIÓN MANUAL</div>
+ <div class="formgrid">
+  <div><div class="mini">APP ID REAL</div><input id="realAppId" inputmode="numeric" autocomplete="off" placeholder="Tu Deriv App ID"></div>
+  <div><div class="mini">PAT REAL</div><input id="realPat" type="password" autocomplete="new-password" placeholder="Personal Access Token"></div>
+  <div><button id="realConnect">CARGAR / CONECTAR REAL</button></div>
+ </div>
+ <div style="margin-top:8px">
+  <select id="realAccountSelect" style="width:100%;padding:10px;border-radius:10px;background:#071024;color:#e8f3ff;border:1px solid #355984">
+   <option value="">Cuenta real…</option>
+  </select>
+ </div>
+ <div class="controls">
+  <div><div class="mini">STAKE BASE REAL</div><input id="realStake" type="number" inputmode="decimal" min="0.35" step="0.01" value="1.00"></div>
+  <div><div class="mini">AUTO REAL</div><button id="autoRealToggle">AUTO-REAL OFF</button></div>
+ </div>
+ <div class="grid" style="margin-top:10px">
+  <div><div class="mini">STAKE MÁXIMO REAL</div><input id="realMaxStake" type="number" inputmode="decimal" min="0.35" step="0.01" value="2.00"></div>
+  <div><div class="mini">STOP-LOSS REAL</div><input id="realStopLoss" type="number" inputmode="decimal" min="1" step="0.50" value="2.00"></div>
+  <div><div class="mini">MODO</div><div id="executionModeView" class="big yellow">DEMO</div></div>
+ </div>
+ <div id="realStatus" class="statusline mini">DESCONECTADO · conectar no activa compras.</div>
+ <div id="realAccount" class="mini">AUTO-REAL requiere activación manual.</div>
+</div>
 <div class="card signalbox">
  <div class="lab">DECISIÓN LIVE · ESPERA DINÁMICA 1–5 TICKS</div>
  <div id="liveDiffer" class="signalDigit">DIFFER –</div>
@@ -65,7 +90,7 @@ button:disabled{opacity:.55;cursor:not-allowed}.formgrid{display:grid;grid-templ
  <div class="grid" style="margin-top:10px">
   <div><div class="lab">ÚLTIMO TICK</div><div id="liveTick" class="big">–</div></div>
   <div><div class="lab">PROB. ESTIMADA DEL CANDIDATO</div><div id="liveProb" class="big">–</div></div>
-  <div><div class="lab">ÚLTIMA COMPRA DEMO</div><div id="lastDemoBuy" class="big">–</div></div>
+  <div><div class="lab">ÚLTIMA OPERACIÓN</div><div id="lastDemoBuy" class="big">–</div></div>
  </div>
  <div class="controls">
   <div><div class="mini">STAKE BASE DEMO</div><input id="demoStake" type="number" inputmode="decimal" min="0.35" step="0.01" value="1.00"></div>
@@ -85,9 +110,9 @@ button:disabled{opacity:.55;cursor:not-allowed}.formgrid{display:grid;grid-templ
  <div id="autoDemoState" class="mini statusline">Cada tick cruza 6 lecturas, recalcula los 10 dígitos y compra el candidato de menor riesgo. Espera máxima: 5 ticks.</div>
  <div id="tradeTrace" class="mini statusline">TRACE: esperando AUTO-DEMO…</div>
 </div>
-<div class="footer">CLEAN 4.4 · TP +$2 AUTO-RESET · CONSENSUS GUARD · DEMO ONLY</div>
+<div class="footer">CLEAN 4.5 · TP +$2 AUTO-RESET · CONSENSUS GUARD · DEMO / REAL</div>
 </div><script>
-const BUILD='CLEAN-4.4-CONSENSUS-GUARD';
+const BUILD='CLEAN-4.5-DEMO-REAL-SPLIT';
 const DYNAMIC_WAIT_MIN=1;
 const DYNAMIC_WAIT_MAX=5;
 let dlCounts=Array(10).fill(1);
@@ -288,7 +313,7 @@ async function load(){
  }catch(e){$('decision').textContent='MEMORY WAITING'}
 }
 
-let derivSocket=null,derivDemoAccount=null,publicSocket=null,liveModel=null,liveEnsemble=null,latestLiveModel=null,latestLiveEnsemble=null,liveSeq=[],livePip=4,liveBarrier=null,liveBarrierProb=null,liveRuleId='neural_argmin',autoDemo=false,pendingTrade=false,activeContractId=null,tradeReq=5000,lastProposalReq=null,lastSignalEpoch=0;
+let derivSocket=null,derivDemoAccount=null,derivRealSocket=null,derivRealAccount=null,publicSocket=null,liveModel=null,liveEnsemble=null,latestLiveModel=null,latestLiveEnsemble=null,liveSeq=[],livePip=4,liveBarrier=null,liveBarrierProb=null,liveRuleId='neural_argmin',autoDemo=false,autoReal=false,executionMode='DEMO',pendingTrade=false,activeContractId=null,tradeReq=5000,lastProposalReq=null,lastSignalEpoch=0;
 let latestPublicTickEpoch=0,latestPublicTickDigit=null,latestPublicTickQuote=null;
 let researchPolicy={source:'v1',rule:'neural_argmin',mode:'RESEARCH_DEMO'},sessionPolicy={source:'v1',rule:'neural_argmin',mode:'RESEARCH_DEMO'},currentBreakEven=.9174311926605504;
 let activeMoneyPolicy={promoted:false,compound_fraction:1,pause_after_match:0,batch_size:5,stage_size:5};
@@ -301,9 +326,32 @@ function trace(msg,good=false){
  const el=$('tradeTrace'); if(!el)return;
  el.textContent='TRACE: '+msg; el.style.color=good?'#6affb6':'#8ca4c8';
 }
-function baseStake(){return Math.max(.35,Number($('demoStake')?.value)||1)}
-function maxSessionStake(){return Math.max(baseStake(),Number($('maxStake')?.value)||5)}
-function sessionStopLoss(){return Math.max(1,Number($('sessionStopLoss')?.value)||5)}
+function baseStake(){
+ const id=executionMode==='REAL'?'realStake':'demoStake';
+ return Math.max(.35,Number($(id)?.value)||1);
+}
+function maxSessionStake(){
+ const id=executionMode==='REAL'?'realMaxStake':'maxStake';
+ return Math.max(baseStake(),Number($(id)?.value)||(executionMode==='REAL'?2:5));
+}
+function sessionStopLoss(){
+ const id=executionMode==='REAL'?'realStopLoss':'sessionStopLoss';
+ return Math.max(1,Number($(id)?.value)||(executionMode==='REAL'?2:5));
+}
+function activeAuto(){return executionMode==='REAL'?autoReal:autoDemo}
+function activeTradeSocket(){return executionMode==='REAL'?derivRealSocket:derivSocket}
+function activeTradeAccount(){return executionMode==='REAL'?derivRealAccount:derivDemoAccount}
+function syncModeView(){
+ if($('executionModeView'))$('executionModeView').textContent=executionMode;
+}
+function resetFinancialMode(){
+ sessionPnl=0;sessionWins=0;sessionLosses=0;sessionStopped=false;
+ completedTpCycles=0;bankedTpProfit=0;
+ currentStake=baseStake();lastSettledContractId=null;
+ pendingTrade=false;activeContractId=null;lastProposalReq=null;dlTradeBarrier=null;
+ dlTicksSinceClose=0;dlReadyForNext=true;
+ renderProfitSession();syncModeView();
+}
 function renderProfitSession(){
  const progress=Math.max(0,Math.min(100,(sessionPnl/SESSION_TARGET)*100));
  $('sessionPnl').textContent=(sessionPnl>=0?'+':'')+'$'+sessionPnl.toFixed(2);
@@ -359,151 +407,231 @@ function applyProfitLadder(profit){
      ' · CICLO '+completedTpCycles+
      ' COMPLETADO · stake base · aprendizaje conservado',true);
  }else if(sessionPnl<=-sessionStopLoss()){
-   sessionStopped=true;autoDemo=false;syncAutoDemoUI();
-   $('autoDemoState').textContent='STOP-LOSS alcanzado: $'+sessionPnl.toFixed(2);
-   trace('STOP-LOSS -$'+sessionStopLoss().toFixed(2)+' ALCANZADO');
+   sessionStopped=true;
+   if(executionMode==='REAL')autoReal=false; else autoDemo=false;
+   syncAutoDemoUI();syncAutoRealUI();
+   $('autoDemoState').textContent='STOP-LOSS '+executionMode+' alcanzado: $'+sessionPnl.toFixed(2);
+   trace('STOP-LOSS '+executionMode+' -$'+sessionStopLoss().toFixed(2)+' ALCANZADO');
  }
 }
 function syncAutoDemoUI(){
  const label=autoDemo?'AUTO-DEMO ON':'AUTO-DEMO OFF';
  for(const id of ['autoDemoToggle','bridgeAutoDemo']){
-   const b=$(id); if(!b)continue;
-   b.textContent=label;
-   b.style.color=autoDemo?'#6affb6':'#4ddcff';
+   const b=$(id);if(!b)continue;
+   b.textContent=label;b.style.color=autoDemo?'#6affb6':'#4ddcff';
  }
  if(derivSocket&&derivSocket.readyState===WebSocket.OPEN){
    derivMsg('CONECTADO A DERIV DEMO · '+(autoDemo?'AUTO-BUY ON':'AUTO-BUY OFF'),true);
  }
 }
+function syncAutoRealUI(){
+ const b=$('autoRealToggle');if(b){
+   b.textContent=autoReal?'AUTO-REAL ON':'AUTO-REAL OFF';
+   b.style.color=autoReal?'#ff6b82':'#4ddcff';
+ }
+ if(derivRealSocket&&derivRealSocket.readyState===WebSocket.OPEN){
+   realMsg('CONECTADO A DERIV REAL · '+(autoReal?'AUTO-REAL ON':'AUTO-REAL OFF'),true);
+ }
+ syncModeView();
+}
 function setAutoDemo(next){
  if(next){
-   if(sessionStopped){
-     $('autoDemoState').textContent='La sesión está finalizada por meta o stop-loss. Pulsa REINICIAR CICLO +$2 para comenzar otra.';
-     trace('SESIÓN FINALIZADA · reinicia para volver a operar');
-     return false;
-   }
+   if(pendingTrade||activeContractId){trace('NO SE PUEDE CAMBIAR DE MODO CON CONTRATO ACTIVO');return false}
+   if(sessionStopped){trace('SESIÓN DETENIDA · reinicia el ciclo');return false}
    if(!derivSocket||derivSocket.readyState!==WebSocket.OPEN||!derivDemoAccount){
      $('autoDemoState').textContent='Primero conecta una cuenta DERIV DEMO con App ID + PAT.';
-     trace('NO HAY CUENTA DEMO CONECTADA');
      return false;
    }
+   autoReal=false;
+   executionMode='DEMO';
    autoDemo=true;
-   dlTicksSinceClose=0;
-   dlReadyForNext=true;
+   resetFinancialMode();
+   dlTicksSinceClose=0;dlReadyForNext=true;
    const q=dlDecision();
-   $('autoDemoState').textContent='AUTO-DEMO activo · esperando '+q.wait+' tick(s) para la próxima entrada.';
-   trace('AUTO-DEMO ARMADO · contador 0/'+q.wait+' · máximo 5',true);
+   $('autoDemoState').textContent='AUTO-DEMO activo · esperando '+q.wait+' tick(s).';
+   trace('MODO DEMO ACTIVO · contador 0/'+q.wait,true);
  }else{
    autoDemo=false;
    $('autoDemoState').textContent='AUTO-DEMO apagado. La IA sigue analizando.';
-   trace('AUTO-DEMO OFF');
  }
- syncAutoDemoUI();
- return autoDemo;
+ syncAutoDemoUI();syncAutoRealUI();return autoDemo;
+}
+function setAutoReal(next){
+ if(next){
+   if(pendingTrade||activeContractId){realMsg('Hay un contrato activo. Espera a que cierre.');return false}
+   if(sessionStopped){realMsg('Sesión detenida por stop-loss. Reinicia el ciclo.');return false}
+   if(!derivRealSocket||derivRealSocket.readyState!==WebSocket.OPEN||!derivRealAccount){
+     realMsg('Primero conecta una cuenta REAL.');
+     return false;
+   }
+   autoDemo=false;
+   executionMode='REAL';
+   autoReal=true;
+   resetFinancialMode();
+   dlTicksSinceClose=0;dlReadyForNext=true;
+   const q=dlDecision();
+   $('autoDemoState').textContent='AUTO-REAL activo · TP +$2 · esperando '+q.wait+' tick(s).';
+   realMsg('AUTO-REAL ACTIVO · dinero real · TP +$2 / ciclo',true);
+   trace('MODO REAL ACTIVO · contador 0/'+q.wait);
+ }else{
+   autoReal=false;
+   realMsg('AUTO-REAL OFF · cuenta conectada sin compras.');
+ }
+ syncAutoDemoUI();syncAutoRealUI();return autoReal;
 }
 function derivMsg(msg,ok=false){
  const el=$('derivStatus'); el.textContent=msg; el.style.color=ok?'#6affb6':'#ffe66d';
+}
+function realMsg(msg,ok=false){
+ const el=$('realStatus');if(!el)return;
+ el.textContent=msg;el.style.color=ok?'#6affb6':'#ffe66d';
 }
 function apiError(j,fallback){
  return (j&&j.error&&(j.error.message||j.error.code))||
         (j&&j.errors&&j.errors[0]&&(j.errors[0].message||j.errors[0].code))||fallback;
 }
-async function connectDerivDemo(){
- const appId=$('derivAppId').value.trim(),pat=$('derivPat').value.trim(),btn=$('derivConnect');
- if(!appId||!pat){derivMsg('FALTA APP ID O PAT');return}
- btn.disabled=true; derivMsg('VALIDANDO PAT Y BUSCANDO CUENTA DEMO…');
- try{
+function handleTradeMessage(m,mode,ws){
+  const isReal=mode==='REAL';
+  const autoOn=isReal?autoReal:autoDemo;
+  if(m.error||m.errors){
+    const err=apiError(m,'respuesta de error');
+    pendingTrade=false;lastProposalReq=null;dlTradeBarrier=null;
+    (isReal?realMsg:derivMsg)('DERIV '+mode+': '+err);
+    trace('ERROR '+mode+' '+err);
+    return;
+  }
+  if(m.proposal && lastProposalReq && m.req_id===lastProposalReq.req){
+    const p=m.proposal||{};
+    if(!p.id){pendingTrade=false;lastProposalReq=null;trace('PROPUESTA SIN ID');return}
+    const maxPrice=Number(p.ask_price??lastProposalReq.stake);
+    trace('PROPUESTA '+mode+' OK · enviando BUY',true);
+    ws.send(JSON.stringify({buy:p.id,price:maxPrice,req_id:++tradeReq}));
+    $('lastDemoBuy').textContent='COMPRANDO '+mode+'…';
+    lastProposalReq=null;return;
+  }
+  if(m.buy){
+    const b=m.buy||{};
+    activeContractId=b.contract_id;pendingTrade=false;
+    trace('BUY '+mode+' OK · contrato '+activeContractId,true);
+    $('lastDemoBuy').textContent=mode+' · DIFFER '+liveBarrier;
+    $('lastDemoBuy').className='big yellow';
+    $('autoDemoState').textContent='Contrato '+mode+' activo '+activeContractId+' · esperando resultado.';
+    ws.send(JSON.stringify({proposal_open_contract:1,contract_id:activeContractId,subscribe:1,req_id:++tradeReq}));
+    return;
+  }
+  if(m.proposal_open_contract){
+    const c=m.proposal_open_contract||{};
+    if(!c.is_sold)return;
+    const cid=String(c.contract_id??activeContractId??'');
+    if(cid && cid===lastSettledContractId)return;
+    const profit=Number(c.profit??0);
+    if(cid)lastSettledContractId=cid;
+    $('lastDemoBuy').textContent=mode+' · '+(profit>=0?'WIN ':'LOSS ')+(profit>=0?'+':'')+profit.toFixed(2);
+    $('lastDemoBuy').className='big '+(profit>=0?'green':'red');
+    activeContractId=null;pendingTrade=false;
+    dlObserveTrade(dlTradeBarrier,profit>=0);dlTradeBarrier=null;
+    applyProfitLadder(profit);
+    trace(mode+' CERRADO · '+(profit>=0?'WIN ':'LOSS ')+profit.toFixed(2)+' · P&L '+sessionPnl.toFixed(2),profit>=0);
+    if(m.subscription?.id)ws.send(JSON.stringify({forget:m.subscription.id}));
+    dlTicksSinceClose=0;dlReadyForNext=true;
+    if(!sessionStopped && (isReal?autoReal:autoDemo)){
+      const q=dlDecision();
+      trace(mode+' · próxima entrada en '+q.wait+' tick(s), máximo 5');
+    }
+  }
+}
+
+async function fetchOptionsAccounts(appId,pat){
   const headers={'Authorization':'Bearer '+pat,'Deriv-App-ID':appId,'Accept':'application/json'};
   const ar=await fetch('https://api.derivws.com/trading/v1/options/accounts',{method:'GET',headers});
   const aj=await ar.json().catch(()=>({}));
   if(!ar.ok)throw Error(apiError(aj,'No se pudieron leer las cuentas'));
   const accounts=Array.isArray(aj.data)?aj.data:(Array.isArray(aj.data?.accounts)?aj.data.accounts:[]);
+  return {headers,accounts};
+}
+async function getOtpUrl(accountId,headers){
+  const or=await fetch('https://api.derivws.com/trading/v1/options/accounts/'+encodeURIComponent(accountId)+'/otp',{method:'POST',headers});
+  const oj=await or.json().catch(()=>({}));
+  if(!or.ok)throw Error(apiError(oj,'No se pudo generar OTP'));
+  if(!oj?.data?.url)throw Error('Deriv no devolvió la URL WebSocket');
+  return oj.data.url;
+}
+
+async function connectDerivDemo(){
+ const appId=$('derivAppId').value.trim(),pat=$('derivPat').value.trim(),btn=$('derivConnect');
+ if(!appId||!pat){derivMsg('FALTA APP ID O PAT');return}
+ btn.disabled=true;derivMsg('VALIDANDO PAT Y BUSCANDO CUENTA DEMO…');
+ try{
+  const {headers,accounts}=await fetchOptionsAccounts(appId,pat);
   const demo=accounts.find(a=>{
-   const id=String(a.account_id||a.id||a.loginid||'').toUpperCase();
-   const type=String(a.account_type||a.group||a.type||'').toLowerCase();
-   return type.includes('demo')||id.startsWith('VRT')||id.startsWith('VRTC');
+    const id=String(a.account_id||a.id||a.loginid||'').toUpperCase();
+    const type=String(a.account_type||a.group||a.type||'').toLowerCase();
+    return type.includes('demo')||id.startsWith('VRT')||id.startsWith('VRTC');
   });
   if(!demo)throw Error('No encontré una cuenta demo de Options para este PAT');
   const accountId=demo.account_id||demo.id||demo.loginid;
   derivDemoAccount=demo;
   $('derivAccount').textContent='DEMO '+accountId+' · '+(demo.currency||'USD')+' · balance '+(demo.balance??'–');
-  derivMsg('GENERANDO OTP DE CONEXIÓN…');
-  const or=await fetch('https://api.derivws.com/trading/v1/options/accounts/'+encodeURIComponent(accountId)+'/otp',{method:'POST',headers});
-  const oj=await or.json().catch(()=>({}));
-  if(!or.ok)throw Error(apiError(oj,'No se pudo generar OTP'));
-  const wsUrl=oj?.data?.url;
-  if(!wsUrl)throw Error('Deriv no devolvió la URL WebSocket demo');
-  if(derivSocket)try{derivSocket.close()}catch(_){}
+  const wsUrl=await getOtpUrl(accountId,headers);
+  try{derivSocket?.close()}catch(_){}
   derivSocket=new WebSocket(wsUrl);
   derivSocket.onopen=()=>{
-   btn.textContent='RECONECTAR DEMO';btn.disabled=false;
-   derivMsg('CONECTADO A DERIV DEMO · PREPARANDO AUTO-DEMO',true);
-   trace('DEMO CONECTADA · activando AUTO-DEMO',true);
-   setTimeout(()=>setAutoDemo(true),150);
-};
+    btn.textContent='RECONECTAR DEMO';btn.disabled=false;
+    derivMsg('CONECTADO A DERIV DEMO · AUTO-DEMO sigue OFF hasta activarlo',true);
+    syncAutoDemoUI();
+  };
   derivSocket.onclose=()=>{autoDemo=false;syncAutoDemoUI();derivMsg('CONEXIÓN DEMO CERRADA');btn.disabled=false};
   derivSocket.onerror=()=>{derivMsg('ERROR EN WEBSOCKET DEMO');btn.disabled=false};
-  derivSocket.onmessage=e=>{
-   try{
-    const m=JSON.parse(e.data);
-    if(m.error||m.errors){
-      const err=apiError(m,'respuesta de error');
-      pendingTrade=false; lastProposalReq=null; dlTradeBarrier=null;
-      derivMsg('DERIV: '+err);
-      $('autoDemoState').textContent='Orden rechazada por Deriv · AUTO-DEMO '+(autoDemo?'ON':'OFF');
-      trace('ERROR '+err);
-      return;
-    }
-    if(m.proposal && lastProposalReq && m.req_id===lastProposalReq.req){
-      const p=m.proposal||{};
-      if(!p.id){pendingTrade=false;lastProposalReq=null;trace('PROPUESTA SIN ID');return}
-      const maxPrice=Number(p.ask_price??lastProposalReq.stake);
-      trace('PROPUESTA OK · enviando BUY',true);
-      derivSocket.send(JSON.stringify({buy:p.id,price:maxPrice,req_id:++tradeReq}));
-      $('lastDemoBuy').textContent='COMPRANDO…';
-      lastProposalReq=null;
-      return;
-    }
-    if(m.buy){
-      const b=m.buy||{};
-      activeContractId=b.contract_id;
-      pendingTrade=false;
-      trace('BUY OK · contrato '+activeContractId,true);
-      $('lastDemoBuy').textContent='DIFFER '+liveBarrier;
-      $('lastDemoBuy').className='big yellow';
-      $('autoDemoState').textContent='Contrato demo activo '+activeContractId+' · esperando resultado.';
-      derivSocket.send(JSON.stringify({proposal_open_contract:1,contract_id:activeContractId,subscribe:1,req_id:++tradeReq}));
-      return;
-    }
-    if(m.proposal_open_contract){
-      const c=m.proposal_open_contract||{};
-      if(c.is_sold){
-        const cid=String(c.contract_id??activeContractId??'');
-        if(cid && cid===lastSettledContractId)return;
-        const profit=Number(c.profit??0);
-        if(cid)lastSettledContractId=cid;
-        $('lastDemoBuy').textContent=(profit>=0?'WIN ':'LOSS ')+(profit>=0?'+':'')+profit.toFixed(2);
-        $('lastDemoBuy').className='big '+(profit>=0?'green':'red');
-        activeContractId=null; pendingTrade=false;
-        dlObserveTrade(dlTradeBarrier,profit>=0);
-        dlTradeBarrier=null;
-        applyProfitLadder(profit);
-        if(!sessionStopped)$('autoDemoState').textContent='Contrato demo cerrado · profit '+profit.toFixed(2)+' · próximo stake $'+currentStake.toFixed(2);
-        trace('CONTRATO CERRADO · '+(profit>=0?'WIN ':'LOSS ')+profit.toFixed(2)+' · P&L sesión '+sessionPnl.toFixed(2),profit>=0);
-        if(m.subscription?.id)derivSocket.send(JSON.stringify({forget:m.subscription.id}));
-        dlTicksSinceClose=0;
-        dlReadyForNext=true;
-        if(!sessionStopped && autoDemo){
-          const q=dlDecision();
-          trace('CERRÓ · próxima entrada dinámica en '+q.wait+' tick(s) máximo 5');
-        }
-      }
-    }
-   }catch(_){}
+  derivSocket.onmessage=e=>{try{handleTradeMessage(JSON.parse(e.data),'DEMO',derivSocket)}catch(_){}};
+ }catch(e){derivMsg('ERROR: '+e.message);btn.disabled=false}
+}
+
+async function connectDerivReal(){
+ const appId=$('realAppId').value.trim(),pat=$('realPat').value.trim(),btn=$('realConnect');
+ if(!appId||!pat){realMsg('FALTA APP ID O PAT REAL');return}
+ if(autoReal||activeContractId||pendingTrade){realMsg('Apaga AUTO-REAL y espera a que cierre cualquier contrato.');return}
+ btn.disabled=true;realMsg('BUSCANDO CUENTAS REALES…');
+ try{
+  const {headers,accounts}=await fetchOptionsAccounts(appId,pat);
+  const reals=accounts.filter(a=>{
+    const id=String(a.account_id||a.id||a.loginid||'').toUpperCase();
+    const type=String(a.account_type||a.group||a.type||'').toLowerCase();
+    return !(type.includes('demo')||id.startsWith('VRT')||id.startsWith('VRTC'));
+  });
+  if(!reals.length)throw Error('No encontré cuentas reales de Options para este PAT');
+
+  const sel=$('realAccountSelect');
+  const previous=sel.value;
+  sel.innerHTML='<option value="">Selecciona cuenta real…</option>'+
+    reals.map(a=>{
+      const id=a.account_id||a.id||a.loginid;
+      return '<option value="'+String(id)+'">'+String(id)+' · '+(a.currency||'USD')+' · balance '+(a.balance??'–')+'</option>';
+    }).join('');
+  if(previous && reals.some(a=>String(a.account_id||a.id||a.loginid)===previous))sel.value=previous;
+  if(reals.length===1)sel.value=String(reals[0].account_id||reals[0].id||reals[0].loginid);
+
+  if(!sel.value){
+    realMsg('Encontré '+reals.length+' cuentas reales. Elige una y pulsa CONECTAR REAL otra vez.');
+    btn.disabled=false;return;
+  }
+
+  const real=reals.find(a=>String(a.account_id||a.id||a.loginid)===sel.value);
+  if(!real)throw Error('Selecciona una cuenta real válida');
+  const accountId=real.account_id||real.id||real.loginid;
+  derivRealAccount=real;
+  $('realAccount').textContent='REAL '+accountId+' · '+(real.currency||'USD')+' · balance '+(real.balance??'–');
+  const wsUrl=await getOtpUrl(accountId,headers);
+  try{derivRealSocket?.close()}catch(_){}
+  derivRealSocket=new WebSocket(wsUrl);
+  derivRealSocket.onopen=()=>{
+    btn.textContent='RECONECTAR REAL';btn.disabled=false;
+    realMsg('REAL CONECTADO · AUTO-REAL OFF · activación manual obligatoria',true);
+    syncAutoRealUI();
   };
- }catch(e){
-  derivMsg('ERROR: '+e.message); btn.disabled=false;
- }
+  derivRealSocket.onclose=()=>{autoReal=false;syncAutoRealUI();realMsg('CONEXIÓN REAL CERRADA');btn.disabled=false};
+  derivRealSocket.onerror=()=>{realMsg('ERROR EN WEBSOCKET REAL');btn.disabled=false};
+  derivRealSocket.onmessage=e=>{try{handleTradeMessage(JSON.parse(e.data),'REAL',derivRealSocket)}catch(_){}};
+ }catch(e){realMsg('ERROR: '+e.message);btn.disabled=false}
 }
 
 function relu(x){return x>0?x:0}
@@ -631,7 +759,7 @@ function renderLiveDecision(){
   return true;
 }
 function tryNextTickTrade(){
-  if(!latestPublicTickEpoch||!autoDemo||sessionStopped)return;
+  if(!latestPublicTickEpoch||!activeAuto()||sessionStopped)return;
   if(pendingTrade||activeContractId)return;
   const d=dlDecision();
   renderLiveDecision();
@@ -645,22 +773,21 @@ function tryNextTickTrade(){
   maybeAutoBuy(true,latestPublicTickEpoch);
 }
 function maybeAutoBuy(signalOk,tickEpoch=Date.now()){
- if(sessionStopped||!autoDemo||!signalOk)return;
+ if(sessionStopped||!activeAuto()||!signalOk)return;
  if(pendingTrade||activeContractId)return;
- if(!derivSocket||derivSocket.readyState!==WebSocket.OPEN){trace('WEBSOCKET DEMO NO LISTO');return}
+ const ws=activeTradeSocket(),acct=activeTradeAccount();
+ if(!ws||ws.readyState!==WebSocket.OPEN){trace('WEBSOCKET '+executionMode+' NO LISTO');return}
  if(liveBarrier==null)return;
  if(tickEpoch===lastSignalEpoch)return;
  lastSignalEpoch=tickEpoch;
  const stake=Math.max(.35,currentStake||baseStake());
- const currency=derivDemoAccount?.currency||derivDemoAccount?.currency_code||'USD';
- pendingTrade=true;
- dlReadyForNext=false;
- dlTradeBarrier=Number(liveBarrier);
+ const currency=acct?.currency||acct?.currency_code||'USD';
+ pendingTrade=true;dlReadyForNext=false;dlTradeBarrier=Number(liveBarrier);
  const req=++tradeReq;
- lastProposalReq={req,stake,barrier:liveBarrier};
- $('lastDemoBuy').textContent='PROPUESTA '+liveBarrier;
- trace('COMPRA DIFFER '+liveBarrier+' · menos probable · espera usada '+dlTicksSinceClose+' tick(s)',true);
- derivSocket.send(JSON.stringify({
+ lastProposalReq={req,stake,barrier:liveBarrier,mode:executionMode};
+ $('lastDemoBuy').textContent=executionMode+' · PROPUESTA '+liveBarrier;
+ trace('COMPRA '+executionMode+' DIFFER '+liveBarrier+' · stake $'+stake.toFixed(2)+' · espera '+dlTicksSinceClose,true);
+ ws.send(JSON.stringify({
    proposal:1,amount:stake,basis:'stake',contract_type:'DIGITDIFF',
    currency,duration:1,duration_unit:'t',barrier:String(liveBarrier),
    underlying_symbol:'R_75',req_id:req
@@ -701,9 +828,9 @@ function startPublicDiffer(){
     }
     $('liveTick').textContent=q+' · '+digit;
     renderLiveDecision();
-    if(!autoDemo && $('tradeTrace')){
+    if(!activeAuto() && $('tradeTrace')){
       const z=dlDecision();
-      $('tradeTrace').textContent='TRACE: TICK LIVE · '+dlTicksSinceClose+'/'+z.wait+' · AUTO-DEMO OFF';
+      $('tradeTrace').textContent='TRACE: TICK LIVE · '+dlTicksSinceClose+'/'+z.wait+' · AUTO OFF · modo '+executionMode;
     }
     tryNextTickTrade();
    }
@@ -712,12 +839,24 @@ function startPublicDiffer(){
 }
 $('autoDemoToggle').onclick=()=>setAutoDemo(!autoDemo);
 $('bridgeAutoDemo').onclick=()=>setAutoDemo(!autoDemo);
-$('resetSession').onclick=()=>{resetProfitSession();if(derivSocket&&derivSocket.readyState===WebSocket.OPEN)setAutoDemo(true)};
+$('autoRealToggle').onclick=()=>setAutoReal(!autoReal);
+$('resetSession').onclick=()=>{
+  resetProfitSession();
+  if(executionMode==='REAL'){
+    if(derivRealSocket&&derivRealSocket.readyState===WebSocket.OPEN)setAutoReal(true);
+  }else{
+    if(derivSocket&&derivSocket.readyState===WebSocket.OPEN)setAutoDemo(true);
+  }
+};
 $('demoStake').addEventListener('change',()=>{if(sessionWins===0&&sessionLosses===0){currentStake=baseStake();renderProfitSession()}});
 $('maxStake').addEventListener('change',()=>{currentStake=Math.min(currentStake,maxSessionStake());renderProfitSession()});
 $('sessionStopLoss').addEventListener('change',()=>{renderProfitSession()});
+$('realStake').addEventListener('change',()=>{if(executionMode==='REAL'&&sessionWins===0&&sessionLosses===0){currentStake=baseStake();renderProfitSession()}});
+$('realMaxStake').addEventListener('change',()=>{if(executionMode==='REAL'){currentStake=Math.min(currentStake,maxSessionStake());renderProfitSession()}});
+$('realStopLoss').addEventListener('change',()=>{renderProfitSession()});
 
 $('derivConnect').onclick=connectDerivDemo;
+$('realConnect').onclick=connectDerivReal;
 
 async function bootstrap(){
  resetProfitSession();
