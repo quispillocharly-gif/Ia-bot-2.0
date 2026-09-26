@@ -1,6 +1,6 @@
 {
   "version": "2.0-differ-director",
-  "timestamp": 1790405690,
+  "timestamp": 1790406769,
   "decision": "COLLECT_V2_FORWARD_DATA",
   "baseline_random": 0.9,
   "payout_status": "OK",
@@ -25,30 +25,49 @@
   },
   "v2_leader": {
     "id": "vote2_margin005",
-    "signals": 575,
-    "wins": 516,
-    "losses": 59,
-    "hit_rate": 0.8973913043478261,
-    "wilson_lower": 0.8698930358828854,
-    "raw_economic_p": 0.9623456691861133,
+    "signals": 607,
+    "wins": 546,
+    "losses": 61,
+    "hit_rate": 0.899505766062603,
+    "wilson_lower": 0.8730180619832753,
+    "raw_economic_p": 0.9500410568409258,
     "bonferroni_p": 1.0,
-    "shadow_pnl": -12.560000000000066,
-    "shadow_roi": -0.02184347826086968,
+    "shadow_pnl": -11.86000000000007,
+    "shadow_roi": -0.019538714991762882,
     "max_drawdown_flat_stake": 16.380000000000056,
-    "temporal_blocks": [],
+    "temporal_blocks": [
+      {
+        "n": 203,
+        "wins": 182,
+        "hit_rate": 0.896551724137931,
+        "wilson_lower": 0.8470346239919203
+      },
+      {
+        "n": 202,
+        "wins": 177,
+        "hit_rate": 0.8762376237623762,
+        "wilson_lower": 0.823683465949738
+      },
+      {
+        "n": 202,
+        "wins": 187,
+        "hit_rate": 0.9257425742574258,
+        "wilson_lower": 0.8811080148957311
+      }
+    ],
     "block_stable": false,
     "prospective_sessions": {
       "target": 20.0,
       "stop_loss": 5.0,
       "base_stake": 1.0,
       "max_stake": 5.0,
-      "completed": 4,
+      "completed": 5,
       "targets": 0,
-      "stops": 4,
+      "stops": 5,
       "target_rate": 0.0,
-      "open_pnl": -3.620271216102639,
-      "open_stake": 1.1881000000000002,
-      "open_trades": 329
+      "open_pnl": 7.291661254842478,
+      "open_stake": 5.0,
+      "open_trades": 26
     },
     "status": "COLLECTING"
   },
@@ -59,7 +78,7 @@
   "ensemble_id": "2be41c870592a418",
   "live_policy": {
     "version": "2.0-live-policy",
-    "timestamp": 1790405690,
+    "timestamp": 1790406769,
     "source": "v1",
     "rule": "cold_consensus",
     "candidate_id": "0e6b8250dd84d516",
