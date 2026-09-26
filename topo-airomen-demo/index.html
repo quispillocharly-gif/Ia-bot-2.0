@@ -1,0 +1,898 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#050713"><title>TOPO AIROMEN · DEMO LAB</title>
+<style>
+:root{--bg:#050713;--panel:#0b1025;--blue:#4ddcff;--vio:#ad73ff;--g:#6affb6;--r:#ff6b82;--y:#ffe66d;--t:#eff7ff;--m:#8ca4c8}
+*{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(circle at 50% 0,#173467 0,transparent 33%),linear-gradient(#050713,#02040a);color:var(--t);font-family:ui-monospace,Consolas,monospace}
+.wrap{max-width:1120px;margin:auto;padding:14px}.head{text-align:center;padding:24px 6px}.logo{font-size:clamp(38px,10vw,70px);font-weight:1000;letter-spacing:3px;color:var(--blue);text-shadow:0 0 16px #4ddcff77,0 0 36px #ad73ff55}.sub{font-size:11px;letter-spacing:3px;color:var(--m)}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.card{background:linear-gradient(180deg,#0b1228e8,#070b18e8);border:1px solid #25466c;border-radius:12px;padding:15px;margin-bottom:10px;box-shadow:0 0 24px #4ddcff12}
+.lab{font-size:10px;letter-spacing:1.4px;color:#79a7d7}.big{font-size:28px;font-weight:1000;margin:7px 0}.green{color:var(--g)}.red{color:var(--r)}.yellow{color:var(--y)}.cyan{color:var(--blue)}.vio{color:var(--vio)}
+.badge{display:inline-block;border:1px solid #355984;border-radius:6px;padding:6px 9px;font-size:11px;margin-top:7px}.mini{font-size:12px;color:var(--m);line-height:1.5}.scroll{overflow:auto}table{width:100%;border-collapse:collapse;min-width:760px;font-size:12px}th,td{padding:9px;border-bottom:1px solid #182b46;text-align:left}
+.footer{text-align:center;color:#60799c;font-size:11px;padding:10px}input,select,button{width:100%;padding:11px 12px;border-radius:8px;border:1px solid #355984;background:#071024;color:var(--t);font:inherit}
+button{cursor:pointer;background:linear-gradient(180deg,#123866,#0b2140);color:var(--blue);font-weight:900}
+button:disabled{opacity:.55;cursor:not-allowed}.formgrid{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end}.statusline{margin-top:10px}
+.signalbox{text-align:center;background:radial-gradient(circle at 50% 0,#123c6b55,transparent 55%),linear-gradient(180deg,#0b1228,#070b18)}
+.signalDigit{font-size:clamp(46px,13vw,82px);font-weight:1000;line-height:1;margin:10px 0;color:var(--blue);text-shadow:0 0 18px #4ddcff77}
+.controls{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.chips{display:flex;flex-wrap:wrap;gap:7px;justify-content:center;margin-top:10px}.chip{border:1px solid #355984;border-radius:999px;padding:7px 10px;font-size:12px;background:#071024}.chip.best{border-color:#2f8d68;color:#6affb6;box-shadow:0 0 14px #6affb622}.chip.wait{color:#8ca4c8}
+@media(max-width:760px){.grid{grid-template-columns:1fr}.formgrid{grid-template-columns:1fr}}
+</style></head><body><div class="wrap">
+<div class="head">
+  <div class="logo">TOPO AIROMEN</div>
+  <div class="sub">CLEAN 4.8 · CONSENSUS GUARD · R_75 · DEMO / REAL</div>
+</div>
+
+<div class="grid">
+  <div class="card">
+    <div class="lab">MOTOR</div>
+    <div id="decision" class="big cyan">ACTIVO</div>
+    <div id="directorMeta" class="mini">Recalcula los 10 dígitos en cada tick</div>
+    <span id="directorStatus" class="badge">DYNAMIC 1–5</span>
+  </div>
+  <div class="card">
+    <div class="lab">ESPERA DINÁMICA</div>
+    <div id="dynamicWait" class="big yellow">–</div>
+    <div id="dynamicWaitMeta" class="mini">Máximo 5 ticks · no sigue orden fijo</div>
+  </div>
+  <div class="card">
+    <div class="lab">TP POR CICLO</div>
+    <div class="big green">+$2.00</div>
+    <div id="tpCyclesTop" class="mini">0 ciclos · acumulado $0.00</div>
+  </div>
+</div>
+
+<div class="card signalbox">
+ <div class="lab">MENOS PROBABLE · 0–9</div>
+ <div id="avoidBest" class="signalDigit">DIFFER –</div>
+ <div id="avoidMeta" class="mini">Aprendiendo de los ticks recientes…</div>
+ <div id="avoidRanking" class="chips"><span class="chip wait">Esperando ticks…</span></div>
+</div>
+<div class="card">
+ <div class="lab">DERIV DEMO / DBOT BRIDGE</div>
+ <div class="formgrid">
+  <div><div class="mini">APP ID</div><input id="derivAppId" inputmode="numeric" autocomplete="off" placeholder="Tu Deriv App ID"></div>
+  <div><div class="mini">PAT</div><input id="derivPat" type="password" autocomplete="new-password" placeholder="Personal Access Token"></div>
+  <div><button id="derivConnect">CONECTAR DEMO</button></div>
+ </div>
+ <div style="margin-top:8px"><button id="bridgeAutoDemo">AUTO-DEMO OFF</button></div>
+ <div id="derivStatus" class="statusline mini">DESCONECTADO · solo demo · auto-buy OFF</div>
+ <div id="derivAccount" class="mini">El PAT se usa solo en esta pestaña y no se guarda en GitHub.</div>
+</div>
+
+<div class="card">
+ <div class="lab">DERIV REAL · AUTO-COMPRA PROTEGIDA</div>
+ <div class="formgrid">
+  <div><div class="mini">APP ID REAL</div><input id="realAppId" inputmode="numeric" autocomplete="off" placeholder="Tu Deriv App ID"></div>
+  <div><div class="mini">PAT REAL</div><input id="realPat" type="password" autocomplete="new-password" placeholder="Personal Access Token"></div>
+  <div><button id="realConnect">CARGAR / CONECTAR REAL</button></div>
+ </div>
+ <div style="margin-top:8px">
+  <select id="realAccountSelect" style="width:100%;padding:10px;border-radius:10px;background:#071024;color:#e8f3ff;border:1px solid #355984">
+   <option value="">Cuenta real…</option>
+  </select>
+ </div>
+ <div class="controls">
+  <div><div class="mini">STAKE DE REFERENCIA</div><input id="realStake" type="number" inputmode="decimal" min="0.04" step="0.01" value="0.04"></div>
+  <div><div class="mini">AUTO-REAL OFF</div><button id="autoRealToggle">REAL MONITOR</button></div>
+  <div style="grid-column:1/-1"><button id="manualStop" style="border-color:#ff6b82;color:#ff9aaa">■ PARAR / STOP</button></div>
+ </div>
+ <div class="grid" style="margin-top:10px">
+  <div><div class="mini">STAKE MÁXIMO REAL · TOPE DURO $6</div><input id="realMaxStake" type="number" inputmode="decimal" min="0.35" step="0.01" value="6.00" max="6.00"></div>
+  <div><div class="mini">STOP REAL</div><input id="realStopLoss" type="number" inputmode="decimal" min="1" step="0.50" value="2.00"></div>
+  <div><div class="mini">MODO</div><div id="executionModeView" class="big yellow">DEMO LAB</div></div>
+ </div>
+ <div id="realStatus" class="statusline mini">DESCONECTADO · AUTO-REAL OFF · activación manual obligatoria.</div>
+ <div id="realAccount" class="mini">REAL usa la misma señal anti-MATCH. Tope duro $6 · máximo 2 compras seguidas por dígito.</div>
+</div>
+<div class="card signalbox">
+ <div class="lab">DECISIÓN LIVE · ESPERA DINÁMICA 1–5 TICKS</div>
+ <div id="liveDiffer" class="signalDigit">DIFFER –</div>
+ <div id="liveReason" class="mini">Esperando stream R_75…</div>
+ <div class="grid" style="margin-top:10px">
+  <div><div class="lab">ÚLTIMO TICK</div><div id="liveTick" class="big">–</div></div>
+  <div><div class="lab">PROB. ESTIMADA DEL CANDIDATO</div><div id="liveProb" class="big">–</div></div>
+  <div><div class="lab">ÚLTIMA OPERACIÓN</div><div id="lastDemoBuy" class="big">–</div></div>
+ </div>
+ <div class="controls">
+  <div><div class="mini">STAKE BASE DEMO</div><input id="demoStake" type="number" inputmode="decimal" min="0.04" step="0.01" value="0.04"></div>
+  <div><div class="mini">AUTO-COMPRA</div><button id="autoDemoToggle">AUTO-DEMO OFF</button></div>
+ </div>
+ <div class="grid" style="margin-top:10px">
+  <div><div class="lab">TP DEL CICLO</div><div class="big green">+$2.00</div><div id="cycleCounter" class="mini">0 ciclos completados · 10 = +$20</div></div>
+  <div><div class="lab">P&L SESIÓN</div><div id="sessionPnl" class="big">+$0.00</div><div id="sessionProgress" class="mini">0.0% de la meta</div></div>
+  <div><div class="lab">PRÓXIMO STAKE</div><div id="nextStake" class="big">$1.00</div><div id="sessionWL" class="mini">0 WIN · 0 LOSS</div></div>
+ </div>
+ <div class="grid" style="margin-top:10px">
+  <div><div class="mini">STAKE MÁXIMO DEMO</div><input id="maxStake" type="number" inputmode="decimal" min="0.35" step="0.01" value="5.00"></div>
+  <div><div class="mini">STOP-LOSS SESIÓN</div><input id="sessionStopLoss" type="number" inputmode="decimal" min="1" step="0.50" value="5.00"></div>
+  <div><div class="mini">SESIÓN</div><button id="resetSession">REINICIAR CICLO +$2</button></div>
+ </div>
+ <div id="ladderInfo" class="mini statusline">TP +$2 MANUAL · al llegar a +$2 se detiene. Pulsa REINICIAR CICLO +$2 para continuar.</div>
+ <div id="autoDemoState" class="mini statusline">Cada tick cruza 6 lecturas, recalcula los 10 dígitos y compra el candidato de menor riesgo. Espera máxima: 5 ticks.</div>
+ <div id="tradeTrace" class="mini statusline">TRACE: esperando AUTO-DEMO…</div>
+</div>
+<div class="footer">DEMO LAB · ANTI-MATCH · TP +$2 · PRUEBAS</div>
+</div><script>
+const BUILD='CLEAN-4.8-REAL-AUTOBUY-PROTECTED';
+const HARD_REAL_MAX_STAKE=6;
+const MAX_REAL_SAME_DIGIT=2;
+let lastRealBarrier=null,realSameDigitCount=0;
+const DYNAMIC_WAIT_MIN=1;
+const DYNAMIC_WAIT_MAX=5;
+let dlCounts=Array(10).fill(1);
+let dlTransitions=Array.from({length:10},()=>Array(10).fill(1));
+let dlSamples=0;
+let dlTicksSinceClose=0;
+let dlReadyForNext=true;
+let dlBarrierPenalty=Array(10).fill(0);
+let dlTradeBarrier=null;
+
+function dlReset(){
+  dlCounts=Array(10).fill(1);
+  dlTransitions=Array.from({length:10},()=>Array(10).fill(1));
+  dlSamples=0;
+  dlTicksSinceClose=0;
+  dlReadyForNext=true;
+  dlBarrierPenalty=Array(10).fill(0);
+  dlTradeBarrier=null;
+}
+function dlObserve(prev,d){
+  // El aprendizaje es reciente y local. Cada tick reduce gradualmente
+  // el castigo de errores anteriores; ningún dígito queda bloqueado.
+  for(let i=0;i<10;i++){
+    dlCounts[i]=Math.max(.05,dlCounts[i]*.992);
+    dlBarrierPenalty[i]*=.90;
+  }
+  dlCounts[d]+=1;
+  if(Number.isInteger(prev)&&prev>=0&&prev<=9){
+    for(let j=0;j<10;j++)dlTransitions[prev][j]=Math.max(.05,dlTransitions[prev][j]*.985);
+    dlTransitions[prev][d]+=1;
+  }
+  dlSamples++;
+}
+
+function dlObserveTrade(barrier,win){
+  const d=Number(barrier);
+  if(!Number.isInteger(d)||d<0||d>9)return;
+  if(win){
+    dlBarrierPenalty[d]*=.65;
+  }else{
+    // MATCH reciente: penaliza temporalmente, nunca excluye el dígito.
+    dlBarrierPenalty[d]=Math.min(.060,dlBarrierPenalty[d]+.030);
+  }
+}
+
+function dlFreqProb(n){
+  const z=liveSeq.slice(-n);
+  const c=Array(10).fill(1.5);
+  z.forEach(d=>c[Number(d)]++);
+  const total=c.reduce((a,b)=>a+b,0)||1;
+  return c.map(x=>x/total);
+}
+
+function dlContextProb(order,lookback){
+  const a=liveSeq.slice(-lookback);
+  const c=Array(10).fill(1.25);
+  if(a.length<=order)return c.map(x=>x/c.reduce((p,q)=>p+q,0));
+  const ctx=a.slice(-order).join(',');
+  let support=0;
+  for(let i=order;i<a.length;i++){
+    if(a.slice(i-order,i).join(',')===ctx){
+      c[Number(a[i])]++;support++;
+    }
+  }
+  // Con poco soporte, vuelve suavemente hacia la frecuencia reciente.
+  const rawTotal=c.reduce((p,q)=>p+q,0)||1;
+  const raw=c.map(x=>x/rawTotal);
+  const base=dlFreqProb(80);
+  const w=Math.max(.15,Math.min(.85,support/(order===1?18:10)));
+  return raw.map((x,d)=>w*x+(1-w)*base[d]);
+}
+
+function dlDecision(){
+  const sources=[
+    dlFreqProb(20),
+    dlFreqProb(40),
+    dlFreqProb(80),
+    dlFreqProb(160),
+    dlContextProb(1,420),
+    dlContextProb(2,700)
+  ];
+  const digits=[0,1,2,3,4,5,6,7,8,9];
+  const bottom3=sources.map(v=>[...digits].sort((a,b)=>v[a]-v[b]||a-b).slice(0,3));
+  const hot2=sources.map(v=>[...digits].sort((a,b)=>v[b]-v[a]||a-b).slice(0,2));
+
+  const rows=digits.map(d=>{
+    const vals=sources.map(v=>Number(v[d]||.1));
+    const mean=vals.reduce((a,b)=>a+b,0)/vals.length;
+    const worst=Math.max(...vals);
+    const bestSource=Math.min(...vals);
+    const bottomVotes=bottom3.reduce((n,set)=>n+(set.includes(d)?1:0),0);
+    const hotVotes=hot2.reduce((n,set)=>n+(set.includes(d)?1:0),0);
+    const spread=worst-bestSource;
+
+    // Minimax: evita candidatos que una lectura considere muy probables.
+    // El error real reciente añade un castigo temporal.
+    const risk=
+      .70*worst+
+      .30*mean+
+      .0070*hotVotes-
+      .0018*bottomVotes+
+      Number(dlBarrierPenalty[d]||0);
+
+    return {
+      digit:d,
+      prob:Math.max(.001,Math.min(.30,risk)),
+      risk,
+      mean,
+      worst,
+      spread,
+      bottomVotes,
+      hotVotes,
+      penalty:Number(dlBarrierPenalty[d]||0)
+    };
+  }).sort((a,b)=>
+    a.hotVotes-b.hotVotes ||
+    b.bottomVotes-a.bottomVotes ||
+    a.risk-b.risk ||
+    a.spread-b.spread ||
+    a.digit-b.digit
+  );
+
+  const safe=rows.filter(x=>x.hotVotes===0);
+  const best=(safe.length?safe:rows)[0];
+  const second=(safe.length?safe:rows)[1]||rows[1]||best;
+  const gap=Math.max(0,second.risk-best.risk);
+
+  // No es secuencia fija: más consenso => entra antes.
+  let wait=5;
+  if(best.bottomVotes>=6 && best.hotVotes===0 && gap>=.0040)wait=1;
+  else if(best.bottomVotes>=5 && best.hotVotes===0 && gap>=.0025)wait=2;
+  else if(best.bottomVotes>=4 && best.hotVotes===0)wait=3;
+  else if(best.bottomVotes>=4 && best.hotVotes<=1)wait=4;
+
+  return {best,rows,gap,wait,sources:6};
+}
+const $=x=>document.getElementById(x),pct=x=>x==null?'–':(100*x).toFixed(2)+'%';
+function badge(el,s){el.textContent=s;el.style.color=/CANDIDATE|CONFIRMED/.test(s)?'#6affb6':/NOT/.test(s)?'#ff6b82':'#ffe66d'}
+async function load(){
+ try{
+  const base='https://raw.githubusercontent.com/quispillocharly-gif/Ia-bot-2.0/main/topo-airomen/memory/';
+  const [a,b,c,d,e,g,h,i]=await Promise.all([
+   fetch(base+'differ_director_latest.json?t='+Date.now(),{cache:'no-store'}),
+   fetch(base+'differ_forward_latest.json?t='+Date.now(),{cache:'no-store'}),
+   fetch(base+'differ_train_latest.json?t='+Date.now(),{cache:'no-store'}),
+   fetch(base+'differ_payout_snapshot.json?t='+Date.now(),{cache:'no-store'}),
+   fetch(base+'differ_v2_latest.json?t='+Date.now(),{cache:'no-store'}),
+   fetch(base+'differ_session_eval_latest.json?t='+Date.now(),{cache:'no-store'}),
+   fetch(base+'differ_v3_latest.json?t='+Date.now(),{cache:'no-store'}),
+   fetch(base+'differ_v4_batch5_latest.json?t='+Date.now(),{cache:'no-store'})
+  ]);
+  const director=a.ok?await a.json():{},f=b.ok?await b.json():{},t=c.ok?await c.json():{},p=d.ok?await d.json():{},v2=e.ok?await e.json():{},sess=g.ok?await g.json():{},v3=h.ok?await h.json():{},v4=i.ok?await i.json():{},L=f.leader||{},L2=v2.leader||{},L3=v3.leader||{};
+  const B4=v4.leader||[...(v4.policies||[])].sort((x,y)=>(y.sessions_completed||0)-(x.sessions_completed||0)||((y.open_session?.pnl??-999)-(x.open_session?.pnl??-999)))[0]||{};
+  currentBreakEven=Number(p.max_break_even??director.break_even_rate??.9174311926605504);
+  researchPolicy=director.live_policy||{source:'v1',rule:L.id||'neural_argmin',mode:'RESEARCH_DEMO',candidate_id:f.model_id};
+  $('decision').textContent=(director.decision||'WAITING').replaceAll('_',' ');
+  badge($('directorStatus'),director.decision||'WAITING');
+  $('directorMeta').textContent='forward '+(director.forward_status||'–')+' · candidate '+(director.candidate_model_id||'–')+' · graveyard '+(f.graveyard_size??0);
+  $('breakEven').textContent=pct(p.max_break_even);$('payoutMeta').textContent=(p.status||'MISSING')+' · '+(p.valid_digits||0)+'/10 digits';
+  const C=t.candidate||{};$('model').textContent=C.model_id||'–';$('trainMeta').textContent=C.model_id?'W'+C.window+' · '+(C.hidden||[]).join('×')+' · test '+pct(C.test?.hit_rate):'Esperando entrenamiento';
+  $('rate').textContent=pct(L.hit_rate);badge($('forwardStatus'),L.status||f.status||'WAITING');
+  $('leaderMeta').textContent=(L.id||'–')+' · '+(L.signals||0)+' señales · Wilson '+pct(L.wilson_lower);
+  $('pnl').textContent=L.shadow_pnl==null?'–':(L.shadow_pnl>=0?'+':'')+L.shadow_pnl.toFixed(2);
+  $('pnl').className='big '+((L.shadow_pnl??0)>=0?'green':'red');
+  $('econMeta').textContent='ROI '+pct(L.shadow_roi)+' · adj-p '+((L.bonferroni_p??1).toFixed(4));
+  $('ticks').textContent=f.data_quality?.forward_ticks??0;
+  $('quality').textContent='chi-square p '+(f.data_quality?.uniformity_chi_square_p==null?'–':f.data_quality.uniformity_chi_square_p.toFixed(4))+' · max dev '+pct(f.data_quality?.max_digit_share_deviation);
+  $('confirmed').textContent=(f.confirmed_variants||[]).length+(v2.confirmed_variants||[]).length;
+  $('rows').innerHTML=(f.variants||[]).map(x=>'<tr><td><b>'+x.id+'</b></td><td>'+x.signals+'</td><td>'+x.wins+'</td><td>'+pct(x.hit_rate)+'</td><td>'+pct(x.wilson_lower)+'</td><td>'+(x.bonferroni_p??1).toFixed(4)+'</td><td>'+((x.shadow_pnl??0)>=0?'+':'')+(x.shadow_pnl??0).toFixed(2)+'</td><td>'+x.status+'</td></tr>').join('');
+  $('v2Rate').textContent=pct(L2.hit_rate);badge($('v2Status'),L2.status||v2.status||'WAITING');
+  $('v2Meta').textContent=(L2.id||'–')+' · '+(L2.signals||0)+' señales · Wilson '+pct(L2.wilson_lower);
+  $('v2Pnl').textContent=L2.shadow_pnl==null?'–':(L2.shadow_pnl>=0?'+':'')+L2.shadow_pnl.toFixed(2);
+  $('v2Pnl').className='big '+((L2.shadow_pnl??0)>=0?'green':'red');
+  $('v2Risk').textContent='max DD '+((L2.max_drawdown_flat_stake??0).toFixed(2))+' · adj-p '+((L2.bonferroni_p??1).toFixed(4));
+  const SB=sess.best||{};
+  $('sessionLabTarget').textContent=SB.target_rate==null?'–':pct(SB.target_rate);
+  $('sessionLabMeta').textContent=(SB.source||'–')+' · '+(SB.id||'–')+' · '+(SB.signals||0)+' señales · mediana '+(SB.median_trades_to_target??'–')+' trades';
+  $('sessionLabStop').textContent=SB.stop_rate==null?'–':pct(SB.stop_rate);
+  $('sessionLabRisk').textContent='media final '+(SB.mean_final_pnl==null?'–':SB.mean_final_pnl.toFixed(2))+' · '+(sess.simulations||SB.simulations||'–')+' simulaciones';
+  const PS=L2.prospective_sessions||{};
+  $('v2RealSessions').textContent=(PS.completed??0)+' cerradas';
+  $('v2RealMeta').textContent=(PS.targets??0)+' meta · '+(PS.stops??0)+' stop · open '+((PS.open_pnl??0)>=0?'+':'')+(PS.open_pnl??0).toFixed(2);
+  $('v3Rate').textContent=pct(L3.hit_rate);badge($('v3Status'),L3.status||v3.status||'WAITING');
+  $('v3Meta').textContent=(L3.id||'–')+' · '+(L3.signals||0)+' señales · Wilson '+pct(L3.wilson_lower);
+  $('v3Throughput').textContent=L3.signals_per_1000_ticks==null?'–':L3.signals_per_1000_ticks.toFixed(1);
+  $('v3Avoided').textContent='MATCH evitados / 1000: '+(L3.matches_avoided_per_1000_ticks==null?'–':L3.matches_avoided_per_1000_ticks.toFixed(1));
+  $('v3Pnl').textContent=L3.shadow_pnl==null?'–':(L3.shadow_pnl>=0?'+':'')+L3.shadow_pnl.toFixed(2);
+  $('v3Pnl').className='big '+((L3.shadow_pnl??0)>=0?'green':'red');
+  $('v3Risk').textContent='ROI '+pct(L3.shadow_roi)+' · DD '+((L3.max_drawdown??0).toFixed(2))+' · coverage '+pct(L3.coverage);
+  $('v4Policy').textContent=B4.policy?B4.policy.replaceAll('_',' '):(v4.status||'COLLECTING');
+  $('v4Meta').textContent=(B4.source||'–')+' · reinv '+pct(B4.compound_fraction)+' · pausa MATCH '+(B4.pause_after_match??'–');
+  $('v4Sessions').textContent=(B4.sessions_completed??0)+' cerradas';
+  $('v4Result').textContent=(B4.targets??0)+' metas · '+(B4.stops??0)+' stops · target rate '+pct(B4.target_rate);
+  const O4=B4.open_session||{};
+  $('v4Open').textContent=(O4.pnl==null?'–':((O4.pnl>=0?'+':'')+'$'+O4.pnl.toFixed(2)));
+  $('v4Open').className='big '+((O4.pnl??0)>=0?'green':'red');
+  $('v4OpenMeta').textContent='Etapa '+(O4.stage??1)+'/4 · bloque '+(O4.batch_trades??0)+'/5 · stake $'+((O4.stake??1).toFixed(2));
+ }catch(e){$('decision').textContent='MEMORY WAITING'}
+}
+
+let derivSocket=null,derivDemoAccount=null,derivRealSocket=null,derivRealAccount=null,publicSocket=null,liveModel=null,liveEnsemble=null,latestLiveModel=null,latestLiveEnsemble=null,liveSeq=[],livePip=4,liveBarrier=null,liveBarrierProb=null,liveRuleId='neural_argmin',autoDemo=false,autoReal=false,executionMode='DEMO',pendingTrade=false,activeContractId=null,tradeReq=5000,lastProposalReq=null,lastSignalEpoch=0;
+let latestPublicTickEpoch=0,latestPublicTickDigit=null,latestPublicTickQuote=null;
+let researchPolicy={source:'v1',rule:'neural_argmin',mode:'RESEARCH_DEMO'},sessionPolicy={source:'v1',rule:'neural_argmin',mode:'RESEARCH_DEMO'},currentBreakEven=.9174311926605504;
+let activeMoneyPolicy={promoted:false,compound_fraction:1,pause_after_match:0,batch_size:5,stage_size:5};
+const SESSION_TARGET=2;
+let completedTpCycles=0;
+let bankedTpProfit=0;
+let sessionPnl=0,sessionWins=0,sessionLosses=0,currentStake=1,sessionStopped=false,lastSettledContractId=null;
+let sessionBatchTrades=0,sessionBatchWins=0,sessionStage=1,sessionPauseLeft=0;
+function trace(msg,good=false){
+ const el=$('tradeTrace'); if(!el)return;
+ el.textContent='TRACE: '+msg; el.style.color=good?'#6affb6':'#8ca4c8';
+}
+function baseStake(){
+ const id=executionMode==='REAL'?'realStake':'demoStake';
+ return Math.max(.35,Number($(id)?.value)||1);
+}
+function maxSessionStake(){
+ const id=executionMode==='REAL'?'realMaxStake':'maxStake';
+ return Math.max(baseStake(),Number($(id)?.value)||(executionMode==='REAL'?2:5));
+}
+function sessionStopLoss(){
+ const id=executionMode==='REAL'?'realStopLoss':'sessionStopLoss';
+ return Math.max(1,Number($(id)?.value)||(executionMode==='REAL'?2:5));
+}
+function activeAuto(){return autoDemo}
+function activeTradeSocket(){return derivSocket}
+function activeTradeAccount(){return derivDemoAccount}
+function syncModeView(){
+ if($('executionModeView'))$('executionModeView').textContent=executionMode;
+}
+function resetFinancialMode(){
+ sessionPnl=0;sessionWins=0;sessionLosses=0;sessionStopped=false;
+ currentStake=baseStake();lastSettledContractId=null;
+ pendingTrade=false;activeContractId=null;lastProposalReq=null;dlTradeBarrier=null;
+ dlTicksSinceClose=0;dlReadyForNext=true;
+ renderProfitSession();syncModeView();
+}
+function renderProfitSession(){
+ const progress=Math.max(0,Math.min(100,(sessionPnl/SESSION_TARGET)*100));
+ $('sessionPnl').textContent=(sessionPnl>=0?'+':'')+'$'+sessionPnl.toFixed(2);
+ $('sessionPnl').className='big '+(sessionPnl>=0?'green':'red');
+ $('sessionProgress').textContent=progress.toFixed(1)+'% de la meta';
+ $('nextStake').textContent='$'+currentStake.toFixed(2);
+ $('sessionWL').textContent=sessionWins+' WIN · '+sessionLosses+' LOSS';
+ if($('cycleCounter'))$('cycleCounter').textContent=
+   completedTpCycles+' ciclos completados · acumulado $'+bankedTpProfit.toFixed(2);
+ if($('tpCyclesTop'))$('tpCyclesTop').textContent=
+   completedTpCycles+' ciclos · acumulado $'+bankedTpProfit.toFixed(2);
+}
+function resetProfitSession(){
+ sessionPnl=0;sessionWins=0;sessionLosses=0;sessionStopped=false;
+ currentStake=baseStake();lastSettledContractId=null;
+ dlReset();
+ sessionBatchTrades=0;sessionBatchWins=0;sessionStage=1;sessionPauseLeft=0;
+ if($('sessionPolicy'))$('sessionPolicy').textContent='CONSENSUS GUARD · 1-5 TICKS';
+ if($('policyMeta'))$('policyMeta').textContent='6 lecturas nuevas por tick · consenso de menos probable · sin modelos anteriores';
+ renderProfitSession();
+ trace('CICLO NUEVO · motor dinámico 1-5 ticks · TP +$2.00',true);
+}
+function applyProfitLadder(profit){
+ sessionPnl+=profit;
+ if(profit>=0){
+   sessionWins++;
+   currentStake=Math.min(maxSessionStake(),Math.max(baseStake(),currentStake+profit));
+ }else{
+   sessionLosses++;
+   currentStake=baseStake();
+ }
+ renderProfitSession();
+ if(sessionPnl>=SESSION_TARGET){
+   const closedCycleProfit=sessionPnl;
+   completedTpCycles++;
+   bankedTpProfit+=closedCycleProfit;
+
+   // TP MANUAL: se detiene aquí y espera al usuario.
+   sessionStopped=true;
+   autoDemo=false;
+   autoReal=false;
+   currentStake=baseStake();
+   dlTicksSinceClose=0;
+   dlReadyForNext=false;
+
+   syncAutoDemoUI();
+   syncAutoRealUI();
+   renderProfitSession();
+
+   $('autoDemoState').textContent=
+     'TP +$2 ALCANZADO · ciclo '+completedTpCycles+
+     ' · acumulado $'+bankedTpProfit.toFixed(2)+
+     ' · DETENIDO · pulsa REINICIAR CICLO +$2';
+   trace('TP +$'+closedCycleProfit.toFixed(2)+
+     ' · CICLO '+completedTpCycles+
+     ' COMPLETADO · STOP MANUAL',true);
+ }else if(sessionPnl<=-sessionStopLoss()){
+   sessionStopped=true;
+   if(executionMode==='REAL')autoReal=false; else autoDemo=false;
+   syncAutoDemoUI();syncAutoRealUI();
+   $('autoDemoState').textContent='STOP-LOSS '+executionMode+' alcanzado: $'+sessionPnl.toFixed(2);
+   trace('STOP-LOSS '+executionMode+' -$'+sessionStopLoss().toFixed(2)+' ALCANZADO');
+ }
+}
+function syncAutoDemoUI(){
+ const label=autoDemo?'AUTO-DEMO ON':'AUTO-DEMO OFF';
+ for(const id of ['autoDemoToggle','bridgeAutoDemo']){
+   const b=$(id);if(!b)continue;
+   b.textContent=label;b.style.color=autoDemo?'#6affb6':'#4ddcff';
+ }
+ if(derivSocket&&derivSocket.readyState===WebSocket.OPEN){
+   derivMsg('CONECTADO A DERIV DEMO · '+(autoDemo?'AUTO-BUY ON':'AUTO-BUY OFF'),true);
+ }
+}
+function syncAutoRealUI(){
+ const b=$('autoRealToggle');if(b){
+   b.textContent=autoReal?'AUTO-REAL ON':'INICIAR REAL';
+   b.style.color=autoReal?'#ff6b82':'#4ddcff';
+ }
+ if(derivRealSocket&&derivRealSocket.readyState===WebSocket.OPEN){
+   realMsg('CONECTADO A DERIV REAL · '+(autoReal?'AUTO-REAL ON':'REAL MONITOR'),true);
+ }
+ syncModeView();
+}
+function setAutoDemo(next){
+ if(next){
+   if(pendingTrade||activeContractId){trace('ESPERA A QUE CIERRE EL CONTRATO DEMO');return false}
+   if(sessionStopped){trace('SESIÓN DETENIDA · reinicia el ciclo');return false}
+   if(!derivSocket||derivSocket.readyState!==WebSocket.OPEN||!derivDemoAccount){
+     derivMsg('Primero conecta DERIV DEMO.');return false;
+   }
+   executionMode='DEMO';autoReal=false;autoDemo=true;
+   dlTicksSinceClose=0;dlReadyForNext=true;lastSignalEpoch=null;
+   syncAutoDemoUI();syncAutoRealUI();
+   const q=dlDecision();trace('DEMO LAB ACTIVO · próxima compra en '+q.wait+' tick(s)',true);
+ }else{autoDemo=false;syncAutoDemoUI();trace('DEMO LAB PAUSADO',true)}
+ return autoDemo;
+}
+function setAutoReal(next){
+ autoReal=false;
+ realMsg('REAL DESACTIVADO EN DEMO LAB.');
+ syncAutoRealUI();
+ return false;
+}
+function derivMsg(msg,ok=false){
+ const el=$('derivStatus'); el.textContent=msg; el.style.color=ok?'#6affb6':'#ffe66d';
+}
+function realMsg(msg,ok=false){
+ const el=$('realStatus');if(!el)return;
+ el.textContent=msg;el.style.color=ok?'#6affb6':'#ffe66d';
+}
+function apiError(j,fallback){
+ return (j&&j.error&&(j.error.message||j.error.code))||
+        (j&&j.errors&&j.errors[0]&&(j.errors[0].message||j.errors[0].code))||fallback;
+}
+function handleTradeMessage(m,mode,ws){
+  const isReal=mode==='REAL';
+  const autoOn=isReal?autoReal:autoDemo;
+  if(m.error||m.errors){
+    const err=apiError(m,'respuesta de error');
+    pendingTrade=false;lastProposalReq=null;dlTradeBarrier=null;
+    dlReadyForNext=true;dlTicksSinceClose=0;
+    (isReal?realMsg:derivMsg)('DERIV '+mode+': '+err);
+    trace('ERROR '+mode+' '+err);
+    return;
+  }
+  if(m.proposal && lastProposalReq && m.req_id===lastProposalReq.req){
+    const p=m.proposal||{};
+    if(!p.id){pendingTrade=false;lastProposalReq=null;dlTradeBarrier=null;dlReadyForNext=true;dlTicksSinceClose=0;trace('PROPUESTA SIN ID · motor rearmado');return}
+    const requestedStake=Number(lastProposalReq.stake);
+    const maxPrice=isReal
+      ? Math.min(HARD_REAL_MAX_STAKE, requestedStake, Number(p.ask_price??requestedStake))
+      : Number(p.ask_price??requestedStake);
+    if(isReal && (!autoReal || requestedStake>HARD_REAL_MAX_STAKE)){
+      pendingTrade=false;lastProposalReq=null;dlTradeBarrier=null;dlReadyForNext=true;dlTicksSinceClose=0;
+      realMsg('BUY REAL CANCELADO POR PROTECCIÓN DE STAKE/MODO.');
+      trace('REAL BUY CANCELADO · protección activa');
+      return;
+    }
+    trace('PROPUESTA '+mode+' OK · enviando BUY protegido',true);
+    ws.send(JSON.stringify({buy:p.id,price:maxPrice,req_id:++tradeReq}));
+    $('lastDemoBuy').textContent='COMPRANDO DEMO…';
+    lastProposalReq=null;return;
+  }
+  if(m.buy){
+    const b=m.buy||{};
+    activeContractId=b.contract_id;pendingTrade=false;
+    trace('BUY '+mode+' OK · contrato '+activeContractId,true);
+    $('lastDemoBuy').textContent=mode+' · DIFFER '+liveBarrier;
+    $('lastDemoBuy').className='big yellow';
+    $('autoDemoState').textContent='Contrato '+mode+' activo '+activeContractId+' · esperando resultado.';
+    ws.send(JSON.stringify({proposal_open_contract:1,contract_id:activeContractId,subscribe:1,req_id:++tradeReq}));
+    return;
+  }
+  if(m.proposal_open_contract){
+    const c=m.proposal_open_contract||{};
+    if(!c.is_sold)return;
+    const cid=String(c.contract_id??activeContractId??'');
+    if(cid && cid===lastSettledContractId)return;
+    const profit=Number(c.profit??0);
+    if(cid)lastSettledContractId=cid;
+    $('lastDemoBuy').textContent=mode+' · '+(profit>=0?'WIN ':'LOSS ')+(profit>=0?'+':'')+profit.toFixed(2);
+    $('lastDemoBuy').className='big '+(profit>=0?'green':'red');
+    activeContractId=null;pendingTrade=false;
+    dlObserveTrade(dlTradeBarrier,profit>=0);dlTradeBarrier=null;
+    applyProfitLadder(profit);
+    trace(mode+' CERRADO · '+(profit>=0?'WIN ':'LOSS ')+profit.toFixed(2)+' · P&L '+sessionPnl.toFixed(2),profit>=0);
+    if(m.subscription?.id)ws.send(JSON.stringify({forget:m.subscription.id}));
+    dlTicksSinceClose=0;dlReadyForNext=true;
+    if(!sessionStopped && (isReal?autoReal:autoDemo)){
+      const q=dlDecision();
+      trace(mode+' · próxima entrada en '+q.wait+' tick(s), máximo 5');
+    }
+  }
+}
+
+async function fetchOptionsAccounts(appId,pat){
+  const headers={'Authorization':'Bearer '+pat,'Deriv-App-ID':appId,'Accept':'application/json'};
+  const ar=await fetch('https://api.derivws.com/trading/v1/options/accounts',{method:'GET',headers});
+  const aj=await ar.json().catch(()=>({}));
+  if(!ar.ok)throw Error(apiError(aj,'No se pudieron leer las cuentas'));
+  const accounts=Array.isArray(aj.data)?aj.data:(Array.isArray(aj.data?.accounts)?aj.data.accounts:[]);
+  return {headers,accounts};
+}
+async function getOtpUrl(accountId,headers){
+  const or=await fetch('https://api.derivws.com/trading/v1/options/accounts/'+encodeURIComponent(accountId)+'/otp',{method:'POST',headers});
+  const oj=await or.json().catch(()=>({}));
+  if(!or.ok)throw Error(apiError(oj,'No se pudo generar OTP'));
+  if(!oj?.data?.url)throw Error('Deriv no devolvió la URL WebSocket');
+  return oj.data.url;
+}
+
+async function connectDerivDemo(){
+ const appId=$('derivAppId').value.trim(),pat=$('derivPat').value.trim(),btn=$('derivConnect');
+ if(!appId||!pat){derivMsg('FALTA APP ID O PAT');return}
+ btn.disabled=true;derivMsg('VALIDANDO PAT Y BUSCANDO CUENTA DEMO…');
+ try{
+  const {headers,accounts}=await fetchOptionsAccounts(appId,pat);
+  const demo=accounts.find(a=>{
+    const id=String(a.account_id||a.id||a.loginid||'').toUpperCase();
+    const type=String(a.account_type||a.group||a.type||'').toLowerCase();
+    return type.includes('demo')||id.startsWith('VRT')||id.startsWith('VRTC');
+  });
+  if(!demo)throw Error('No encontré una cuenta demo de Options para este PAT');
+  const accountId=demo.account_id||demo.id||demo.loginid;
+  derivDemoAccount=demo;
+  $('derivAccount').textContent='DEMO '+accountId+' · '+(demo.currency||'USD')+' · balance '+(demo.balance??'–');
+  const wsUrl=await getOtpUrl(accountId,headers);
+  try{derivSocket?.close()}catch(_){}
+  derivSocket=new WebSocket(wsUrl);
+  derivSocket.onopen=()=>{
+    btn.textContent='RECONECTAR DEMO';btn.disabled=false;
+    derivMsg('CONECTADO A DERIV DEMO · AUTO-DEMO sigue OFF hasta activarlo',true);
+    syncAutoDemoUI();
+  };
+  derivSocket.onclose=()=>{autoDemo=false;syncAutoDemoUI();derivMsg('CONEXIÓN DEMO CERRADA');btn.disabled=false};
+  derivSocket.onerror=()=>{derivMsg('ERROR EN WEBSOCKET DEMO');btn.disabled=false};
+  derivSocket.onmessage=e=>{try{handleTradeMessage(JSON.parse(e.data),'DEMO',derivSocket)}catch(_){}};
+ }catch(e){derivMsg('ERROR: '+e.message);btn.disabled=false}
+}
+
+async function connectDerivReal(){
+ const appId=$('realAppId').value.trim(),pat=$('realPat').value.trim(),btn=$('realConnect');
+ if(!appId||!pat){realMsg('FALTA APP ID O PAT REAL');return}
+ if(autoReal||activeContractId||pendingTrade){realMsg('Apaga AUTO-REAL y espera a que cierre cualquier contrato.');return}
+ btn.disabled=true;realMsg('BUSCANDO CUENTAS REALES…');
+ try{
+  const {headers,accounts}=await fetchOptionsAccounts(appId,pat);
+  const reals=accounts.filter(a=>{
+    const id=String(a.account_id||a.id||a.loginid||'').toUpperCase();
+    const type=String(a.account_type||a.group||a.type||'').toLowerCase();
+    return !(type.includes('demo')||id.startsWith('VRT')||id.startsWith('VRTC'));
+  });
+  if(!reals.length)throw Error('No encontré cuentas reales de Options para este PAT');
+
+  const sel=$('realAccountSelect');
+  const previous=sel.value;
+  sel.innerHTML='<option value="">Selecciona cuenta real…</option>'+
+    reals.map(a=>{
+      const id=a.account_id||a.id||a.loginid;
+      return '<option value="'+String(id)+'">'+String(id)+' · '+(a.currency||'USD')+' · balance '+(a.balance??'–')+'</option>';
+    }).join('');
+  if(previous && reals.some(a=>String(a.account_id||a.id||a.loginid)===previous))sel.value=previous;
+  if(reals.length===1)sel.value=String(reals[0].account_id||reals[0].id||reals[0].loginid);
+
+  if(!sel.value){
+    realMsg('Encontré '+reals.length+' cuentas reales. Elige una y pulsa CONECTAR REAL otra vez.');
+    btn.disabled=false;return;
+  }
+
+  const real=reals.find(a=>String(a.account_id||a.id||a.loginid)===sel.value);
+  if(!real)throw Error('Selecciona una cuenta real válida');
+  const accountId=real.account_id||real.id||real.loginid;
+  derivRealAccount=real;
+  $('realAccount').textContent='REAL '+accountId+' · '+(real.currency||'USD')+' · balance '+(real.balance??'–');
+  const wsUrl=await getOtpUrl(accountId,headers);
+  try{derivRealSocket?.close()}catch(_){}
+  derivRealSocket=new WebSocket(wsUrl);
+  derivRealSocket.onopen=()=>{
+    btn.textContent='RECONECTAR REAL';btn.disabled=false;
+    realMsg('REAL CONECTADO · AUTO-REAL OFF · activación manual obligatoria',true);
+    syncAutoRealUI();
+  };
+  derivRealSocket.onclose=()=>{autoReal=false;syncAutoRealUI();realMsg('CONEXIÓN REAL CERRADA');btn.disabled=false};
+  derivRealSocket.onerror=()=>{realMsg('ERROR EN WEBSOCKET REAL');btn.disabled=false};
+  derivRealSocket.onmessage=e=>{try{handleTradeMessage(JSON.parse(e.data),'REAL',derivRealSocket)}catch(_){}};
+ }catch(e){realMsg('ERROR: '+e.message);btn.disabled=false}
+}
+
+function relu(x){return x>0?x:0}
+function softmax(a){
+ const m=Math.max(...a),e=a.map(x=>Math.exp(x-m)),z=e.reduce((x,y)=>x+y,0);
+ return e.map(x=>x/z);
+}
+function denseLayer(input,W,b,activation){
+ const out=Array(b.length).fill(0);
+ for(let j=0;j<b.length;j++){
+  let z=Number(b[j]);
+  for(let i=0;i<input.length;i++)z+=input[i]*Number(W[i][j]);
+  out[j]=activation==='relu'?relu(z):z;
+ }
+ return out;
+}
+function modelProbs(model,seq){
+ if(!model||seq.length<model.window)return null;
+ const w=model.window,x=Array(w*10).fill(0),tail=seq.slice(-w);
+ tail.forEach((d,i)=>{x[i*10+d]=1});
+ let a=x;
+ for(let k=0;k<model.coefs.length;k++){
+  const last=k===model.coefs.length-1;
+  a=denseLayer(a,model.coefs[k],model.intercepts[k],last?'identity':(model.activation||'relu'));
+ }
+ const out=(model.out_activation==='softmax'||a.length>1)?softmax(a):a;
+ const full=Array(10).fill(1);
+ (model.classes||[]).forEach((c,i)=>full[Number(c)]=Number(out[i]));
+ return full;
+}
+function neuralProbs(seq){return modelProbs(liveModel,seq)}
+function calUpper(model,p){
+ for(const r of (model?.calibration||[]))if(Number(r.lo)<=p&&p<Number(r.hi))return Number(r.upper95_loss??1);
+ return 1;
+}
+function entropyNorm(a,n=200){
+ const z=a.slice(-n);if(!z.length)return 1;
+ const c=Array(10).fill(0);z.forEach(d=>c[d]++);
+ let h=0;for(const x of c){if(!x)continue;const p=x/z.length;h-=p*Math.log(p)}return h/Math.log(10);
+}
+function repeatRate(a,n=200){const z=a.slice(-n);if(z.length<2)return 0;let k=0;for(let i=1;i<z.length;i++)if(z[i]===z[i-1])k++;return k/(z.length-1)}
+function transitionPeak(a,n=500){
+ const z=a.slice(-n);if(z.length<20)return .1;
+ const m=Array.from({length:10},()=>Array(10).fill(0));for(let i=1;i<z.length;i++)m[z[i-1]][z[i]]++;
+ const vals=[];for(const r of m){const sum=r.reduce((x,y)=>x+y,0);if(sum)vals.push(Math.max(...r)/sum)}
+ return vals.length?vals.reduce((x,y)=>x+y,0)/vals.length:.1;
+}
+function liveRegime(){return repeatRate(liveSeq)>.13||transitionPeak(liveSeq)>.18||entropyNorm(liveSeq)<.955?'CHAOTIC':'STABLE'}
+function ensembleDecision(){
+ const models=liveEnsemble?.models||[];if(models.length<3)return null;
+ const outs=models.map(m=>{const p=modelProbs(m,liveSeq);if(!p)return null;let b=0;for(let d=1;d<10;d++)if(p[d]<p[b])b=d;return {m,p,b,pmin:Number(p[b])}});if(outs.some(x=>!x))return null;
+ const votes=Array(10).fill(0);outs.forEach(x=>votes[x.b]++);let b=0;for(let d=1;d<10;d++)if(votes[d]>votes[b])b=d;
+ const agree=votes[b],avgLoss=outs.reduce((z,x)=>z+Number(x.p[b]),0)/outs.length;
+ const uc=outs.filter(x=>x.b===b).map(x=>calUpper(x.m,x.pmin));const consLoss=Math.max(avgLoss,uc.length?Math.max(...uc):1);
+ const predWin=1-avgLoss,consWin=1-consLoss,rule=liveRuleId||'vote2_margin005',reg=liveRegime();
+ let ok=false,score=predWin;
+ if(rule==='vote2_margin005')ok=agree>=2&&predWin>=currentBreakEven+.005;
+ else if(rule==='vote2_margin010')ok=agree>=2&&predWin>=currentBreakEven+.010;
+ else if(rule==='vote3_margin005')ok=agree>=3&&predWin>=currentBreakEven+.005;
+ else if(rule==='vote2_calibrated'){score=consWin;ok=agree>=2&&consWin>=currentBreakEven+.002}
+ else if(rule==='vote3_calibrated'){score=consWin;ok=agree>=3&&consWin>=currentBreakEven+.002}
+ else if(rule==='stable_vote2_calibrated'){score=consWin;ok=agree>=2&&consWin>=currentBreakEven+.002&&reg==='STABLE'}
+ return {barrier:b,lossProb:1-score,winProb:score,agree,regime:reg,ok};
+}
+function scanAvoidMatchDigits(){
+  const d=dlDecision();
+  return d.rows.map(x=>({
+    digit:x.digit,
+    matchProb:x.prob,
+    avoidProb:1-x.prob,
+    agree:0,
+    sd:0,
+    margin:0
+  }));
+}
+function avoidMatchDecision(){
+  const d=dlDecision();
+  return {
+    digit:d.best.digit,
+    matchProb:d.best.prob,
+    avoidProb:1-d.best.prob,
+    gap:d.gap,
+    wait:d.wait,
+    ok:true,
+    rows:d.rows
+  };
+}
+function renderAvoidMatchScanner(){
+  const d=avoidMatchDecision();
+  if(!d)return null;
+  $('avoidBest').textContent='DIFFER '+d.digit;
+  $('avoidBest').style.color='#6affb6';
+  $('avoidMeta').textContent=
+    'MENOS PROBABLE D'+d.digit+
+    ' · riesgo '+pct(d.matchProb)+
+    ' · consenso '+d.rows[0].bottomVotes+'/6'+
+    ' · hot '+d.rows[0].hotVotes+'/6'+
+    ' · espera '+d.wait+' tick(s)';
+  if($('dynamicWait'))$('dynamicWait').textContent=d.wait+' TICK'+(d.wait===1?'':'S');
+  if($('dynamicWaitMeta'))$('dynamicWaitMeta').textContent=
+    'Transcurridos '+dlTicksSinceClose+'/'+d.wait+
+    ' · máximo 5 · orden no fijo';
+  $('avoidRanking').innerHTML=d.rows.map(x=>
+    '<span class="chip '+(x.digit===d.digit?'best':'')+'">D'+x.digit+
+    ' · '+pct(x.prob)+
+    ' · C'+x.bottomVotes+'/6'+
+    ' · H'+x.hotVotes+
+    (x.penalty>.001?' · P'+pct(x.penalty):'')+
+    '</span>'
+  ).join('');
+  return d;
+}
+function renderLiveDecision(){
+  const d=renderAvoidMatchScanner();
+  if(!d)return false;
+  liveBarrier=d.digit;
+  liveBarrierProb=d.matchProb;
+  $('liveDiffer').textContent='DIFFER '+d.digit;
+  $('liveProb').textContent=pct(d.matchProb);
+  $('liveReason').textContent=
+    'NUEVO MOTOR · 10 dígitos recalculados · espera '+d.wait+
+    ' · transcurridos '+dlTicksSinceClose+
+    ' · repetición permitida';
+  $('liveDiffer').style.color='#4ddcff';
+  return true;
+}
+function tryNextTickTrade(){
+  executionMode='DEMO';
+  if(!latestPublicTickEpoch||sessionStopped||!autoDemo)return;
+  if(pendingTrade||activeContractId)return;
+  const d=dlDecision();
+  renderLiveDecision();
+  if(!dlReadyForNext)return;
+  if(dlTicksSinceClose<d.wait){
+    trace('ANALIZANDO · '+dlTicksSinceClose+'/'+d.wait+' ticks · D'+d.best.digit+' menos probable');
+    return;
+  }
+  liveBarrier=d.best.digit;
+  liveBarrierProb=d.best.prob;
+  maybeAutoBuy(true,latestPublicTickEpoch);
+}
+function maybeAutoBuy(signalOk,tickEpoch=Date.now()){
+ executionMode='DEMO';
+ if(!autoDemo)return;
+ if(sessionStopped||!signalOk)return;
+ if(pendingTrade||activeContractId)return;
+ const ws=activeTradeSocket(),acct=activeTradeAccount();
+ if(!ws||ws.readyState!==WebSocket.OPEN){trace('WEBSOCKET '+executionMode+' NO LISTO');return}
+ if(liveBarrier==null)return;
+ if(tickEpoch===lastSignalEpoch)return;
+ lastSignalEpoch=tickEpoch;
+ let stake=Math.max(.04,currentStake||baseStake());
+ if(executionMode==='REAL'){
+   stake=Math.min(HARD_REAL_MAX_STAKE,stake);
+   const b=Number(liveBarrier);
+   if(lastRealBarrier===b && realSameDigitCount>=MAX_REAL_SAME_DIGIT){
+     const ranked=dlDecision().rows.filter(x=>x.digit!==b);
+     if(ranked.length){liveBarrier=ranked[0].digit;liveBarrierProb=ranked[0].prob;}
+   }
+   if(lastRealBarrier===Number(liveBarrier))realSameDigitCount++;
+   else {lastRealBarrier=Number(liveBarrier);realSameDigitCount=1;}
+ }
+ const currency=acct?.currency||acct?.currency_code||'USD';
+ pendingTrade=true;dlReadyForNext=false;dlTradeBarrier=Number(liveBarrier);
+ const req=++tradeReq;
+ lastProposalReq={req,stake,barrier:liveBarrier,mode:executionMode};
+ $('lastDemoBuy').textContent=executionMode+' · PROPUESTA '+liveBarrier;
+ trace('COMPRA '+executionMode+' DIFFER '+liveBarrier+' · stake $'+stake.toFixed(2)+' · espera '+dlTicksSinceClose,true);
+ ws.send(JSON.stringify({
+   proposal:1,amount:stake,basis:'stake',contract_type:'DIGITDIFF',
+   currency,duration:1,duration_unit:'t',barrier:String(liveBarrier),
+   underlying_symbol:'R_75',req_id:req
+ }));
+}
+
+async function loadLiveModel(){ /* CLEAN 4.0: no modelos anteriores */ }
+function startPublicDiffer(){
+ try{publicSocket?.close()}catch(_){}
+ publicSocket=new WebSocket('wss://api.derivws.com/trading/v1/options/ws/public');
+ publicSocket.onopen=()=>publicSocket.send(JSON.stringify({
+   ticks_history:'R_75',count:220,end:'latest',style:'ticks',req_id:100
+ }));
+ publicSocket.onmessage=e=>{
+  try{
+   const m=JSON.parse(e.data);if(m.error)return;
+   if(m.history?.prices){
+    livePip=Number(m.pip_size??4);
+    liveSeq=m.history.prices.map(q=>Number(Number(q).toFixed(livePip).slice(-1))).slice(-220);
+    dlReset();
+    for(let i=0;i<liveSeq.length;i++)dlObserve(i?liveSeq[i-1]:null,liveSeq[i]);
+    if($('decision'))$('decision').textContent='ACTIVO';
+    if($('directorMeta'))$('directorMeta').textContent=
+      'Aprendiendo con '+liveSeq.length+' ticks recientes · 10 dígitos libres';
+    if($('directorStatus'))$('directorStatus').textContent='ONLINE';
+    renderLiveDecision();
+    publicSocket.send(JSON.stringify({ticks:'R_75',subscribe:1,req_id:101}));
+   }else if(m.tick){
+    livePip=Number(m.tick.pip_size??livePip);
+    const q=Number(m.tick.quote).toFixed(livePip),digit=Number(q.slice(-1));
+    const prev=liveSeq.length?Number(liveSeq[liveSeq.length-1]):null;
+    latestPublicTickEpoch=Number(m.tick.epoch??Date.now());
+    latestPublicTickDigit=digit;latestPublicTickQuote=q;
+    liveSeq.push(digit);if(liveSeq.length>500)liveSeq.shift();
+    dlObserve(prev,digit);
+    if(!sessionStopped&&!pendingTrade&&!activeContractId&&dlReadyForNext){
+      dlTicksSinceClose=Math.min(DYNAMIC_WAIT_MAX,dlTicksSinceClose+1);
+    }
+    $('liveTick').textContent=q+' · '+digit;
+    renderLiveDecision();
+    if(!activeAuto() && $('tradeTrace')){
+      const z=dlDecision();
+      $('tradeTrace').textContent='TRACE: TICK LIVE · '+dlTicksSinceClose+'/'+z.wait+' · AUTO OFF · modo '+executionMode;
+    }
+    tryNextTickTrade();
+   }
+  }catch(_){}
+ };
+}
+$('autoDemoToggle').onclick=()=>setAutoDemo(!autoDemo);
+$('bridgeAutoDemo').onclick=()=>setAutoDemo(!autoDemo);
+$('autoRealToggle').onclick=()=>setAutoReal(!autoReal);
+$('manualStop').onclick=()=>{
+  autoDemo=false;
+  autoReal=false;
+  dlReadyForNext=false;
+  dlTicksSinceClose=0;
+  syncAutoDemoUI();
+  syncAutoRealUI();
+  realMsg('STOP MANUAL · compras detenidas · conexión REAL permanece abierta.',true);
+  derivMsg('STOP MANUAL · compras detenidas · conexión DEMO permanece abierta.',true);
+  trace('STOP MANUAL · compras OFF · conexiones conservadas',true);
+};
+$('resetSession').onclick=()=>{
+  sessionPnl=0;
+  sessionWins=0;
+  sessionLosses=0;
+  sessionStopped=false;
+  currentStake=baseStake();
+  lastSettledContractId=null;
+  pendingTrade=false;
+  activeContractId=null;
+  lastProposalReq=null;
+  dlTradeBarrier=null;
+  dlTicksSinceClose=0;
+  dlReadyForNext=true;
+  renderProfitSession();
+
+  if(executionMode==='DEMO' && derivSocket&&derivSocket.readyState===WebSocket.OPEN){
+    setAutoDemo(true);
+  }else{
+    autoDemo=false;
+    autoReal=false;
+    syncAutoDemoUI();
+    syncAutoRealUI();
+    $('autoDemoState').textContent='CICLO +$2 REINICIADO · listo para iniciar manualmente.';
+    trace('CICLO +$2 REINICIADO · esperando inicio',true);
+  }
+};
+$('demoStake').addEventListener('change',()=>{if(sessionWins===0&&sessionLosses===0){currentStake=baseStake();renderProfitSession()}});
+$('maxStake').addEventListener('change',()=>{currentStake=Math.min(currentStake,maxSessionStake());renderProfitSession()});
+$('sessionStopLoss').addEventListener('change',()=>{renderProfitSession()});
+$('realStake').addEventListener('change',()=>{if(executionMode==='REAL'&&sessionWins===0&&sessionLosses===0){currentStake=baseStake();renderProfitSession()}});
+$('realMaxStake').addEventListener('change',()=>{const el=$('realMaxStake');el.value=Math.min(HARD_REAL_MAX_STAKE,Math.max(.35,Number(el.value)||HARD_REAL_MAX_STAKE)).toFixed(2);if(executionMode==='REAL'){currentStake=Math.min(currentStake,HARD_REAL_MAX_STAKE,maxSessionStake());renderProfitSession()}});
+$('realStopLoss').addEventListener('change',()=>{renderProfitSession()});
+
+$('derivConnect').onclick=connectDerivDemo;
+$('realConnect').onclick=connectDerivReal;
+
+async function bootstrap(){
+ resetProfitSession();
+ startPublicDiffer();
+}
+bootstrap();
+</script></body></html>
