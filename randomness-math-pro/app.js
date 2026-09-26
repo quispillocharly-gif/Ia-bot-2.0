@@ -14,6 +14,6 @@ function tick(d){seq.push(d);if(seq.length>2500)seq.shift();settle(d);if(run&&!p
 
 let ws=null,retry=null,lastEpoch=0;
 function connect(){clearTimeout(retry);ws=new WebSocket('wss://api.derivws.com/trading/v1/options/ws/public');ws.onopen=()=>{ws.send(JSON.stringify({ticks_history:'R_75',count:700,end:'latest',style:'ticks',req_id:1}));$('status').textContent='CONECTADO · MATH PRO'};ws.onmessage=e=>{const m=JSON.parse(e.data);if(m.history&&m.history.prices){const p=Number(m.pip_size||4);seq=m.history.prices.map(x=>Number(Number(x).toFixed(p).slice(-1)));ws.send(JSON.stringify({ticks:'R_75',subscribe:1,req_id:2}));$('status').textContent='TICKS EN VIVO';decide()}if(m.tick){const ep=+m.tick.epoch;if(ep===lastEpoch)return;lastEpoch=ep;const p=Number(m.tick.pip_size||4);tick(Number(Number(m.tick.quote).toFixed(p).slice(-1)))}};ws.onclose=()=>{pending=null;retry=setTimeout(connect,2500)}}
-$('start').onclick=()=>{if($('mode').value==='REAL'){$('status').textContent='REAL: autentica primero';return}pnl=0;stake=1;w=l=ops=0;pending=null;lastBought=null;run=true;ui();log('MATH PRO INICIADO');decide()};
+$('start').onclick=()=>{if($('mode').value==='REAL'&&(typeof realReady==='undefined'||!realReady)){$('status').textContent='REAL: autentica primero';return}pnl=0;stake=1;w=l=ops=0;pending=null;lastBought=null;run=true;ui();log('MATH PRO INICIADO');decide()};
 $('stop').onclick=()=>{run=false;pending=null;$('status').textContent='STOP MANUAL'};
 ui();connect();
