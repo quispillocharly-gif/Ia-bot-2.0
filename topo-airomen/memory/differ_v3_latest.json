@@ -1,51 +1,51 @@
 {
   "version": "3.2-next-digit-avoid-match-safety",
-  "timestamp": 1790440891,
-  "runs": 109,
+  "timestamp": 1790441814,
+  "runs": 110,
   "ensemble_id": "f81db252073342fe",
-  "new_ticks_this_run": 547,
-  "forward_ticks": 63399,
+  "new_ticks_this_run": 461,
+  "forward_ticks": 63860,
   "break_even_rate": 0.9174311926605504,
   "payout_fresh": true,
-  "payout_age_seconds": 3,
+  "payout_age_seconds": 2,
   "leader": {
     "id": "every_tick_best",
-    "signals": 63399,
-    "wins": 57023,
-    "matches": 6376,
-    "hit_rate": 0.899430590387861,
-    "wilson_lower": 0.8970651716234664,
+    "signals": 63860,
+    "wins": 57435,
+    "matches": 6425,
+    "hit_rate": 0.8993892890698403,
+    "wilson_lower": 0.8970320883997797,
     "coverage": 1.0,
     "signals_per_1000_ticks": 1000.0,
-    "matches_avoided_per_1000_ticks": 899.430590387861,
-    "avg_predicted_win": 0.9182926678323581,
-    "avg_model_agreement": 1.0061988359437846,
+    "matches_avoided_per_1000_ticks": 899.3892890698403,
+    "avg_predicted_win": 0.9182940264949577,
+    "avg_model_agreement": 1.00632633886627,
     "safety_gate": {
       "min_gap": 0.0,
       "max_recent_share": 1.0,
       "max_transition_risk": 1.0
     },
-    "shadow_pnl": -1243.930000000264,
-    "shadow_roi": -0.019620656477235668,
-    "max_drawdown": 1244.110000000264,
+    "shadow_pnl": -1255.8500000002978,
+    "shadow_roi": -0.019665674913878762,
+    "max_drawdown": 1256.2700000002949,
     "temporal_blocks": [
       {
         "n": 3334,
-        "wins": 2984,
-        "hit_rate": 0.8950209958008398,
-        "wilson_lower": 0.884157436082141
+        "wins": 2995,
+        "hit_rate": 0.8983203359328135,
+        "wilson_lower": 0.88759853993997
       },
       {
         "n": 3333,
-        "wins": 3016,
-        "hit_rate": 0.9048904890489049,
-        "wilson_lower": 0.8944594286980845
+        "wins": 3022,
+        "hit_rate": 0.9066906690669067,
+        "wilson_lower": 0.8963421944128832
       },
       {
         "n": 3333,
-        "wins": 2993,
-        "hit_rate": 0.897989798979898,
-        "wilson_lower": 0.8872519726020492
+        "wins": 2983,
+        "hit_rate": 0.894989498949895,
+        "wilson_lower": 0.8841229024987665
       }
     ],
     "block_stable": false,
@@ -54,42 +54,42 @@
   "variants": [
     {
       "id": "every_tick_best",
-      "signals": 63399,
-      "wins": 57023,
-      "matches": 6376,
-      "hit_rate": 0.899430590387861,
-      "wilson_lower": 0.8970651716234664,
+      "signals": 63860,
+      "wins": 57435,
+      "matches": 6425,
+      "hit_rate": 0.8993892890698403,
+      "wilson_lower": 0.8970320883997797,
       "coverage": 1.0,
       "signals_per_1000_ticks": 1000.0,
-      "matches_avoided_per_1000_ticks": 899.430590387861,
-      "avg_predicted_win": 0.9182926678323581,
-      "avg_model_agreement": 1.0061988359437846,
+      "matches_avoided_per_1000_ticks": 899.3892890698403,
+      "avg_predicted_win": 0.9182940264949577,
+      "avg_model_agreement": 1.00632633886627,
       "safety_gate": {
         "min_gap": 0.0,
         "max_recent_share": 1.0,
         "max_transition_risk": 1.0
       },
-      "shadow_pnl": -1243.930000000264,
-      "shadow_roi": -0.019620656477235668,
-      "max_drawdown": 1244.110000000264,
+      "shadow_pnl": -1255.8500000002978,
+      "shadow_roi": -0.019665674913878762,
+      "max_drawdown": 1256.2700000002949,
       "temporal_blocks": [
         {
           "n": 3334,
-          "wins": 2984,
-          "hit_rate": 0.8950209958008398,
-          "wilson_lower": 0.884157436082141
+          "wins": 2995,
+          "hit_rate": 0.8983203359328135,
+          "wilson_lower": 0.88759853993997
         },
         {
           "n": 3333,
-          "wins": 3016,
-          "hit_rate": 0.9048904890489049,
-          "wilson_lower": 0.8944594286980845
+          "wins": 3022,
+          "hit_rate": 0.9066906690669067,
+          "wilson_lower": 0.8963421944128832
         },
         {
           "n": 3333,
-          "wins": 2993,
-          "hit_rate": 0.897989798979898,
-          "wilson_lower": 0.8872519726020492
+          "wins": 2983,
+          "hit_rate": 0.894989498949895,
+          "wilson_lower": 0.8841229024987665
         }
       ],
       "block_stable": false,
@@ -97,24 +97,67 @@
     },
     {
       "id": "be_only",
-      "signals": 33677,
-      "wins": 30339,
-      "matches": 3338,
-      "hit_rate": 0.9008819075333313,
-      "wilson_lower": 0.8976445016699609,
-      "coverage": 0.5311913437120459,
-      "signals_per_1000_ticks": 531.1913437120459,
-      "matches_avoided_per_1000_ticks": 478.5406709885014,
-      "avg_predicted_win": 0.9222422239991837,
-      "avg_model_agreement": 1.2168839267155624,
+      "signals": 33930,
+      "wins": 30566,
+      "matches": 3364,
+      "hit_rate": 0.9008547008547009,
+      "wilson_lower": 0.8976291735265994,
+      "coverage": 0.5313185092389602,
+      "signals_per_1000_ticks": 531.3185092389601,
+      "matches_avoided_per_1000_ticks": 478.6407766990291,
+      "avg_predicted_win": 0.922242632398999,
+      "avg_model_agreement": 1.217094017094017,
       "safety_gate": {
         "min_gap": 0.0,
         "max_recent_share": 1.0,
         "max_transition_risk": 1.0
       },
-      "shadow_pnl": -607.4900000001319,
-      "shadow_roi": -0.01803872078867274,
-      "max_drawdown": 609.1900000001318,
+      "shadow_pnl": -613.0600000001247,
+      "shadow_roi": -0.018068376068379743,
+      "max_drawdown": 616.6500000001253,
+      "temporal_blocks": [
+        {
+          "n": 3334,
+          "wins": 3021,
+          "hit_rate": 0.906118776244751,
+          "wilson_lower": 0.8957455736382925
+        },
+        {
+          "n": 3333,
+          "wins": 2994,
+          "hit_rate": 0.8982898289828983,
+          "wilson_lower": 0.8875650287321839
+        },
+        {
+          "n": 3333,
+          "wins": 2994,
+          "hit_rate": 0.8982898289828983,
+          "wilson_lower": 0.8875650287321839
+        }
+      ],
+      "block_stable": false,
+      "status": "NOT_CONFIRMED"
+    },
+    {
+      "id": "margin002_sd025",
+      "signals": 23943,
+      "wins": 21584,
+      "matches": 2359,
+      "hit_rate": 0.9014743348786701,
+      "wilson_lower": 0.8976346725008192,
+      "coverage": 0.37492953335421236,
+      "signals_per_1000_ticks": 374.92953335421237,
+      "matches_avoided_per_1000_ticks": 337.9893517068587,
+      "avg_predicted_win": 0.9236713725995777,
+      "avg_model_agreement": 1.299502986259032,
+      "safety_gate": {
+        "min_gap": 0.0,
+        "max_recent_share": 1.0,
+        "max_transition_risk": 1.0
+      },
+      "shadow_pnl": -416.44000000020264,
+      "shadow_roi": -0.01739297498225797,
+      "max_drawdown": 417.88000000020224,
       "temporal_blocks": [
         {
           "n": 3334,
@@ -124,58 +167,15 @@
         },
         {
           "n": 3333,
-          "wins": 2989,
-          "hit_rate": 0.8967896789678967,
-          "wilson_lower": 0.8860000212975861
+          "wins": 3002,
+          "hit_rate": 0.9006900690069007,
+          "wilson_lower": 0.8900704782166252
         },
         {
           "n": 3333,
-          "wins": 2999,
-          "hit_rate": 0.8997899789978998,
-          "wilson_lower": 0.8891307245827735
-        }
-      ],
-      "block_stable": false,
-      "status": "NOT_CONFIRMED"
-    },
-    {
-      "id": "margin002_sd025",
-      "signals": 23761,
-      "wins": 21421,
-      "matches": 2340,
-      "hit_rate": 0.9015192963259122,
-      "wilson_lower": 0.8976654705902642,
-      "coverage": 0.37478509124749604,
-      "signals_per_1000_ticks": 374.78509124749604,
-      "matches_avoided_per_1000_ticks": 337.8759917348854,
-      "avg_predicted_win": 0.9236708033787064,
-      "avg_model_agreement": 1.2996506881023526,
-      "safety_gate": {
-        "min_gap": 0.0,
-        "max_recent_share": 1.0,
-        "max_transition_risk": 1.0
-      },
-      "shadow_pnl": -412.11000000019857,
-      "shadow_roi": -0.01734396700476405,
-      "max_drawdown": 412.7000000001798,
-      "temporal_blocks": [
-        {
-          "n": 3334,
-          "wins": 3029,
-          "hit_rate": 0.9085182963407319,
-          "wilson_lower": 0.8982564158190618
-        },
-        {
-          "n": 3333,
-          "wins": 2997,
-          "hit_rate": 0.8991899189918992,
-          "wilson_lower": 0.8885043627661973
-        },
-        {
-          "n": 3333,
-          "wins": 3017,
-          "hit_rate": 0.9051905190519052,
-          "wilson_lower": 0.8947731469604533
+          "wins": 3014,
+          "hit_rate": 0.9042904290429042,
+          "wilson_lower": 0.8938320823748577
         }
       ],
       "block_stable": false,
@@ -183,36 +183,36 @@
     },
     {
       "id": "margin005_sd020",
-      "signals": 11867,
-      "wins": 10709,
-      "matches": 1158,
-      "hit_rate": 0.9024184713912531,
-      "wilson_lower": 0.8969483522112672,
-      "coverage": 0.18717960851117527,
-      "signals_per_1000_ticks": 187.17960851117527,
-      "matches_avoided_per_1000_ticks": 168.91433618826795,
-      "avg_predicted_win": 0.925998698664668,
-      "avg_model_agreement": 1.458919693267043,
+      "signals": 11969,
+      "wins": 10801,
+      "matches": 1168,
+      "hit_rate": 0.9024145709750188,
+      "wilson_lower": 0.8969682759545912,
+      "coverage": 0.18742561854055748,
+      "signals_per_1000_ticks": 187.42561854055748,
+      "matches_avoided_per_1000_ticks": 169.1356091450047,
+      "avg_predicted_win": 0.9259942835440053,
+      "avg_model_agreement": 1.4581000919040856,
       "safety_gate": {
         "min_gap": 0.0,
         "max_recent_share": 1.0,
         "max_transition_risk": 1.0
       },
-      "shadow_pnl": -194.18999999996967,
-      "shadow_roi": -0.016363866183531615,
+      "shadow_pnl": -195.90999999996936,
+      "shadow_roi": -0.01636811763722695,
       "max_drawdown": 204.79999999997173,
       "temporal_blocks": [
         {
           "n": 3334,
-          "wins": 2988,
-          "hit_rate": 0.8962207558488302,
-          "wilson_lower": 0.8854083700450529
+          "wins": 2998,
+          "hit_rate": 0.8992201559688062,
+          "wilson_lower": 0.8885375949433052
         },
         {
           "n": 3333,
-          "wins": 3010,
-          "hit_rate": 0.903090309030903,
-          "wilson_lower": 0.8925777470241536
+          "wins": 3005,
+          "hit_rate": 0.9015901590159016,
+          "wilson_lower": 0.8910104876576813
         },
         {
           "n": 3333,
@@ -226,42 +226,42 @@
     },
     {
       "id": "agree2_margin002",
-      "signals": 8875,
-      "wins": 8019,
-      "matches": 856,
-      "hit_rate": 0.9035492957746479,
-      "wilson_lower": 0.8972316708881733,
-      "coverage": 0.13998643511727316,
-      "signals_per_1000_ticks": 139.98643511727315,
-      "matches_avoided_per_1000_ticks": 126.4846448682156,
-      "avg_predicted_win": 0.9250438790435757,
-      "avg_model_agreement": 2.0793239436619717,
+      "signals": 8939,
+      "wins": 8075,
+      "matches": 864,
+      "hit_rate": 0.9033448931647835,
+      "wilson_lower": 0.897044862015602,
+      "coverage": 0.13997807704353274,
+      "signals_per_1000_ticks": 139.97807704353275,
+      "matches_avoided_per_1000_ticks": 126.44848105230191,
+      "avg_predicted_win": 0.9250384678154037,
+      "avg_model_agreement": 2.0792034903233025,
       "safety_gate": {
         "min_gap": 0.0,
         "max_recent_share": 1.0,
         "max_transition_risk": 1.0
       },
-      "shadow_pnl": -134.2899999999774,
-      "shadow_roi": -0.015131267605631256,
+      "shadow_pnl": -137.2499999999772,
+      "shadow_roi": -0.015354066450383399,
       "max_drawdown": 143.2199999999819,
       "temporal_blocks": [
         {
-          "n": 2959,
-          "wins": 2667,
-          "hit_rate": 0.9013180128421764,
-          "wilson_lower": 0.8900461669437428
+          "n": 2980,
+          "wins": 2685,
+          "hit_rate": 0.9010067114093959,
+          "wilson_lower": 0.8897619399651718
         },
         {
-          "n": 2958,
-          "wins": 2656,
-          "hit_rate": 0.8979039891818796,
-          "wilson_lower": 0.8864714717477665
+          "n": 2980,
+          "wins": 2679,
+          "hit_rate": 0.898993288590604,
+          "wilson_lower": 0.8876550161495268
         },
         {
-          "n": 2958,
-          "wins": 2696,
-          "hit_rate": 0.9114266396213658,
-          "wilson_lower": 0.9006464642932488
+          "n": 2979,
+          "wins": 2711,
+          "hit_rate": 0.9100369251426653,
+          "wilson_lower": 0.8992268720329594
         }
       ],
       "block_stable": false,
@@ -269,42 +269,42 @@
     },
     {
       "id": "agree2_gap001",
-      "signals": 8288,
-      "wins": 7485,
-      "matches": 803,
-      "hit_rate": 0.9031129343629344,
-      "wilson_lower": 0.8965564391550995,
-      "coverage": 0.13072761400022082,
-      "signals_per_1000_ticks": 130.72761400022083,
-      "matches_avoided_per_1000_ticks": 118.06179908200446,
-      "avg_predicted_win": 0.9250946181682767,
-      "avg_model_agreement": 2.0822876447876446,
+      "signals": 8351,
+      "wins": 7540,
+      "matches": 811,
+      "hit_rate": 0.9028858819303077,
+      "wilson_lower": 0.8963483573073688,
+      "coverage": 0.13077043532727842,
+      "signals_per_1000_ticks": 130.77043532727842,
+      "matches_avoided_per_1000_ticks": 118.07077983088004,
+      "avg_predicted_win": 0.9250885551461924,
+      "avg_model_agreement": 2.0821458507963118,
       "safety_gate": {
         "min_gap": 0.001,
         "max_recent_share": 1.0,
         "max_transition_risk": 1.0
       },
-      "shadow_pnl": -129.3499999999778,
-      "shadow_roi": -0.015606901544398866,
+      "shadow_pnl": -132.3999999999776,
+      "shadow_roi": -0.015854388695961875,
       "max_drawdown": 137.9299999999822,
       "temporal_blocks": [
         {
-          "n": 2822,
-          "wins": 2544,
-          "hit_rate": 0.9014883061658399,
-          "wilson_lower": 0.8899412710395544
+          "n": 2843,
+          "wins": 2564,
+          "hit_rate": 0.9018642279282448,
+          "wilson_lower": 0.8903800433739031
         },
         {
-          "n": 2822,
-          "wins": 2535,
-          "hit_rate": 0.8982990786676116,
-          "wilson_lower": 0.8866001044750723
+          "n": 2843,
+          "wins": 2554,
+          "hit_rate": 0.8983468167428772,
+          "wilson_lower": 0.8866954026963465
         },
         {
-          "n": 2822,
-          "wins": 2574,
-          "hit_rate": 0.9121190644932672,
-          "wilson_lower": 0.9011048714211766
+          "n": 2843,
+          "wins": 2590,
+          "hit_rate": 0.9110094970102005,
+          "wilson_lower": 0.8999807533656007
         }
       ],
       "block_stable": false,
@@ -312,42 +312,42 @@
     },
     {
       "id": "agree2_gap001_r14",
-      "signals": 7356,
-      "wins": 6656,
-      "matches": 700,
-      "hit_rate": 0.9048395867319196,
-      "wilson_lower": 0.8979209164146288,
-      "coverage": 0.11602706667297591,
-      "signals_per_1000_ticks": 116.0270666729759,
-      "matches_avoided_per_1000_ticks": 104.9858830580924,
-      "avg_predicted_win": 0.9251003279228728,
-      "avg_model_agreement": 2.0841489940184883,
+      "signals": 7416,
+      "wins": 6708,
+      "matches": 708,
+      "hit_rate": 0.9045307443365695,
+      "wilson_lower": 0.8976314689340174,
+      "coverage": 0.11612903225806452,
+      "signals_per_1000_ticks": 116.12903225806453,
+      "matches_avoided_per_1000_ticks": 105.0422799874726,
+      "avg_predicted_win": 0.9250938634775269,
+      "avg_model_agreement": 2.084007551240561,
       "safety_gate": {
         "min_gap": 0.001,
         "max_recent_share": 0.14,
         "max_transition_risk": 1.0
       },
-      "shadow_pnl": -100.95999999998156,
-      "shadow_roi": -0.013724850462205215,
+      "shadow_pnl": -104.27999999998138,
+      "shadow_roi": -0.01406148867313665,
       "max_drawdown": 110.95999999998541,
       "temporal_blocks": [
         {
-          "n": 2513,
-          "wins": 2272,
-          "hit_rate": 0.9040986868284918,
-          "wilson_lower": 0.8919613789533071
+          "n": 2533,
+          "wins": 2292,
+          "hit_rate": 0.9048559020923805,
+          "wilson_lower": 0.8928083714981147
         },
         {
-          "n": 2513,
-          "wins": 2261,
-          "hit_rate": 0.8997214484679665,
-          "wilson_lower": 0.8873603973285117
+          "n": 2533,
+          "wins": 2276,
+          "hit_rate": 0.8985392814844059,
+          "wilson_lower": 0.8861705712171594
         },
         {
-          "n": 2513,
-          "wins": 2296,
-          "hit_rate": 0.9136490250696379,
-          "wilson_lower": 0.902025841754962
+          "n": 2533,
+          "wins": 2313,
+          "hit_rate": 0.9131464666403474,
+          "wilson_lower": 0.9015439237152119
         }
       ],
       "block_stable": false,
@@ -355,42 +355,42 @@
     },
     {
       "id": "safety_full",
-      "signals": 7143,
-      "wins": 6464,
-      "matches": 679,
-      "hit_rate": 0.9049419011619768,
-      "wilson_lower": 0.8979208306709521,
-      "coverage": 0.11266739223016135,
-      "signals_per_1000_ticks": 112.66739223016135,
-      "matches_avoided_per_1000_ticks": 101.95744412372434,
-      "avg_predicted_win": 0.9251009979868899,
-      "avg_model_agreement": 2.0845583088338233,
+      "signals": 7200,
+      "wins": 6513,
+      "matches": 687,
+      "hit_rate": 0.9045833333333333,
+      "wilson_lower": 0.8975797672717817,
+      "coverage": 0.11274663326025681,
+      "signals_per_1000_ticks": 112.74663326025681,
+      "matches_avoided_per_1000_ticks": 101.98872533667397,
+      "avg_predicted_win": 0.9250951869502537,
+      "avg_model_agreement": 2.0844444444444443,
       "safety_gate": {
         "min_gap": 0.001,
         "max_recent_share": 0.14,
         "max_transition_risk": 0.16
       },
-      "shadow_pnl": -97.23999999998233,
-      "shadow_roi": -0.013613327733442858,
+      "shadow_pnl": -100.82999999998216,
+      "shadow_roi": -0.01400416666666419,
       "max_drawdown": 107.02999999998356,
       "temporal_blocks": [
         {
-          "n": 2443,
-          "wins": 2211,
-          "hit_rate": 0.9050347932869423,
-          "wilson_lower": 0.8927651800517603
+          "n": 2462,
+          "wins": 2229,
+          "hit_rate": 0.90536149471974,
+          "wilson_lower": 0.8931590952570463
         },
         {
-          "n": 2443,
-          "wins": 2200,
-          "hit_rate": 0.9005321326238231,
-          "wilson_lower": 0.8880277332065561
+          "n": 2462,
+          "wins": 2215,
+          "hit_rate": 0.8996750609260764,
+          "wilson_lower": 0.8871778053029615
         },
         {
-          "n": 2442,
-          "wins": 2228,
-          "hit_rate": 0.9123669123669124,
-          "wilson_lower": 0.9004942591022845
+          "n": 2461,
+          "wins": 2244,
+          "hit_rate": 0.9118244616009752,
+          "wilson_lower": 0.8999700696985063
         }
       ],
       "block_stable": false,
@@ -398,42 +398,42 @@
     },
     {
       "id": "agree3_margin002",
-      "signals": 704,
-      "wins": 638,
-      "matches": 66,
-      "hit_rate": 0.90625,
-      "wilson_lower": 0.8824590598215636,
-      "coverage": 0.01110427609268285,
-      "signals_per_1000_ticks": 11.10427609268285,
-      "matches_avoided_per_1000_ticks": 10.063250208993832,
-      "avg_predicted_win": 0.9289220316746952,
+      "signals": 708,
+      "wins": 640,
+      "matches": 68,
+      "hit_rate": 0.903954802259887,
+      "wilson_lower": 0.8800193789100874,
+      "coverage": 0.01108675227059192,
+      "signals_per_1000_ticks": 11.086752270591921,
+      "matches_avoided_per_1000_ticks": 10.021922956467273,
+      "avg_predicted_win": 0.9289040474190774,
       "avg_model_agreement": 3.0,
       "safety_gate": {
         "min_gap": 0.0,
         "max_recent_share": 1.0,
         "max_transition_risk": 1.0
       },
-      "shadow_pnl": -8.580000000000082,
-      "shadow_roi": -0.012187500000000117,
-      "max_drawdown": 11.100000000000051,
+      "shadow_pnl": -10.400000000000082,
+      "shadow_roi": -0.01468926553672328,
+      "max_drawdown": 11.300000000000082,
       "temporal_blocks": [
         {
-          "n": 235,
-          "wins": 211,
-          "hit_rate": 0.8978723404255319,
-          "wilson_lower": 0.8525389840229081
+          "n": 236,
+          "wins": 212,
+          "hit_rate": 0.8983050847457628,
+          "wilson_lower": 0.8531448671005427
         },
         {
-          "n": 235,
-          "wins": 211,
-          "hit_rate": 0.8978723404255319,
-          "wilson_lower": 0.8525389840229081
+          "n": 236,
+          "wins": 212,
+          "hit_rate": 0.8983050847457628,
+          "wilson_lower": 0.8531448671005427
         },
         {
-          "n": 234,
+          "n": 236,
           "wins": 216,
-          "hit_rate": 0.9230769230769231,
-          "wilson_lower": 0.8816952007172654
+          "hit_rate": 0.9152542372881356,
+          "wilson_lower": 0.872733824659863
         }
       ],
       "block_stable": false,
