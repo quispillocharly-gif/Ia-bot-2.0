@@ -462,8 +462,13 @@ function setAutoDemo(next){
  syncAutoDemoUI();syncAutoRealUI();return autoDemo;
 }
 function setAutoReal(next){
- autoReal=!!next;
  if(next){
+   if(pendingTrade||activeContractId){trace('NO SE PUEDE ACTIVAR REAL CON CONTRATO ACTIVO');return false}
+   if(sessionStopped){realMsg('SESIÓN DETENIDA · reinicia el ciclo');return false}
+   if(!derivRealSocket||derivRealSocket.readyState!==WebSocket.OPEN||!derivRealAccount){
+     autoReal=false;realMsg('Primero conecta una cuenta DERIV REAL válida.');syncAutoRealUI();return false;
+   }
+   autoReal=true;
    executionMode='REAL';
    autoDemo=false;
    dlTicksSinceClose=0;
@@ -476,7 +481,9 @@ function setAutoReal(next){
      'MODO AUTO-REAL · compra DIGITDIFF automática · stake ≤ $6 · máximo 2 seguidas por dígito.';
    trace('AUTO-REAL · contador 0/'+q.wait+' · protecciones activas');
  }else{
+   autoReal=false;
    realMsg('REAL MONITOR OFF.');
+   syncAutoRealUI();
  }
  return autoReal;
 }
@@ -497,19 +504,20 @@ function handleTradeMessage(m,mode,ws){
   if(m.error||m.errors){
     const err=apiError(m,'respuesta de error');
     pendingTrade=false;lastProposalReq=null;dlTradeBarrier=null;
+    dlReadyForNext=true;dlTicksSinceClose=0;
     (isReal?realMsg:derivMsg)('DERIV '+mode+': '+err);
     trace('ERROR '+mode+' '+err);
     return;
   }
   if(m.proposal && lastProposalReq && m.req_id===lastProposalReq.req){
     const p=m.proposal||{};
-    if(!p.id){pendingTrade=false;lastProposalReq=null;trace('PROPUESTA SIN ID');return}
+    if(!p.id){pendingTrade=false;lastProposalReq=null;dlTradeBarrier=null;dlReadyForNext=true;dlTicksSinceClose=0;trace('PROPUESTA SIN ID · motor rearmado');return}
     const requestedStake=Number(lastProposalReq.stake);
     const maxPrice=isReal
       ? Math.min(HARD_REAL_MAX_STAKE, requestedStake, Number(p.ask_price??requestedStake))
       : Number(p.ask_price??requestedStake);
     if(isReal && (!autoReal || requestedStake>HARD_REAL_MAX_STAKE)){
-      pendingTrade=false;lastProposalReq=null;dlTradeBarrier=null;
+      pendingTrade=false;lastProposalReq=null;dlTradeBarrier=null;dlReadyForNext=true;dlTicksSinceClose=0;
       realMsg('BUY REAL CANCELADO POR PROTECCIÓN DE STAKE/MODO.');
       trace('REAL BUY CANCELADO · protección activa');
       return;
