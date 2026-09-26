@@ -4,7 +4,7 @@
 <style>
 *{box-sizing:border-box}body{margin:0;background:#071522;color:#eef7ff;font-family:system-ui,-apple-system,sans-serif}.wrap{max-width:760px;margin:auto;padding:18px}.card{background:#0d2132;border:1px solid #28465d;border-radius:22px;padding:20px;margin:14px 0}.title{font-size:27px;font-weight:900}.sub,.muted{color:#9db3c5}.status{font-weight:800;margin-top:10px}.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:18px}.metric b{display:block;font-size:36px}.ok{color:#55e3a1}.bad{color:#ff788b}.decision{font-size:32px;font-weight:900;line-height:1.15}.read{font-size:18px;color:#a9bdcc;line-height:1.35}.models{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}.model{background:#081a29;border-radius:14px;padding:10px;text-align:center;min-width:0}.model b{display:block;font-size:18px}.model small{color:#8ea6b8}.actions{display:flex;gap:10px}.actions button{flex:1;border:0;border-radius:14px;padding:15px;font-size:17px;font-weight:900}.go{background:#55e3a1;color:#052014}.stop{background:#ff788b;color:#2a0710}.log{white-space:pre-wrap;color:#a9bdcc;max-height:230px;overflow:auto}.bar{height:10px;background:#071522;border-radius:20px;overflow:hidden}.bar i{display:block;height:100%;background:#55e3a1;width:0}.wide{grid-column:1/-1}@media(max-width:520px){.models{grid-template-columns:repeat(3,1fr)}.decision{font-size:28px}.card{padding:16px}.wrap{padding:10px}}
 </style></head><body><main class="wrap">
-<div class="card"><div class="title">RANDOMNESS LAB · DEMO</div><div class="sub">TORNEO 25 + RANDOM · DIGITDIFF · R_75</div><div id="status" class="status">Conectando ticks...</div></div>
+<div class="card"><div class="title">RANDOMNESS LAB · DEMO</div><div class="sub">TORNEO 100 + RANDOM · DIGITDIFF · R_75</div><div id="status" class="status">Conectando ticks...</div></div>
 <div class="card"><div class="grid">
 <div class="metric"><span class="muted">P&L neto</span><b id="pnl">+$0.00</b></div><div class="metric"><span class="muted">Stake actual</span><b id="stake">$0.50</b></div>
 <div class="metric"><span class="muted">WIN</span><b id="wins" class="ok">0</b></div><div class="metric"><span class="muted">MATCH</span><b id="loss" class="bad">0</b></div>
@@ -12,13 +12,17 @@
 <div class="wide"><span class="muted">Meta +$5</span><div class="bar"><i id="progress"></i></div></div>
 </div></div>
 <div class="card"><div class="grid"><div><span class="muted">DECISIÓN</span><div id="decision" class="decision">INVESTIGANDO</div></div><div><span class="muted">LECTURA</span><div id="reason" class="read">Reuniendo evidencia...</div></div></div></div>
-<div class="card"><div class="muted">Torneo 25 + RANDOM · MATCH / pruebas</div><div id="models" class="models"></div></div>
+<div class="card"><div class="muted">Torneo 100 + RANDOM · MATCH / pruebas</div><div id="models" class="models"></div></div>
 <div class="card actions"><button id="go" class="go">INICIAR SESIÓN</button><button id="stop" class="stop">STOP</button></div>
 <div class="card"><b>REGISTRO</b><div id="log" class="log">Esperando datos...</div></div>
 </main><script>
 const $=id=>document.getElementById(id);
 const BASE=.50,TARGET=5;
-const MODEL_NAMES=['F10','F15','F20','F25','F30','F40','F50','F60','F75','F100','F125','F150','T20','T40','T60','T100','T150','T200','B1','B2','B3','A20','A35','A50','A75','RANDOM'];
+const FREQ_WINDOWS=Array.from({length:40},(_,i)=>10+i*5);
+const TRANS_WINDOWS=Array.from({length:30},(_,i)=>20+i*10);
+const ANTI_WINDOWS=Array.from({length:20},(_,i)=>15+i*5);
+const BLEND_WEIGHTS=Array.from({length:10},(_,i)=>{const a=.15+.025*i,b=.35-.015*i,c=.15+.01*i,d=1-a-b-c;return [a,b,c,d]});
+const MODEL_NAMES=[...FREQ_WINDOWS.map(n=>'F'+n),...TRANS_WINDOWS.map(n=>'T'+n),...ANTI_WINDOWS.map(n=>'A'+n),...BLEND_WEIGHTS.map((_,i)=>'B'+(i+1)),'RANDOM'];
 let seq=[],running=false,pnl=0,stake=BASE,wins=0,losses=0,sessions=0,pending=null,lastEpoch=0,nextVirtual=null;
 const score=Object.fromEntries(MODEL_NAMES.map(n=>[n,{m:0,n:0,hm:0,hn:0}]));
 function log(x){$('log').textContent=x+'\n'+$('log').textContent.slice(0,4000)}
@@ -28,18 +32,18 @@ function freq(arr,n){const c=Array(10).fill(0);arr.slice(-n).forEach(d=>c[d]++);
 function trans(arr,n){const z=arr.slice(-n),last=z[z.length-1],c=Array(10).fill(1);for(let i=1;i<z.length;i++)if(z[i-1]===last)c[z[i]]++;return minPick(c)}
 function anti(arr,n){const c=Array(10).fill(0);arr.slice(-n).forEach(d=>c[d]++);c[arr[arr.length-1]]++;return minPick(c)}
 function blend(arr,w){const z=arr.slice(-180),last=z[z.length-1],c20=Array(10).fill(0),c50=Array(10).fill(0),c100=Array(10).fill(0),t=Array(10).fill(1);z.slice(-20).forEach(d=>c20[d]++);z.slice(-50).forEach(d=>c50[d]++);z.slice(-100).forEach(d=>c100[d]++);for(let i=1;i<z.length;i++)if(z[i-1]===last)t[z[i]]++;const ts=t.reduce((a,b)=>a+b,0),r=Array(10).fill(0);for(let d=0;d<10;d++)r[d]=w[0]*(c20[d]+1)/30+w[1]*(c50[d]+1)/60+w[2]*(c100[d]+1)/110+w[3]*t[d]/ts;return minPick(r)}
-function predictions(arr){const o={};[10,15,20,25,30,40,50,60,75,100,125,150].forEach(n=>o['F'+n]=freq(arr,n));[20,40,60,100,150,200].forEach(n=>o['T'+n]=trans(arr,n));o.B1=blend(arr,[.4,.25,.15,.2]);o.B2=blend(arr,[.2,.3,.25,.25]);o.B3=blend(arr,[.25,.2,.3,.25]);[20,35,50,75].forEach(n=>o['A'+n]=anti(arr,n));o.RANDOM=Math.floor(Math.random()*10);return o}
+function predictions(arr){const o={};FREQ_WINDOWS.forEach(n=>o['F'+n]=freq(arr,n));TRANS_WINDOWS.forEach(n=>o['T'+n]=trans(arr,n));ANTI_WINDOWS.forEach(n=>o['A'+n]=anti(arr,n));BLEND_WEIGHTS.forEach((w,i)=>o['B'+(i+1)]=blend(arr,w));o.RANDOM=Math.floor(Math.random()*10);return o}
 function recordVirtual(actual){if(!nextVirtual)return;for(const [name,pick] of Object.entries(nextVirtual)){const s=score[name];s.n++;if(pick===actual)s.m++;if(s.n%3===0){s.hn++;if(pick===actual)s.hm++}}}
 function evaluate(){
  const random=score.RANDOM.n?score.RANDOM.m/score.RANDOM.n:.10;
- const list=MODEL_NAMES.filter(n=>n!=='RANDOM').map(name=>{const s=score[name];return {name,n:s.n,rate:s.n?s.m/s.n:1,hn:s.hn,hold:s.hn?s.hm/s.hn:1}}).filter(x=>x.n>=200&&x.hn>=80);
+ const list=MODEL_NAMES.filter(n=>n!=='RANDOM').map(name=>{const s=score[name];return {name,n:s.n,rate:s.n?s.m/s.n:1,hn:s.hn,hold:s.hn?s.hm/s.hn:1}}).filter(x=>x.n>=400&&x.hn>=130);
  list.sort((a,b)=>(a.rate+a.hold)-(b.rate+b.hold));
- const champ=list[0],valid=!!champ&&champ.rate<.10&&champ.hold<.10&&champ.rate+.012<random;
+ const champ=list[0],valid=!!champ&&champ.rate<.10&&champ.hold<.10&&champ.rate+.02<random;
  $('models').innerHTML=MODEL_NAMES.map(name=>{const s=score[name],r=s.n?100*s.m/s.n:0;return '<div class="model">'+name+'<b>'+(s.n?r.toFixed(1):'–')+'%</b><small>'+s.n+'</small></div>'}).join('');
  if(!champ){$('decision').textContent='INVESTIGANDO';$('reason').textContent='Reuniendo selección + confirmación';return {buy:false}}
  const picks=predictions(seq),digit=picks[champ.name];
  $('decision').textContent=valid?'COMPRAR DIFFER '+digit:'INVESTIGANDO · SIN VENTAJA';
- $('reason').textContent='TORNEO 25 · '+champ.name+' selección '+(champ.rate*100).toFixed(1)+'% · confirmación '+(champ.hold*100).toFixed(1)+'% · RANDOM '+(random*100).toFixed(1)+'%';
+ $('reason').textContent='TORNEO 100 · '+champ.name+' selección '+(champ.rate*100).toFixed(1)+'% · confirmación '+(champ.hold*100).toFixed(1)+'% · RANDOM '+(random*100).toFixed(1)+'%';
  return {buy:valid,digit}
 }
 function settle(actual){if(!pending)return;const won=actual!==pending.digit;if(won){const profit=pending.stake*.10;pnl+=profit;stake=pending.stake+profit;wins++;log('WIN · DIFFER '+pending.digit+' · +$'+profit.toFixed(2))}else{pnl-=pending.stake;stake=BASE;losses++;log('MATCH · D'+pending.digit+' · -$'+pending.stake.toFixed(2)+' · vuelve $0.50')}pending=null;stats();if(pnl>=TARGET){sessions++;running=false;stats();$('status').textContent='META +$5 ALCANZADA · detenida';log('OBJETIVO +$5 ALCANZADO')}}
