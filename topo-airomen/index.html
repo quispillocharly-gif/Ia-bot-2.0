@@ -79,7 +79,7 @@ button:disabled{opacity:.55;cursor:not-allowed}.formgrid{display:grid;grid-templ
  <div class="grid" style="margin-top:10px">
   <div><div class="mini">STAKE MÁXIMO REAL · TOPE DURO $6</div><input id="realMaxStake" type="number" inputmode="decimal" min="0.35" step="0.01" value="6.00" max="6.00"></div>
   <div><div class="mini">STOP REAL</div><input id="realStopLoss" type="number" inputmode="decimal" min="1" step="0.50" value="2.00"></div>
-  <div><div class="mini">MODO</div><div id="executionModeView" class="big yellow">DEMO</div></div>
+  <div><div class="mini">MODO</div><div id="executionModeView" class="big yellow">REAL ONLY</div></div>
  </div>
  <div id="realStatus" class="statusline mini">DESCONECTADO · AUTO-REAL OFF · activación manual obligatoria.</div>
  <div id="realAccount" class="mini">REAL usa la misma señal anti-MATCH. Tope duro $6 · máximo 2 compras seguidas por dígito.</div>
@@ -111,7 +111,7 @@ button:disabled{opacity:.55;cursor:not-allowed}.formgrid{display:grid;grid-templ
  <div id="autoDemoState" class="mini statusline">Cada tick cruza 6 lecturas, recalcula los 10 dígitos y compra el candidato de menor riesgo. Espera máxima: 5 ticks.</div>
  <div id="tradeTrace" class="mini statusline">TRACE: esperando AUTO-DEMO…</div>
 </div>
-<div class="footer">CLEAN 4.8 · TP +$2 MANUAL STOP · REAL AUTO-BUY PROTECTED</div>
+<div class="footer">REAL ONLY · ANTI-MATCH · TP +$2 · STOP MANUAL · TOPE $6</div>
 </div><script>
 const BUILD='CLEAN-4.8-REAL-AUTOBUY-PROTECTED';
 const HARD_REAL_MAX_STAKE=6;
@@ -342,9 +342,9 @@ function sessionStopLoss(){
  const id=executionMode==='REAL'?'realStopLoss':'sessionStopLoss';
  return Math.max(1,Number($(id)?.value)||(executionMode==='REAL'?2:5));
 }
-function activeAuto(){return executionMode==='REAL'?autoReal:autoDemo}
-function activeTradeSocket(){return executionMode==='REAL'?derivRealSocket:derivSocket}
-function activeTradeAccount(){return executionMode==='REAL'?derivRealAccount:derivDemoAccount}
+function activeAuto(){return autoReal}
+function activeTradeSocket(){return derivRealSocket}
+function activeTradeAccount(){return derivRealAccount}
 function syncModeView(){
  if($('executionModeView'))$('executionModeView').textContent=executionMode;
 }
@@ -440,27 +440,10 @@ function syncAutoRealUI(){
  syncModeView();
 }
 function setAutoDemo(next){
- if(next){
-   if(pendingTrade||activeContractId){trace('NO SE PUEDE CAMBIAR DE MODO CON CONTRATO ACTIVO');return false}
-   if(sessionStopped){trace('SESIÓN DETENIDA · reinicia el ciclo');return false}
-   if(!derivSocket||derivSocket.readyState!==WebSocket.OPEN||!derivDemoAccount){
-     $('autoDemoState').textContent='Primero conecta una cuenta DERIV DEMO con App ID + PAT.';
-     return false;
-   }
-   autoReal=false;
-   executionMode='DEMO';
-   autoDemo=true;
-   resetFinancialMode();
-   dlTicksSinceClose=0;dlReadyForNext=true;
-   lastSignalEpoch=null;
-   const q=dlDecision();
-   $('autoDemoState').textContent='AUTO-DEMO activo · esperando '+q.wait+' tick(s).';
-   trace('MODO DEMO ACTIVO · contador 0/'+q.wait,true);
- }else{
-   autoDemo=false;
-   $('autoDemoState').textContent='AUTO-DEMO apagado. La IA sigue analizando.';
- }
- syncAutoDemoUI();syncAutoRealUI();return autoDemo;
+ autoDemo=false;
+ syncAutoDemoUI();
+ trace('DEMO DESACTIVADO · BOT SOLO REAL');
+ return false;
 }
 function setAutoReal(next){
  if(next){
@@ -780,10 +763,10 @@ function renderLiveDecision(){
   return true;
 }
 function tryNextTickTrade(){
-  if(!latestPublicTickEpoch||sessionStopped)return;
+  executionMode='REAL';
+  if(!latestPublicTickEpoch||sessionStopped||!autoReal)return;
   if(pendingTrade||activeContractId)return;
   const d=dlDecision();
-  if(executionMode!=='REAL' && !activeAuto())return;
   renderLiveDecision();
   if(!dlReadyForNext)return;
   if(dlTicksSinceClose<d.wait){
@@ -795,8 +778,9 @@ function tryNextTickTrade(){
   maybeAutoBuy(true,latestPublicTickEpoch);
 }
 function maybeAutoBuy(signalOk,tickEpoch=Date.now()){
- if(executionMode==='REAL' && !autoReal)return;
- if(sessionStopped||!activeAuto()||!signalOk)return;
+ executionMode='REAL';
+ if(!autoReal)return;
+ if(sessionStopped||!signalOk)return;
  if(pendingTrade||activeContractId)return;
  const ws=activeTradeSocket(),acct=activeTradeAccount();
  if(!ws||ws.readyState!==WebSocket.OPEN){trace('WEBSOCKET '+executionMode+' NO LISTO');return}
