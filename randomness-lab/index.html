@@ -65,56 +65,11 @@ function settle(d){
 }
 function onDigit(d){
  if(pending){settle(d);return}
- 
  if(!run||seq.length<300)return;
  const q=calc();if(!q||!q.buy)return;
- pending={barrier:q.digit,stake};$('status').textContent='OPERACIÓN ABIERTA · DIFFER '+q.digit+' · 
-}
-function connect(){
- const ws=new WebSocket('wss://api.derivws.com/trading/v1/options/ws/public');
- ws.onopen=()=>ws.send(JSON.stringify({ticks_history:'R_75',count:600,end:'latest',style:'ticks',req_id:1}));
- ws.onmessage=e=>{
-   const m=JSON.parse(e.data);
-   if(m.history&&m.history.prices){
-     const p=Number(m.pip_size||4);
-     seq=m.history.prices.map(x=>Number(Number(x).toFixed(p).slice(-1)));
-     calc();ws.send(JSON.stringify({ticks:'R_75',subscribe:1,req_id:2}));$('status').textContent='Ticks R_75 conectados · listo'
-   }else if(m.tick){
-     const ep=Number(m.tick.epoch);if(ep===lastEpoch)return;lastEpoch=ep;
-     const p=Number(m.tick.pip_size||4),d=Number(Number(m.tick.quote).toFixed(p).slice(-1));
-     if(virtualPred){Object.entries(virtualPred).forEach(([k,p])=>{virtual[k].n++;if(p===d)virtual[k].m++;if(virtual[k].n%3===0){virtual[k].hn++;if(p===d)virtual[k].hm++}})}seq.push(d);if(seq.length>1200)seq.shift();calc();if(seq.length>=180)virtualPred=modelPicks(seq);onDigit(d)
-   }
- };
- ws.onclose=()=>{$('status').textContent='Feed desconectado';run=false};
- ws.onerror=()=>{$('status').textContent='Error de conexión al feed'}
-}
-$('go').onclick=()=>{pnl=0;stake=BASE;w=0;l=0;pending=null;lastMatch=null;wait=0;run=true;stats();log('SESIÓN CONTINUA INICIADA · base $0.50 · objetivo NETO +$5')};
-$('stop').onclick=()=>{run=false;pending=null;$('status').textContent='Sesión detenida manualmente';log('STOP MANUAL')};
-stats();connect();
-</script></body></html>+stake.toFixed(2);log('COMPRA SIMULADA · DIFFER '+q.digit+' · 
-}
-function connect(){
- const ws=new WebSocket('wss://api.derivws.com/trading/v1/options/ws/public');
- ws.onopen=()=>ws.send(JSON.stringify({ticks_history:'R_75',count:600,end:'latest',style:'ticks',req_id:1}));
- ws.onmessage=e=>{
-   const m=JSON.parse(e.data);
-   if(m.history&&m.history.prices){
-     const p=Number(m.pip_size||4);
-     seq=m.history.prices.map(x=>Number(Number(x).toFixed(p).slice(-1)));
-     calc();ws.send(JSON.stringify({ticks:'R_75',subscribe:1,req_id:2}));$('status').textContent='Ticks R_75 conectados · listo'
-   }else if(m.tick){
-     const ep=Number(m.tick.epoch);if(ep===lastEpoch)return;lastEpoch=ep;
-     const p=Number(m.tick.pip_size||4),d=Number(Number(m.tick.quote).toFixed(p).slice(-1));
-     if(virtualPred){Object.entries(virtualPred).forEach(([k,p])=>{virtual[k].n++;if(p===d)virtual[k].m++;if(virtual[k].n%3===0){virtual[k].hn++;if(p===d)virtual[k].hm++}})}seq.push(d);if(seq.length>1200)seq.shift();calc();if(seq.length>=180)virtualPred=modelPicks(seq);onDigit(d)
-   }
- };
- ws.onclose=()=>{$('status').textContent='Feed desconectado';run=false};
- ws.onerror=()=>{$('status').textContent='Error de conexión al feed'}
-}
-$('go').onclick=()=>{pnl=0;stake=BASE;w=0;l=0;pending=null;lastMatch=null;wait=0;run=true;stats();log('SESIÓN CONTINUA INICIADA · base $0.50 · objetivo NETO +$5')};
-$('stop').onclick=()=>{run=false;pending=null;$('status').textContent='Sesión detenida manualmente';log('STOP MANUAL')};
-stats();connect();
-</script></body></html>+stake.toFixed(2)+' · se liquida con el próximo tick · '+q.reason)
+ pending={barrier:q.digit,stake};
+ $('status').textContent='OPERACION ABIERTA - DIFFER '+q.digit+' - $'+stake.toFixed(2);
+ log('COMPRA SIMULADA - DIFFER '+q.digit+' - $'+stake.toFixed(2)+' - liquida en proximo tick - '+q.reason)
 }
 function connect(){
  const ws=new WebSocket('wss://api.derivws.com/trading/v1/options/ws/public');
