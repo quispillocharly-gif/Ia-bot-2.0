@@ -74,6 +74,7 @@ button:disabled{opacity:.55;cursor:not-allowed}.formgrid{display:grid;grid-templ
  <div class="controls">
   <div><div class="mini">STAKE DE REFERENCIA</div><input id="realStake" type="number" inputmode="decimal" min="0.35" step="0.01" value="1.00"></div>
   <div><div class="mini">AUTO-REAL OFF</div><button id="autoRealToggle">REAL MONITOR</button></div>
+  <div style="grid-column:1/-1"><button id="manualStop" style="border-color:#ff6b82;color:#ff9aaa">■ PARAR / STOP</button></div>
  </div>
  <div class="grid" style="margin-top:10px">
   <div><div class="mini">STAKE MÁXIMO REAL · TOPE DURO $6</div><input id="realMaxStake" type="number" inputmode="decimal" min="0.35" step="0.01" value="6.00" max="6.00"></div>
@@ -861,6 +862,13 @@ function startPublicDiffer(){
 $('autoDemoToggle').onclick=()=>setAutoDemo(!autoDemo);
 $('bridgeAutoDemo').onclick=()=>setAutoDemo(!autoDemo);
 $('autoRealToggle').onclick=()=>setAutoReal(!autoReal);
+$('manualStop').onclick=()=>{
+  autoReal=false;
+  dlReadyForNext=false;
+  syncAutoRealUI();
+  realMsg('STOP MANUAL · nuevas compras detenidas. El contrato ya abierto, si existe, se deja cerrar normalmente.');
+  trace('STOP MANUAL · AUTO-REAL OFF',true);
+};
 $('resetSession').onclick=()=>{
   sessionPnl=0;
   sessionWins=0;
