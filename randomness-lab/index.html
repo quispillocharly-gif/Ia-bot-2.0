@@ -4,15 +4,15 @@ body{margin:0;background:#07111c;color:#eaf5ff;font-family:system-ui;padding:16p
 <div class="c"><button id="go">INICIAR SESIÓN</button><button id="stop">PARAR</button><div id="status" class="m">Cargando ticks públicos…</div></div>
 <div class="c g"><div><span class="m">P&L neto</span><div id="pnl" class="n">$0.00</div></div><div><span class="m">Meta</span><div class="n">+$5.00</div></div><div><span class="m">Stake actual</span><div id="stake" class="n">$0.50</div></div><div><span class="m">Acierto</span><div id="rate" class="n">–</div></div></div>
 <div class="c"><div class="bar"><i id="progress"></i></div><p class="m">Cinco modelos compiten sobre validación reciente. Compra con el modelo que haya mostrado menor MATCH; WIN reinvierte sin límite fijo y MATCH vuelve a $0.50. Meta +$5 netos.</p></div>
-<div class="c g"><div><span class="m">WIN</span><div id="wins" class="n ok">0</div></div><div><span class="m">MATCH</span><div id="loss" class="n bad">0</div></div><div><span class="m">Operaciones</span><div id="trades" class="n">0</div></div><div><span class="m">Entropía</span><div id="entropy" class="n">–</div></div></div>
+<div class="c g"><div><span class="m">WIN</span><div id="wins" class="n ok">0</div></div><div><span class="m">MATCH</span><div id="loss" class="n bad">0</div></div><div><span class="m">Operaciones</span><div id="trades" class="n">0</div></div><div><span class="m">Sesiones +$5</span><div id="sessions" class="n ok">0</div></div><div><span class="m">Entropía</span><div id="entropy" class="n">–</div></div></div>
 <div class="c g"><div><span class="m">DECISIÓN</span><div id="decision" class="n">ESPERAR</div></div><div><span class="m">LECTURA</span><div id="reason" class="m">Analizando aleatoriedad…</div></div></div><div class="c"><div class="m">Distribución calculada</div><div id="digits" class="digits"></div></div>
 <div class="c"><b>REGISTRO</b><div id="log" class="log m">Esperando datos…</div></div></div>
 <script>
 const $=x=>document.getElementById(x);
 const BASE=.50,TARGET=5;
-let seq=[],run=false,pnl=0,stake=BASE,w=0,l=0,pending=null,lastEpoch=0,lastMatch=null,wait=0,perf=Array.from({length:10},()=>({w:1,l:1}));
+let seq=[],run=false,pnl=0,stake=BASE,w=0,l=0,pending=null,lastEpoch=0,lastMatch=null,wait=0,perf=Array.from({length:10},()=>({w:1,l:1})),sessions=0,modelMemory={};
 function log(s){$('log').textContent=s+'\\n'+$('log').textContent.slice(0,3500)}
-function stats(){const t=w+l;$('pnl').textContent=(pnl>=0?'+':'')+'$'+pnl.toFixed(2);$('stake').textContent='$'+stake.toFixed(2);$('wins').textContent=w;$('loss').textContent=l;$('trades').textContent=t;$('rate').textContent=t?(100*w/t).toFixed(2)+'%':'–';$('progress').style.width=Math.max(0,Math.min(100,pnl/TARGET*100))+'%'}
+function stats(){const t=w+l;$('sessions').textContent=sessions;$('pnl').textContent=(pnl>=0?'+':'')+'$'+pnl.toFixed(2);$('stake').textContent='$'+stake.toFixed(2);$('wins').textContent=w;$('loss').textContent=l;$('trades').textContent=t;$('rate').textContent=t?(100*w/t).toFixed(2)+'%':'–';$('progress').style.width=Math.max(0,Math.min(100,pnl/TARGET*100))+'%'}
 function calc(){
  if(seq.length<180)return null;
  const train=seq.slice(-180,-40),test=seq.slice(-40),now=seq[seq.length-1];
@@ -26,7 +26,7 @@ function calc(){
   {name:'TRANSICIÓN',pick:transPick},
   {name:'ANTI-RACHA',pick:antiRun}
  ];
- const scored=models.map(m=>{let hit=0,total=0,ctx=train.slice();for(const actual of test){const p=m.pick(ctx);if(p===actual)hit++;total++;ctx.push(actual)}return {...m,match:hit/Math.max(1,total)}});
+ const scored=models.map(m=>{let hit=0,total=0,ctx=train.slice();for(const actual of test){const p=m.pick(ctx);if(p===actual)hit++;total++;ctx.push(actual)}const mem=modelMemory[m.name]||{hit:0,total:0};const recent=hit/Math.max(1,total),learned=mem.hit/Math.max(1,mem.total);return {...m,match:mem.total>=20?recent*.75+learned*.25:recent,recent}});
  scored.sort((x,y)=>x.match-y.match);const champ=scored[0],runner=scored[1],digit=champ.pick(seq);
  const z=seq.slice(-200),c=Array(10).fill(0);z.forEach(d=>c[d]++);let H=0;c.forEach(x=>{if(x){const p=x/z.length;H-=p*Math.log(p)}});H/=Math.log(10);
  $('entropy').textContent=(H*100).toFixed(1)+'%';$('digits').innerHTML=c.map((x,d)=>'<div class="d">D'+d+'<br><b>'+(100*x/z.length).toFixed(1)+'%</b></div>').join('');
@@ -37,7 +37,7 @@ function calc(){
 }
 function settle(d){
  if(!pending)return;
- const won=d!==pending.barrier;
+ const won=d!==pending.barrier;if(pending.model){const mm=modelMemory[pending.model]||(modelMemory[pending.model]={hit:0,total:0});mm.total++;if(!won)mm.hit++;}
  if(won){
    lastMatch=null;
    const profit=pending.stake*.10;
@@ -49,14 +49,37 @@ function settle(d){
    log('MATCH · D'+pending.barrier+' · -$'+pending.stake.toFixed(2)+' · reinicio $0.50')
  }
  pending=null;stats();
- if(pnl>=TARGET){run=false;$('status').textContent='META ALCANZADA · sesión detenida';log('OBJETIVO +$5 ALCANZADO')}
+ if(pnl>=TARGET){sessions++;stats();run=false;$('status').textContent='META ALCANZADA · sesión detenida';log('OBJETIVO +$5 ALCANZADO')}
 }
 function onDigit(d){
  if(pending){settle(d);return}
  
  if(!run||seq.length<100)return;
  const q=calc();if(!q||!q.buy)return;
- pending={barrier:q.digit,stake};log('ESTRATEGIA · DIFFER '+q.digit+' · $'+stake.toFixed(2)+' · '+q.reason)
+ pending={barrier:q.digit,stake,model:(q.reason||'').split(' · ')[0]};log('ESTRATEGIA · DIFFER '+q.digit+' · 
+}
+function connect(){
+ const ws=new WebSocket('wss://api.derivws.com/trading/v1/options/ws/public');
+ ws.onopen=()=>ws.send(JSON.stringify({ticks_history:'R_75',count:300,end:'latest',style:'ticks',req_id:1}));
+ ws.onmessage=e=>{
+   const m=JSON.parse(e.data);
+   if(m.history&&m.history.prices){
+     const p=Number(m.pip_size||4);
+     seq=m.history.prices.map(x=>Number(Number(x).toFixed(p).slice(-1)));
+     calc();ws.send(JSON.stringify({ticks:'R_75',subscribe:1,req_id:2}));$('status').textContent='Ticks R_75 conectados · listo'
+   }else if(m.tick){
+     const ep=Number(m.tick.epoch);if(ep===lastEpoch)return;lastEpoch=ep;
+     const p=Number(m.tick.pip_size||4),d=Number(Number(m.tick.quote).toFixed(p).slice(-1));
+     seq.push(d);if(seq.length>600)seq.shift();calc();onDigit(d)
+   }
+ };
+ ws.onclose=()=>{$('status').textContent='Feed desconectado';run=false};
+ ws.onerror=()=>{$('status').textContent='Error de conexión al feed'}
+}
+$('go').onclick=()=>{pnl=0;stake=BASE;w=0;l=0;pending=null;lastMatch=null;wait=0;run=true;stats();log('SESIÓN CONTINUA INICIADA · base $0.50 · objetivo NETO +$5')};
+$('stop').onclick=()=>{run=false;pending=null;$('status').textContent='Sesión detenida manualmente';log('STOP MANUAL')};
+stats();connect();
+</script></body></html>+stake.toFixed(2)+' · '+q.reason)
 }
 function connect(){
  const ws=new WebSocket('wss://api.derivws.com/trading/v1/options/ws/public');
