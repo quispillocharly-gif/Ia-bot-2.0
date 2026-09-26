@@ -17,7 +17,6 @@ function analyze(){
  for(const z of wins){const c=Array(10).fill(0);z.forEach(d=>c[d]++);const n=z.length,sd=Math.sqrt(n*.1*.9);for(let d=0;d<10;d++){const zz=(c[d]-n*.1)/sd;if(zz<0){score[d]+=Math.min(3,-zz);ev[d].push('Z'+n+'='+zz.toFixed(2))}}}
  const recent=seq.slice(-160),last=recent[recent.length-1],tr=Array.from({length:10},()=>Array(10).fill(1));for(let i=1;i<recent.length;i++)tr[recent[i-1]][recent[i]]++;const ts=tr[last].reduce((a,x)=>a+x,0);for(let d=0;d<10;d++){const p=tr[last][d]/ts;if(p<.1){score[d]+=(.1-p)*20;ev[d].push('M1='+(p*100).toFixed(1)+'%')}}
  if(recent.length>2){const a=recent[recent.length-2],bb=recent[recent.length-1],cnt=Array(10).fill(1);let n=10;for(let i=2;i<recent.length;i++)if(recent[i-2]===a&&recent[i-1]===bb){cnt[recent[i]]++;n++}for(let d=0;d<10;d++){const p=cnt[d]/n;if(n>=20&&p<.1){score[d]+=(.1-p)*25;ev[d].push('M2='+(p*100).toFixed(1)+'%')}}}
- for(let d=0;d<10;d++){let dist=0;for(let i=seq.length-1;i>=0&&seq[i]!==d;i--)dist++;if(dist>=15)ev[d].push('gap='+dist)}
  const ranked=score.map((s,d)=>({d,s,ev:ev[d],j:Math.random()*.12})).sort((x,y)=>(y.s+y.j)-(x.s+x.j)),best=ranked[0],second=ranked[1],H=entropy10(seq.slice(-100));
  const confidence=Math.min(100,Math.round(best.s*12)),margin=best.s-second.s;
  return {digit:best.d,score:best.s,confidence,margin,H,ev:best.ev,ranked,trade:best.s>=2.6&&best.ev.length>=2&&margin>=.15}
@@ -32,9 +31,9 @@ function decide(){if(!running||pending)return;const q=analyze();if(!q){$('status
  const dur=1+Math.floor(Math.random()*2);
  choices[pick.d]++;lastBought=pick.d;pending={digit:pick.d,stake,duration:dur,left:dur};ops++;
  $('decision').textContent='D'+pick.d+' · '+dur+' TICK'+(dur>1?'S':'');
- $('evidence').textContent='NUEVA DECISIÓN · '+band.map(x=>'D'+x.d+' '+x.s.toFixed(2)).join(' · ');
+ $('evidence').textContent='MATEMÁTICA D'+pick.d+' · score '+pick.s.toFixed(2)+' · '+pick.ev.join(' · ')+' | candidatos: '+band.map(x=>'D'+x.d+'='+x.s.toFixed(2)).join(' · ');
  $('status').innerHTML='<b>COMPRA SIMULADA DIFFER '+pick.d+' · '+dur+'T</b>';
- log('NUEVA ENTRADA D'+pick.d+' · '+dur+'T · recalculada con ticks actuales');ui()}
+ log('ENTRADA MATEMÁTICA D'+pick.d+' · '+dur+'T · score '+pick.s.toFixed(2)+' · '+pick.ev.join(' | '));ui()}
 function tick(d){seq.push(d);if(seq.length>2500)seq.shift();if(pending)settle(d);if(running&&!pending)decide()}
 async function loadCloudLearning(){try{const r=await fetch('learned-state.json?t='+Date.now(),{cache:'no-store'});if(!r.ok)return;const s=await r.json();if(!s.updated_epoch)return;const rate=s.match_rate==null?'–':(s.match_rate*100).toFixed(2)+'%';log('APRENDIZAJE 24/7 · '+s.ticks_analyzed+' ticks · '+s.qualified_predictions+' señales · MATCH '+rate);$('evidence').textContent='24/7: '+s.ticks_analyzed+' ticks · '+s.qualified_predictions+' señales · MATCH '+rate+' · base 10%'}catch(e){log('Estado 24/7 aún no disponible')}}
 function connect(){clearTimeout(retry);ws=new WebSocket('wss://api.derivws.com/trading/v1/options/ws/public');ws.onopen=()=>{ws.send(JSON.stringify({ticks_history:'R_75',count:700,end:'latest',style:'ticks',req_id:1}));$('status').innerHTML='<b>Conectado · MATH LAB</b>'};ws.onmessage=e=>{const m=JSON.parse(e.data);if(m.history&&m.history.prices){const hp=Number((m.echo_req&&m.echo_req.pip_size)||m.pip_size||4);seq=m.history.prices.map(x=>Number(Number(x).toFixed(hp).slice(-1)));log('HISTORIAL NORMALIZADO · '+seq.length+' ticks · muestra '+seq.slice(-20).join(''));ws.send(JSON.stringify({ticks:'R_75',subscribe:1,req_id:2}));$('status').innerHTML='<b>Historial cargado · ticks EN VIVO activos</b>';decide()}if(m.tick){const ep=+m.tick.epoch;if(ep===lastEpoch)return;lastEpoch=ep;const p=Number(m.tick.pip_size||4);tick(Number(Number(m.tick.quote).toFixed(p).slice(-1)))}};ws.onclose=()=>{pending=null;$('status').innerHTML='<b>Reconectando...</b>';retry=setTimeout(connect,2500)};ws.onerror=()=>{try{ws.close()}catch(e){}}}
