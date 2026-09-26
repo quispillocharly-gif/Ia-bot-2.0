@@ -60,7 +60,7 @@ function settle(d){
    pnl-=pending.stake;stake=BASE;l++;perf[pending.barrier].l++;
    log('MATCH · D'+pending.barrier+' · -$'+pending.stake.toFixed(2)+' · reinicio $0.50')
  }
- pending=null;wait=0;stats();if(run)$('status').textContent='Ticks R_75 conectados · buscando siguiente entrada';
+ pending=null;wait=0;stats();
  if(pnl>=TARGET){sessions++;stats();run=false;$('status').textContent='META ALCANZADA · sesión detenida';log('OBJETIVO +$5 ALCANZADO')}
 }
 function onDigit(d){
