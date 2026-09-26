@@ -7,7 +7,7 @@
 <div class="c"><b>REGISTRO</b><div id="log" class="log">Esperando ticks...</div></div>
 </main><script>
 const $=id=>document.getElementById(id),BASE=1,TARGET=5;
-let seq=[],running=false,pending=null,pnl=0,stake=BASE,w=0,l=0,sessions=0,ops=0,lastEpoch=0,ws,retry,skips=0;
+let seq=[],running=false,pending=null,pnl=0,stake=BASE,w=0,l=0,sessions=0,ops=0,lastEpoch=0,ws,retry,skips=0,lastBought=null;
 const choices=Array(10).fill(0),outcomes=Array.from({length:10},()=>({m:0,n:0}));
 function log(x){$('log').textContent=x+'\n'+$('log').textContent.slice(0,5000)}
 function entropy10(z){const c=Array(10).fill(0);z.forEach(d=>c[d]++);let H=0;for(const n of c)if(n){const p=n/z.length;H-=p*Math.log2(p)}return H}
@@ -25,12 +25,12 @@ function analyze(){
 function ui(){ $('pnl').textContent=(pnl>=0?'+':'')+'$'+pnl.toFixed(2);$('stake').textContent='$'+stake.toFixed(2);$('win').textContent=w;$('match').textContent=l;$('sessions').textContent=sessions;$('ops').textContent=ops;$('bar').style.width=Math.max(0,Math.min(100,pnl/TARGET*100))+'%';$('digits').innerHTML=outcomes.map((s,d)=>'<div class="d">D'+d+'<b>'+(s.n?(100*s.m/s.n).toFixed(1):'–')+'%</b><small>'+s.n+' pruebas · '+choices[d]+' entradas</small></div>').join('')}
 function settle(d){if(!pending)return;pending.left--;if(pending.left>0){$('status').innerHTML='<b>OPERACIÓN ABIERTA · '+pending.left+' tick(s) restantes</b>';return}const p=pending,s=outcomes[p.digit];s.n++;if(d!==p.digit){const gain=p.stake*.10;pnl+=gain;stake=p.stake+gain;w++;log('WIN D'+p.digit+' +$'+gain.toFixed(2))}else{s.m++;pnl-=p.stake;stake=BASE;l++;log('MATCH D'+p.digit+' -$'+p.stake.toFixed(2))}pending=null;ui();if(pnl>=TARGET){sessions++;running=false;$('status').innerHTML='<b>META +$5 · DETENIDO</b>';log('SESIÓN +$5 COMPLETADA');ui()}}
 function decide(){if(!running||pending)return;const q=analyze();if(!q){$('status').innerHTML='<b>CALIBRANDO · '+seq.length+'/120 ticks</b>';return}
- const candidates=q.ranked.filter(x=>x.s>=2.6&&x.ev.length>=2);
+ const candidates=q.ranked.filter(x=>x.s>=2.6&&x.ev.length>=2&&x.d!==lastBought);
  if(!candidates.length){skips++;$('decision').textContent='SIN ENTRADA';$('status').innerHTML='<b>SIN ENTRADA · evidencia insuficiente</b>';return}
  const maxScore=candidates[0].s,band=candidates.filter(x=>x.s>=maxScore-.75);
  const pick=band[Math.floor(Math.random()*band.length)];
  const dur=1+Math.floor(Math.random()*2);
- choices[pick.d]++;pending={digit:pick.d,stake,duration:dur,left:dur};ops++;
+ choices[pick.d]++;lastBought=pick.d;pending={digit:pick.d,stake,duration:dur,left:dur};ops++;
  $('decision').textContent='D'+pick.d+' · '+dur+' TICK'+(dur>1?'S':'');
  $('evidence').textContent='NUEVA DECISIÓN · '+band.map(x=>'D'+x.d+' '+x.s.toFixed(2)).join(' · ');
  $('status').innerHTML='<b>COMPRA SIMULADA DIFFER '+pick.d+' · '+dur+'T</b>';
@@ -38,6 +38,6 @@ function decide(){if(!running||pending)return;const q=analyze();if(!q){$('status
 function tick(d){seq.push(d);if(seq.length>2500)seq.shift();if(pending)settle(d);if(running&&!pending)decide()}
 async function loadCloudLearning(){try{const r=await fetch('learned-state.json?t='+Date.now(),{cache:'no-store'});if(!r.ok)return;const s=await r.json();if(!s.updated_epoch)return;const rate=s.match_rate==null?'–':(s.match_rate*100).toFixed(2)+'%';log('APRENDIZAJE 24/7 · '+s.ticks_analyzed+' ticks · '+s.qualified_predictions+' señales · MATCH '+rate);$('evidence').textContent='24/7: '+s.ticks_analyzed+' ticks · '+s.qualified_predictions+' señales · MATCH '+rate+' · base 10%'}catch(e){log('Estado 24/7 aún no disponible')}}
 function connect(){clearTimeout(retry);ws=new WebSocket('wss://api.derivws.com/trading/v1/options/ws/public');ws.onopen=()=>{ws.send(JSON.stringify({ticks_history:'R_75',count:700,end:'latest',style:'ticks',req_id:1}));$('status').innerHTML='<b>Conectado · MATH LAB</b>'};ws.onmessage=e=>{const m=JSON.parse(e.data);if(m.history&&m.history.prices){const hp=Number((m.echo_req&&m.echo_req.pip_size)||m.pip_size||4);seq=m.history.prices.map(x=>Number(Number(x).toFixed(hp).slice(-1)));log('HISTORIAL NORMALIZADO · '+seq.length+' ticks · muestra '+seq.slice(-20).join(''));ws.send(JSON.stringify({ticks:'R_75',subscribe:1,req_id:2}));$('status').innerHTML='<b>Historial cargado · ticks EN VIVO activos</b>';decide()}if(m.tick){const ep=+m.tick.epoch;if(ep===lastEpoch)return;lastEpoch=ep;const p=Number(m.tick.pip_size||4);tick(Number(Number(m.tick.quote).toFixed(p).slice(-1)))}};ws.onclose=()=>{pending=null;$('status').innerHTML='<b>Reconectando...</b>';retry=setTimeout(connect,2500)};ws.onerror=()=>{try{ws.close()}catch(e){}}}
-$('go').onclick=()=>{pnl=0;stake=BASE;w=0;l=0;ops=0;skips=0;pending=null;running=true;choices.fill(0);outcomes.forEach(x=>{x.m=0;x.n=0});ui();log('MATH LAB INICIADO · meta +$5');decide()};
+$('go').onclick=()=>{pnl=0;stake=BASE;w=0;l=0;ops=0;skips=0;pending=null;lastBought=null;running=true;choices.fill(0);outcomes.forEach(x=>{x.m=0;x.n=0});ui();log('MATH LAB INICIADO · meta +$5');decide()};
 $('stop').onclick=()=>{running=false;pending=null;$('status').innerHTML='<b>STOP MANUAL</b>';log('STOP MANUAL')};ui();loadCloudLearning();connect();
 </script></body></html>
