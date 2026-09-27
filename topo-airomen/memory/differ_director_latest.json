@@ -1,6 +1,6 @@
 {
   "version": "2.0-differ-director",
-  "timestamp": 1790537450,
+  "timestamp": 1790538403,
   "decision": "COLLECT_V2_FORWARD_DATA",
   "baseline_random": 0.9,
   "payout_status": "OK",
@@ -25,17 +25,36 @@
   },
   "v2_leader": {
     "id": "vote2_margin005",
-    "signals": 548,
-    "wins": 492,
-    "losses": 56,
-    "hit_rate": 0.8978102189781022,
-    "wilson_lower": 0.8696173129053356,
-    "raw_economic_p": 0.9561283815892408,
+    "signals": 613,
+    "wins": 550,
+    "losses": 63,
+    "hit_rate": 0.8972267536704731,
+    "wilson_lower": 0.8706614700318297,
+    "raw_economic_p": 0.9674379846636694,
     "bonferroni_p": 1.0,
-    "shadow_pnl": -11.720000000000063,
-    "shadow_roi": -0.021386861313868726,
+    "shadow_pnl": -13.500000000000071,
+    "shadow_roi": -0.022022838499184454,
     "max_drawdown_flat_stake": 17.30000000000004,
-    "temporal_blocks": [],
+    "temporal_blocks": [
+      {
+        "n": 205,
+        "wins": 177,
+        "hit_rate": 0.8634146341463415,
+        "wilson_lower": 0.8096767035249357
+      },
+      {
+        "n": 204,
+        "wins": 185,
+        "hit_rate": 0.9068627450980392,
+        "wilson_lower": 0.8591218970661684
+      },
+      {
+        "n": 204,
+        "wins": 188,
+        "hit_rate": 0.9215686274509803,
+        "wilson_lower": 0.8764043776139727
+      }
+    ],
     "block_stable": false,
     "prospective_sessions": {
       "target": 20.0,
@@ -46,9 +65,9 @@
       "targets": 0,
       "stops": 8,
       "target_rate": 0.0,
-      "open_pnl": 13.72498376452746,
-      "open_stake": 5.0,
-      "open_trades": 114
+      "open_pnl": 5.20526897426994,
+      "open_stake": 1.5386239549000005,
+      "open_trades": 179
     },
     "status": "COLLECTING"
   },
@@ -59,7 +78,7 @@
   "ensemble_id": "b603ecb16a47ecef",
   "live_policy": {
     "version": "2.0-live-policy",
-    "timestamp": 1790537450,
+    "timestamp": 1790538403,
     "source": "v1",
     "rule": "cold_consensus",
     "candidate_id": "0e6b8250dd84d516",
