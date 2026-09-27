@@ -1,10 +1,10 @@
 {
   "version": "7.0-adaptive-shadow-lab",
-  "timestamp": 1790523758,
+  "timestamp": 1790524715,
   "model_id": "4d99ca520bf96c63",
   "search_version": null,
-  "runs": 207,
-  "new_ticks_this_run": 572,
+  "runs": 208,
+  "new_ticks_this_run": 480,
   "window": 10,
   "hidden": [
     32
@@ -12,10 +12,10 @@
   "confidence_threshold": 0.0,
   "current_regime": "UNIFORM",
   "regime_features": {
-    "entropy": 0.989028523855997,
-    "repeat_rate": 0.11055276381909548,
-    "max_share": 0.13,
-    "transition_peak": 0.16263127116673606
+    "entropy": 0.9926082422352284,
+    "repeat_rate": 0.11557788944723618,
+    "max_share": 0.12,
+    "transition_peak": 0.1665271890448679
   },
   "regime_performance": [
     {
@@ -29,12 +29,12 @@
     },
     {
       "regime": "UNIFORM",
-      "opportunities": 77958,
-      "signals": 6251,
-      "wins": 606,
-      "hit_rate": 0.09694448888177891,
-      "wilson_lower": 0.08985511327378516,
-      "shadow_pnl": -839.42000000002
+      "opportunities": 78438,
+      "signals": 6289,
+      "wins": 608,
+      "hit_rate": 0.09667673716012085,
+      "wilson_lower": 0.08961725097530975,
+      "shadow_pnl": -859.5600000000201
     },
     {
       "regime": "REPEAT_HEAVY",
@@ -55,22 +55,22 @@
       "shadow_pnl": -145.9199999999993
     }
   ],
-  "opportunities": 124768,
-  "predictions": 16555,
-  "wins": 1669,
-  "losses": 14886,
-  "hit_rate": 0.10081546360616128,
-  "wilson_lower": 0.09632119061125928,
-  "coverage": 0.1326862657091562,
+  "opportunities": 125248,
+  "predictions": 16593,
+  "wins": 1671,
+  "losses": 14922,
+  "hit_rate": 0.10070511661544025,
+  "wilson_lower": 0.09621813901442253,
+  "coverage": 0.13248115738375063,
   "skipped_confidence": 0,
-  "skipped_agreement": 108213,
-  "mean_confidence": 0.17698157154084404,
-  "mean_expert_agreement": 2.747568710359408,
+  "skipped_agreement": 108655,
+  "mean_confidence": 0.17696900159894668,
+  "mean_expert_agreement": 2.7483878744048695,
   "calibration": {
-    "ece": 0.07710983545092326,
-    "brier_binary": 0.09681819466895038,
-    "brier_multiclass": 0.09217707646820945,
-    "brier_multiclass_samples": 114005,
+    "ece": 0.0771005171798831,
+    "brier_binary": 0.09682553278547482,
+    "brier_multiclass": 0.0921758711792269,
+    "brier_multiclass_samples": 114485,
     "bins": [
       {
         "bin": "0.00-0.12",
@@ -81,59 +81,59 @@
       },
       {
         "bin": "0.12-0.14",
-        "n": 12886,
-        "wins": 1218,
-        "hit_rate": 0.09452118578302034,
-        "avg_confidence": 0.13319631414951957
+        "n": 12940,
+        "wins": 1226,
+        "hit_rate": 0.09474497681607419,
+        "avg_confidence": 0.13319837112135183
       },
       {
         "bin": "0.14-0.16",
-        "n": 32536,
-        "wins": 3262,
-        "hit_rate": 0.10025817555938038,
-        "avg_confidence": 0.15052206015829406
+        "n": 32659,
+        "wins": 3270,
+        "hit_rate": 0.10012553966747298,
+        "avg_confidence": 0.1505200748777188
       },
       {
         "bin": "0.16-0.18",
-        "n": 31877,
-        "wins": 3213,
-        "hit_rate": 0.10079367569093704,
-        "avg_confidence": 0.16952288189212408
+        "n": 31995,
+        "wins": 3226,
+        "hit_rate": 0.10082825441475231,
+        "avg_confidence": 0.1695225575101955
       },
       {
         "bin": "0.18-0.22",
-        "n": 33390,
-        "wins": 3297,
-        "hit_rate": 0.09874213836477988,
-        "avg_confidence": 0.19637716899922453
+        "n": 33518,
+        "wins": 3311,
+        "hit_rate": 0.09878274360045348,
+        "avg_confidence": 0.1963719243106043
       },
       {
         "bin": "0.22-1.01",
-        "n": 13761,
-        "wins": 1415,
-        "hit_rate": 0.10282682944553448,
-        "avg_confidence": 0.2500424004165891
+        "n": 13818,
+        "wins": 1421,
+        "hit_rate": 0.10283687943262411,
+        "avg_confidence": 0.2500402877706577
       }
     ],
-    "samples": 124768
+    "samples": 125248
   },
   "placebo": {
-    "random_10pct_p": 0.0388,
-    "economic_break_even_p": 0.4752,
+    "random_10pct_p": 0.0716,
+    "economic_break_even_p": 0.6158,
     "bootstrap_95_rate": [
-      0.099,
-      0.127
+      0.0964875,
+      0.1235
     ],
     "recent_samples": 2000
   },
   "economic": {
     "break_even_rate": 0.11198208286674133,
-    "shadow_pnl": -1650.8299999999576,
-    "shadow_staked": 16555.0,
-    "shadow_roi": -0.0997179099969772,
-    "ev_per_signal": -0.0997179099969772,
+    "shadow_pnl": -1670.9699999999575,
+    "shadow_staked": 16593.0,
+    "shadow_roi": -0.10070330862411604,
+    "ev_per_signal": -0.10070330862411604,
     "payout_snapshot_available": true,
-    "payout_snapshot_age_seconds": 512,
+    "payout_snapshot_age_seconds": 1470,
     "payout_snapshot_fresh": true,
     "payout_max_age_seconds": 7200
   },
