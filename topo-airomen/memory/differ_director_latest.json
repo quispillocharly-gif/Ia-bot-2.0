@@ -1,6 +1,6 @@
 {
   "version": "2.0-differ-director",
-  "timestamp": 1790632284,
+  "timestamp": 1790633522,
   "decision": "COLLECT_V2_FORWARD_DATA",
   "baseline_random": 0.9,
   "payout_status": "OK",
@@ -25,30 +25,49 @@
   },
   "v2_leader": {
     "id": "vote2_margin005",
-    "signals": 573,
-    "wins": 522,
-    "losses": 51,
-    "hit_rate": 0.9109947643979057,
-    "wilson_lower": 0.8848592945560115,
-    "raw_economic_p": 0.7415940178673244,
+    "signals": 666,
+    "wins": 607,
+    "losses": 59,
+    "hit_rate": 0.9114114114114115,
+    "wilson_lower": 0.8874042563668904,
+    "raw_economic_p": 0.7410318352514913,
     "bonferroni_p": 1.0,
-    "shadow_pnl": -4.02000000000004,
-    "shadow_roi": -0.007015706806282793,
+    "shadow_pnl": -4.3700000000000525,
+    "shadow_roi": -0.0065615615615616405,
     "max_drawdown_flat_stake": 9.970000000000018,
-    "temporal_blocks": [],
+    "temporal_blocks": [
+      {
+        "n": 222,
+        "wins": 199,
+        "hit_rate": 0.8963963963963963,
+        "wilson_lower": 0.8493399143437157
+      },
+      {
+        "n": 222,
+        "wins": 207,
+        "hit_rate": 0.9324324324324325,
+        "wilson_lower": 0.8915239890826486
+      },
+      {
+        "n": 222,
+        "wins": 201,
+        "hit_rate": 0.9054054054054054,
+        "wilson_lower": 0.8597226190694646
+      }
+    ],
     "block_stable": false,
     "prospective_sessions": {
       "target": 20.0,
       "stop_loss": 5.0,
       "base_stake": 1.0,
       "max_stake": 5.0,
-      "completed": 6,
+      "completed": 8,
       "targets": 1,
-      "stops": 5,
-      "target_rate": 0.16666666666666666,
-      "open_pnl": -3.549313815722924,
-      "open_stake": 2.367363674592119,
-      "open_trades": 80
+      "stops": 7,
+      "target_rate": 0.125,
+      "open_pnl": 1.34172702723626,
+      "open_stake": 3.341727027236261,
+      "open_trades": 26
     },
     "status": "COLLECTING"
   },
@@ -59,7 +78,7 @@
   "ensemble_id": "c0cf151e33c8e505",
   "live_policy": {
     "version": "2.0-live-policy",
-    "timestamp": 1790632284,
+    "timestamp": 1790633522,
     "source": "v1",
     "rule": "cold_consensus",
     "candidate_id": "0e6b8250dd84d516",
