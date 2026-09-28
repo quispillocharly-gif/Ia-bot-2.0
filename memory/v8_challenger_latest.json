@@ -1,84 +1,120 @@
 {
   "version": "8.0-prospective-challenger-lab",
-  "timestamp": 1790588825,
-  "runs": 245,
+  "timestamp": 1790589678,
+  "runs": 246,
   "model_id": "4d99ca520bf96c63",
   "start_epoch": 1790295988,
-  "new_ticks_this_run": 525,
-  "opportunities": 146416,
+  "new_ticks_this_run": 426,
+  "opportunities": 146842,
   "tests": 6,
   "data_quality": {
-    "forward_ticks": 146416,
+    "forward_ticks": 146842,
     "digit_counts": [
-      14577,
-      14537,
-      14722,
-      14769,
-      14545,
-      14655,
-      14681,
-      14465,
-      14691,
-      14774
+      14619,
+      14580,
+      14763,
+      14809,
+      14595,
+      14687,
+      14721,
+      14506,
+      14736,
+      14826
     ],
-    "uniformity_chi_square_p": 0.6546127657583645,
-    "max_digit_share_deviation": 0.0012061523330783586
+    "uniformity_chi_square_p": 0.6515227706307353,
+    "max_digit_share_deviation": 0.0012135492570245626
   },
   "break_even_rate": 0.11198208286674133,
   "payout_fresh": true,
-  "payout_age_seconds": 547,
+  "payout_age_seconds": 1401,
   "confirmed_variants": [],
   "status": "RESEARCHING",
   "leader": {
-    "id": "agree4_all",
-    "min_agree": 4,
-    "min_conf": 0.0,
+    "id": "conf14_agree3",
+    "min_agree": 3,
+    "min_conf": 0.14,
     "regimes": null,
-    "signals": 2326,
-    "wins": 246,
-    "hit_rate": 0.1057609630266552,
-    "wilson_lower": 0.09390640533572393,
-    "raw_economic_p": 0.8374831707935387,
+    "signals": 10395,
+    "wins": 1034,
+    "hit_rate": 0.09947089947089947,
+    "wilson_lower": 0.09386441144368503,
+    "raw_economic_p": 0.9999815663706864,
     "bonferroni_p": 1.0,
-    "shadow_pnl": -129.21999999999926,
-    "shadow_roi": -0.05555460017196873,
+    "shadow_pnl": -1161.379999999985,
+    "shadow_roi": -0.1117248677248663,
     "temporal_blocks": [
       {
-        "n": 776,
-        "wins": 86,
-        "hit_rate": 0.11082474226804123,
-        "wilson_lower": 0.09062606105886649
+        "n": 1000,
+        "wins": 114,
+        "hit_rate": 0.114,
+        "wilson_lower": 0.09576134825357561
       },
       {
-        "n": 775,
-        "wins": 75,
-        "hit_rate": 0.0967741935483871,
-        "wilson_lower": 0.07790412465107312
+        "n": 1000,
+        "wins": 102,
+        "hit_rate": 0.102,
+        "wilson_lower": 0.08473884484006548
       },
       {
-        "n": 775,
-        "wins": 85,
-        "hit_rate": 0.10967741935483871,
-        "wilson_lower": 0.08957195700118897
+        "n": 1000,
+        "wins": 117,
+        "hit_rate": 0.117,
+        "wilson_lower": 0.0985280743489338
       }
     ],
-    "block_stable": false,
+    "block_stable": true,
     "status": "NOT_CONFIRMED"
   },
   "variants": [
+    {
+      "id": "conf14_agree3",
+      "min_agree": 3,
+      "min_conf": 0.14,
+      "regimes": null,
+      "signals": 10395,
+      "wins": 1034,
+      "hit_rate": 0.09947089947089947,
+      "wilson_lower": 0.09386441144368503,
+      "raw_economic_p": 0.9999815663706864,
+      "bonferroni_p": 1.0,
+      "shadow_pnl": -1161.379999999985,
+      "shadow_roi": -0.1117248677248663,
+      "temporal_blocks": [
+        {
+          "n": 1000,
+          "wins": 114,
+          "hit_rate": 0.114,
+          "wilson_lower": 0.09576134825357561
+        },
+        {
+          "n": 1000,
+          "wins": 102,
+          "hit_rate": 0.102,
+          "wilson_lower": 0.08473884484006548
+        },
+        {
+          "n": 1000,
+          "wins": 117,
+          "hit_rate": 0.117,
+          "wilson_lower": 0.0985280743489338
+        }
+      ],
+      "block_stable": true,
+      "status": "NOT_CONFIRMED"
+    },
     {
       "id": "agree4_all",
       "min_agree": 4,
       "min_conf": 0.0,
       "regimes": null,
-      "signals": 2326,
+      "signals": 2328,
       "wins": 246,
-      "hit_rate": 0.1057609630266552,
-      "wilson_lower": 0.09390640533572393,
-      "raw_economic_p": 0.8374831707935387,
+      "hit_rate": 0.1056701030927835,
+      "wilson_lower": 0.09382523068828424,
+      "raw_economic_p": 0.8410329619067862,
       "bonferroni_p": 1.0,
-      "shadow_pnl": -129.21999999999926,
-      "shadow_roi": -0.05555460017196873,
+      "shadow_pnl": -131.21999999999926,
+      "shadow_roi": -0.05636597938144298,
       "temporal_blocks": [
         {
           "n": 776,
@@ -87,55 +123,19 @@
           "wilson_lower": 0.09062606105886649
         },
         {
-          "n": 775,
+          "n": 776,
           "wins": 75,
-          "hit_rate": 0.0967741935483871,
-          "wilson_lower": 0.07790412465107312
+          "hit_rate": 0.09664948453608248,
+          "wilson_lower": 0.0778028092747465
         },
         {
-          "n": 775,
+          "n": 776,
           "wins": 85,
-          "hit_rate": 0.10967741935483871,
-          "wilson_lower": 0.08957195700118897
+          "hit_rate": 0.1095360824742268,
+          "wilson_lower": 0.08945537336413761
         }
       ],
       "block_stable": false,
-      "status": "NOT_CONFIRMED"
-    },
-    {
-      "id": "conf14_agree3",
-      "min_agree": 3,
-      "min_conf": 0.14,
-      "regimes": null,
-      "signals": 10376,
-      "wins": 1031,
-      "hit_rate": 0.0993639167309175,
-      "wilson_lower": 0.09375522478378563,
-      "raw_economic_p": 0.9999839697766437,
-      "bonferroni_p": 1.0,
-      "shadow_pnl": -1169.1699999999853,
-      "shadow_roi": -0.11268022359290529,
-      "temporal_blocks": [
-        {
-          "n": 1000,
-          "wins": 114,
-          "hit_rate": 0.114,
-          "wilson_lower": 0.09576134825357561
-        },
-        {
-          "n": 1000,
-          "wins": 105,
-          "hit_rate": 0.105,
-          "wilson_lower": 0.08748748752043772
-        },
-        {
-          "n": 1000,
-          "wins": 114,
-          "hit_rate": 0.114,
-          "wilson_lower": 0.09576134825357561
-        }
-      ],
-      "block_stable": true,
       "status": "NOT_CONFIRMED"
     },
     {
@@ -143,32 +143,32 @@
       "min_agree": 3,
       "min_conf": 0.0,
       "regimes": null,
-      "signals": 11641,
-      "wins": 1151,
-      "hit_rate": 0.09887466712481746,
-      "wilson_lower": 0.09358382091902857,
-      "raw_economic_p": 0.9999976370602214,
+      "signals": 11664,
+      "wins": 1154,
+      "hit_rate": 0.09893689986282579,
+      "wilson_lower": 0.09364960708842275,
+      "raw_economic_p": 0.9999974300820625,
       "bonferroni_p": 1.0,
-      "shadow_pnl": -1362.5699999999715,
-      "shadow_roi": -0.11704922257537767,
+      "shadow_pnl": -1358.7799999999713,
+      "shadow_roi": -0.11649348422496325,
       "temporal_blocks": [
         {
           "n": 1000,
-          "wins": 113,
-          "hit_rate": 0.113,
-          "wilson_lower": 0.09484005096521629
+          "wins": 112,
+          "hit_rate": 0.112,
+          "wilson_lower": 0.09391923505867933
         },
         {
           "n": 1000,
-          "wins": 107,
-          "hit_rate": 0.107,
-          "wilson_lower": 0.08932257609530182
+          "wins": 111,
+          "hit_rate": 0.111,
+          "wilson_lower": 0.09299890611775587
         },
         {
           "n": 1000,
-          "wins": 117,
-          "hit_rate": 0.117,
-          "wilson_lower": 0.0985280743489338
+          "wins": 114,
+          "hit_rate": 0.114,
+          "wilson_lower": 0.09576134825357561
         }
       ],
       "block_stable": true,
@@ -182,14 +182,14 @@
         "UNIFORM",
         "CONCENTRATED"
       ],
-      "signals": 7052,
-      "wins": 705,
-      "hit_rate": 0.09997163925127624,
-      "wilson_lower": 0.09318685336163804,
-      "raw_economic_p": 0.9994533414316197,
+      "signals": 7070,
+      "wins": 707,
+      "hit_rate": 0.1,
+      "wilson_lower": 0.0932226877201457,
+      "raw_economic_p": 0.9994461768234638,
       "bonferroni_p": 1.0,
-      "shadow_pnl": -756.3500000000278,
-      "shadow_roi": -0.10725326148610717,
+      "shadow_pnl": -756.4900000000279,
+      "shadow_roi": -0.10700000000000394,
       "temporal_blocks": [
         {
           "n": 1000,
@@ -199,18 +199,18 @@
         },
         {
           "n": 1000,
-          "wins": 117,
-          "hit_rate": 0.117,
-          "wilson_lower": 0.0985280743489338
+          "wins": 119,
+          "hit_rate": 0.119,
+          "wilson_lower": 0.10037486818688018
         },
         {
           "n": 1000,
-          "wins": 112,
-          "hit_rate": 0.112,
-          "wilson_lower": 0.09391923505867933
+          "wins": 110,
+          "hit_rate": 0.11,
+          "wilson_lower": 0.0920790698498625
         }
       ],
-      "block_stable": true,
+      "block_stable": false,
       "status": "NOT_CONFIRMED"
     },
     {
@@ -218,20 +218,20 @@
       "min_agree": 2,
       "min_conf": 0.22,
       "regimes": null,
-      "signals": 3586,
-      "wins": 354,
-      "hit_rate": 0.09871723368655884,
-      "wilson_lower": 0.08937955919792458,
-      "raw_economic_p": 0.9951347992865004,
+      "signals": 3591,
+      "wins": 355,
+      "hit_rate": 0.09885825675299359,
+      "wilson_lower": 0.08952045589284682,
+      "raw_economic_p": 0.9947548343602463,
       "bonferroni_p": 1.0,
-      "shadow_pnl": -424.7799999999979,
-      "shadow_roi": -0.11845510317902898,
+      "shadow_pnl": -420.8499999999979,
+      "shadow_roi": -0.11719576719576662,
       "temporal_blocks": [
         {
           "n": 1000,
-          "wins": 88,
-          "hit_rate": 0.088,
-          "wilson_lower": 0.07198073098543067
+          "wins": 87,
+          "hit_rate": 0.087,
+          "wilson_lower": 0.07107415624980785
         },
         {
           "n": 1000,
@@ -241,9 +241,9 @@
         },
         {
           "n": 1000,
-          "wins": 114,
-          "hit_rate": 0.114,
-          "wilson_lower": 0.09576134825357561
+          "wins": 115,
+          "hit_rate": 0.115,
+          "wilson_lower": 0.09668312145987148
         }
       ],
       "block_stable": false,
@@ -254,14 +254,14 @@
       "min_agree": 3,
       "min_conf": 0.18,
       "regimes": null,
-      "signals": 4387,
+      "signals": 4391,
       "wins": 414,
-      "hit_rate": 0.09436972874401642,
-      "wilson_lower": 0.08607016986021096,
-      "raw_economic_p": 0.9999302726639995,
+      "hit_rate": 0.0942837622409474,
+      "wilson_lower": 0.08599142308368324,
+      "raw_economic_p": 0.9999358890869227,
       "bonferroni_p": 1.0,
-      "shadow_pnl": -689.9800000000104,
-      "shadow_roi": -0.1572783223159358,
+      "shadow_pnl": -693.9800000000104,
+      "shadow_roi": -0.15804600318834214,
       "temporal_blocks": [
         {
           "n": 1000,
