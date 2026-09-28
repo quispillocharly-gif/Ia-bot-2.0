@@ -1,6 +1,6 @@
 {
   "version": "2.0-differ-director",
-  "timestamp": 1790573694,
+  "timestamp": 1790574668,
   "decision": "COLLECT_V2_FORWARD_DATA",
   "baseline_random": 0.9,
   "payout_status": "OK",
@@ -25,17 +25,36 @@
   },
   "v2_leader": {
     "id": "vote2_margin005",
-    "signals": 589,
-    "wins": 530,
-    "losses": 59,
-    "hit_rate": 0.8998302207130731,
-    "wilson_lower": 0.8729331456215549,
-    "raw_economic_p": 0.9448080581467933,
+    "signals": 681,
+    "wins": 614,
+    "losses": 67,
+    "hit_rate": 0.9016152716593245,
+    "wilson_lower": 0.8769422401983353,
+    "raw_economic_p": 0.9386916737488626,
     "bonferroni_p": 1.0,
-    "shadow_pnl": -11.300000000000033,
-    "shadow_roi": -0.01918505942275048,
-    "max_drawdown_flat_stake": 14.740000000000025,
-    "temporal_blocks": [],
+    "shadow_pnl": -11.740000000000045,
+    "shadow_roi": -0.017239353891336337,
+    "max_drawdown_flat_stake": 14.820000000000038,
+    "temporal_blocks": [
+      {
+        "n": 227,
+        "wins": 209,
+        "hit_rate": 0.920704845814978,
+        "wilson_lower": 0.8781510101644312
+      },
+      {
+        "n": 227,
+        "wins": 201,
+        "hit_rate": 0.8854625550660793,
+        "wilson_lower": 0.837467407511767
+      },
+      {
+        "n": 227,
+        "wins": 204,
+        "hit_rate": 0.8986784140969163,
+        "wilson_lower": 0.8525552532527456
+      }
+    ],
     "block_stable": false,
     "prospective_sessions": {
       "target": 20.0,
@@ -46,9 +65,9 @@
       "targets": 0,
       "stops": 8,
       "target_rate": 0.0,
-      "open_pnl": 5.683322509684958,
+      "open_pnl": 1.1166450193699133,
       "open_stake": 5.0,
-      "open_trades": 67
+      "open_trades": 159
     },
     "status": "COLLECTING"
   },
@@ -59,7 +78,7 @@
   "ensemble_id": "cfd5006a0e980fb9",
   "live_policy": {
     "version": "2.0-live-policy",
-    "timestamp": 1790573694,
+    "timestamp": 1790574668,
     "source": "v1",
     "rule": "cold_consensus",
     "candidate_id": "0e6b8250dd84d516",
