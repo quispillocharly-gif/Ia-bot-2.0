@@ -10,22 +10,102 @@ function log(s){$('log').textContent=s+'\n'+$('log').textContent}
 function ent(a){let c=Array(10).fill(0);a.forEach(x=>c[x]++);let h=0;c.forEach(v=>{if(v){let p=v/a.length;h-=p*Math.log2(p)}});return h}
 function analyse(){
  if(hist.length<180)return null;
- let last=hist[hist.length-1],w12=hist.slice(-12),w36=hist.slice(-36),w120=hist.slice(-120),f12=Array(10).fill(0),f36=Array(10).fill(0),f120=Array(10).fill(0),tr=Array(10).fill(0);
- w12.forEach(x=>f12[x]++);w36.forEach(x=>f36[x]++);w120.forEach(x=>f120[x]++);
- for(let i=Math.max(1,hist.length-300);i<hist.length;i++)if(hist[i-1]===last)tr[hist[i]]++;
- let tt=tr.reduce((a,b)=>a+b,0),H=ent(w36),rows=[];
- for(let d=0;d<10;d++){
-  let gap=0;for(let i=hist.length-1;i>=0&&gap<50;i--){if(hist[i]===d)break;gap++}
-  let streak=0;for(let i=hist.length-1;i>=0&&hist[i]===d;i--)streak++;
-  let p12=f12[d]/12,p36=f36[d]/36,p120=f120[d]/120,pt=tt?tr[d]/tt:.1;
-  let hot=Math.max(0,p12-.10)*1.7+Math.max(0,p36-.10)*.75,transition=Math.max(0,pt-.10)*1.35,recency=gap===0?.11:gap===1?.06:gap===2?.03:0,repeat=streak*.075;
-  let risk=.40*p12+.23*p36+.17*p120+.20*pt+hot+transition+recency+repeat;
-  rows.push({d,risk,p12,p36,pt,gap});
+
+ // QUANTUM ANALYSIS V2:
+ // combina frecuencia multi-ventana, frecuencia con decaimiento temporal,
+ // transiciones de orden 1 y 2, tendencia reciente, recencia y repetición.
+ let last=hist[hist.length-1],prev=hist[hist.length-2],
+     w12=hist.slice(-12),w36=hist.slice(-36),w120=hist.slice(-120),
+     f12=Array(10).fill(0),f36=Array(10).fill(0),f120=Array(10).fill(0),
+     tr1=Array(10).fill(0),tr2=Array(10).fill(0);
+
+ w12.forEach(x=>f12[x]++);
+ w36.forEach(x=>f36[x]++);
+ w120.forEach(x=>f120[x]++);
+
+ // Markov orden 1: qué suele venir después del último dígito.
+ for(let i=Math.max(1,hist.length-360);i<hist.length;i++){
+  if(hist[i-1]===last)tr1[hist[i]]++;
  }
+
+ // Markov orden 2: qué suele venir después del par [anterior, último].
+ for(let i=Math.max(2,hist.length-600);i<hist.length;i++){
+  if(hist[i-2]===prev&&hist[i-1]===last)tr2[hist[i]]++;
+ }
+
+ let t1=tr1.reduce((a,b)=>a+b,0),t2=tr2.reduce((a,b)=>a+b,0),
+     H=ent(w36),rows=[];
+
+ // Probabilidad ponderada: los ticks recientes pesan más que los antiguos.
+ function decayProb(d){
+  let start=Math.max(0,hist.length-64),num=0,den=0,w=1;
+  for(let i=hist.length-1;i>=start;i--){
+   if(hist[i]===d)num+=w;
+   den+=w;
+   w*=.94;
+  }
+  return den?num/den:.10;
+ }
+
+ for(let d=0;d<10;d++){
+  let gap=0;
+  for(let i=hist.length-1;i>=0&&gap<50;i--){if(hist[i]===d)break;gap++}
+
+  let streak=0;
+  for(let i=hist.length-1;i>=0&&hist[i]===d;i--)streak++;
+
+  let p12=f12[d]/12,p36=f36[d]/36,p120=f120[d]/120,pe=decayProb(d);
+
+  // Suavizado: si hay pocas transiciones, acercamos el cálculo al 10% base
+  // para no sobrevalorar coincidencias casuales con muestras pequeñas.
+  let raw1=t1?tr1[d]/t1:.10,rel1=t1/(t1+12),pt1=rel1*raw1+(1-rel1)*.10;
+  let raw2=t2?tr2[d]/t2:.10,rel2=t2/(t2+8),pt2=rel2*raw2+(1-rel2)*.10;
+  let pt=.72*pt1+.28*pt2;
+
+  // Evita que una ventana de 12 ticks con cero apariciones domine demasiado.
+  let short=.82*p12+.18*p36;
+  let mid=.90*p36+.10*p120;
+
+  // Penalizaciones solo cuando el dígito está acelerando o concentrándose.
+  let rise=Math.max(0,p12-p36)*.32+Math.max(0,p36-p120)*.10;
+  let hot=Math.max(0,p12-.10)*.82+
+          Math.max(0,p36-.10)*.32+
+          Math.max(0,pe-.10)*.38;
+  let transition=Math.max(0,pt-.10)*.62;
+
+  // Recencia continua: castiga sobre todo 0-3 ticks, sin premiar ausencias largas.
+  let recency=gap===0?.065:gap===1?.038:gap===2?.018:gap===3?.008:0;
+  let repeat=Math.min(streak,3)*.030;
+
+  // Núcleo de riesgo: conserva una escala similar a la versión anterior.
+  let risk=.32*short+
+           .18*mid+
+           .12*p120+
+           .16*pt+
+           .22*pe+
+           hot+transition+rise+recency+repeat;
+
+  rows.push({d,risk,p12,p36,p120,pt,pe,gap});
+ }
+
  rows.sort((a,b)=>a.risk-b.risk);
- let pool=rows.filter(x=>x.d!==lastPick),q=pool[0],second=pool[1];if(!q||!second)return null;
- let spread=second.risk-q.risk,near=pnl>=target()*.75,need=near?.05:.03,maxRisk=near?.085:.105;
- let safe=q.risk<maxRisk&&spread>=need&&q.p12<=.10&&q.pt<=.13;
+ let pool=rows.filter(x=>x.d!==lastPick),q=pool[0],second=pool[1];
+ if(!q||!second)return null;
+
+ let spread=second.risk-q.risk,
+     near=pnl>=target()*.75,
+     need=near?.05:.03,
+     maxRisk=near?.085:.105;
+
+ // Seguridad interna: exige acuerdo razonable entre corto plazo,
+ // transición y frecuencia ponderada.
+ let safe=q.risk<maxRisk&&
+          spread>=need&&
+          q.p12<=.10&&
+          q.p36<=.12&&
+          q.pt<=.13&&
+          q.pe<=.12;
+
  return{q,spread,H,near,safe};
 }
 function showSignal(s){
