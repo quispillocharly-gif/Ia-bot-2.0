@@ -9,175 +9,122 @@ function ent(a){let c=Array(10).fill(0);a.forEach(x=>c[x]++);let h=0;c.forEach(v
 function analyse(){
  if(hist.length<240)return null;
 
- // QUANTUM ANALYSIS V8 · MATEMÁTICA BAYESIANA PARA DELAY 1 TICK
+ // QUANTUM ANALYSIS V9
+ // CADENA DE MARKOV DE PRIMER ORDEN + ENTROPÍA RÉNYI (alpha = 2)
  // Sin GAP, EMA/EWMA ni indicadores técnicos.
- // Objetivo: estimar el riesgo del dígito en t+2, porque existe 1 tick de delay.
- // Combina:
- // 1) P² de una matriz de transición,
- // 2) conteo directo a t+2 según el último dígito,
- // 3) conteo directo a t+2 según los últimos 2 y 3 dígitos,
- // 4) pesos por tamaño de muestra,
- // 5) penalización por incertidumbre y desacuerdo entre estimadores.
+ //
+ // El modelo es estrictamente de primer orden:
+ // P(X[t+1]=j | X[t]=i)
+ //
+ // Como existe 1 tick de delay entre señal y entrada, se proyecta a t+2:
+ // P²(i,d) = sum_j P(i,j) * P(j,d)
+ //
+ // La Entropía Rényi de orden 2 mide cuán concentrada o uniforme es
+ // la distribución proyectada. Si está demasiado cerca de uniforme,
+ // el modelo pierde confianza y eleva el riesgo interno.
+
+ const STATES=10;
+ const ALPHA=.5; // suavizado Jeffreys/Dirichlet
+ const RENYI_ALPHA=2;
 
  let n=hist.length,
      last=hist[n-1],
-     prev=hist[n-2],
-     prev2=hist[n-3],
-     w12=hist.slice(-12),
-     w36=hist.slice(-36),
-     w120=hist.slice(-120),
-     f12=Array(10).fill(0),
-     f36=Array(10).fill(0),
-     f120=Array(10).fill(0),
-     t1=Array.from({length:10},()=>Array(10).fill(0)),
-     rowN=Array(10).fill(0),
-     next2Last=Array(10).fill(0),
-     next2Pair=Array(10).fill(0),
-     next2Triple=Array(10).fill(0),
-     cLast=0,cPair=0,cTriple=0;
+     counts=Array.from({length:STATES},()=>Array(STATES).fill(0)),
+     rowN=Array(STATES).fill(0);
 
- w12.forEach(x=>f12[x]++);
- w36.forEach(x=>f36[x]++);
- w120.forEach(x=>f120[x]++);
-
- // Matriz de transición de un paso.
- for(let i=Math.max(0,n-1000);i<n-1;i++){
+ // Matriz de transición de primer orden con hasta 1000 transiciones recientes.
+ for(let i=Math.max(0,n-1001);i<n-1;i++){
   let a=hist[i],b=hist[i+1];
-  t1[a][b]++;
+  counts[a][b]++;
   rowN[a]++;
  }
 
- // Observación directa del resultado a t+2.
- for(let i=Math.max(0,n-1000);i<n-2;i++){
-  if(hist[i]===last){
-   next2Last[hist[i+2]]++;
-   cLast++;
-  }
-
-  if(i>=1&&hist[i-1]===prev&&hist[i]===last){
-   next2Pair[hist[i+2]]++;
-   cPair++;
-  }
-
-  if(i>=2&&hist[i-2]===prev2&&hist[i-1]===prev&&hist[i]===last){
-   next2Triple[hist[i+2]]++;
-   cTriple++;
-  }
+ function prob(a,b){
+  return (counts[a][b]+ALPHA)/(rowN[a]+STATES*ALPHA);
  }
 
- let H=ent(hist.slice(-36)),rows=[];
+ // Matriz P suavizada.
+ let P=Array.from({length:STATES},(_,a)=>
+  Array.from({length:STATES},(_,b)=>prob(a,b))
+ );
 
- function dirichletMean(count,total,alpha=1){
-  return (count+alpha)/(total+10*alpha);
+ // Proyección de dos pasos desde el estado actual para compensar el delay.
+ let p2=Array(STATES).fill(0);
+ for(let d=0;d<STATES;d++){
+  let s=0;
+  for(let j=0;j<STATES;j++) s+=P[last][j]*P[j][d];
+  p2[d]=s;
  }
 
- // Varianza posterior aproximada para una categoría de un Dirichlet simétrico.
- function dirichletVar(count,total,alpha=1){
-  let A=total+10*alpha,
-      a=count+alpha;
-  return (a*(A-a))/(A*A*(A+1));
+ // Entropía Rényi H_alpha(p) = 1/(1-alpha) log2(sum p_i^alpha)
+ // Para alpha=2: H2 = -log2(sum p_i^2)
+ function renyi2(dist){
+  let sumSq=dist.reduce((s,p)=>s+p*p,0);
+  return -Math.log2(Math.max(sumSq,1e-12));
  }
 
- function p1(a,b){
-  return dirichletMean(t1[a][b],rowN[a],1);
- }
+ let H2=renyi2(p2),
+     H2MAX=Math.log2(STATES),
+     h2Norm=H2/H2MAX;
 
- function reliability(total,k){
-  return total/(total+k);
- }
+ // Entropía Rényi de la fila actual (1 paso) como segunda medida
+ // de estructura del estado presente.
+ let rowEntropy=renyi2(P[last]),
+     rowEntropyNorm=rowEntropy/H2MAX;
 
- for(let d=0;d<10;d++){
-  // Frecuencias suavizadas en tres escalas.
-  let p12=dirichletMean(f12[d],12,.8),
-      p36=dirichletMean(f36[d],36,1),
-      p120=dirichletMean(f120[d],120,1.5);
+ // Soporte estadístico del estado actual.
+ let support=rowN[last]/(rowN[last]+25);
 
-  // Estimador A: transición de dos pasos P².
-  let p2Matrix=0;
-  for(let j=0;j<10;j++) p2Matrix+=p1(last,j)*p1(j,d);
+ // Confianza estructural: baja cuando la distribución es casi uniforme.
+ let structure=Math.max(0,1-h2Norm),
+     rowStructure=Math.max(0,1-rowEntropyNorm),
+     confidence=Math.min(1,
+       .55*support+
+       .27*Math.min(1,structure/.08)+
+       .18*Math.min(1,rowStructure/.08)
+     );
 
-  // Estimadores B/C/D: conteo directo a t+2.
-  let pLast=dirichletMean(next2Last[d],cLast,1),
-      pPair=dirichletMean(next2Pair[d],cPair,1),
-      pTriple=dirichletMean(next2Triple[d],cTriple,1);
+ let rows=[];
 
-  // Cada contexto recibe peso según la cantidad de evidencia.
-  let rLast=reliability(cLast,16),
-      rPair=reliability(cPair,14),
-      rTriple=reliability(cTriple,10),
-      rMatrix=.72;
+ for(let d=0;d<STATES;d++){
+  let targetP=p2[d];
 
-  // El contexto más largo no puede dominar si la muestra es pequeña.
-  let wLast=.34*rLast,
-      wPair=.26*rPair,
-      wTriple=.18*rTriple,
-      wMatrix=.22*rMatrix,
-      wSum=wLast+wPair+wTriple+wMatrix;
+  // Ventaja matemática frente al 10% teórico.
+  // Un candidato con P² menor que 0.10 recibe menor riesgo.
+  let excess=Math.max(0,targetP-.10);
 
-  let targetP=(wLast*pLast+wPair*pPair+wTriple*pTriple+wMatrix*p2Matrix)/wSum;
+  // Cuando Rényi está muy cerca del máximo, la cadena parece casi uniforme.
+  // El filtro evita convertir pequeñas diferencias aleatorias en señales fuertes.
+  let entropyPenalty=Math.max(0,h2Norm-.965),
+      rowEntropyPenalty=Math.max(0,rowEntropyNorm-.965);
 
-  // Incertidumbre posterior de los tres conteos directos.
-  let vLast=dirichletVar(next2Last[d],cLast,1),
-      vPair=dirichletVar(next2Pair[d],cPair,1),
-      vTriple=dirichletVar(next2Triple[d],cTriple,1);
+  // Penalización por poco soporte de la fila del estado actual.
+  let supportPenalty=1-support;
 
-  let uncertainty=Math.sqrt(
-   (wLast*vLast+wPair*vPair+wTriple*vTriple)/Math.max(.0001,wLast+wPair+wTriple)
-  );
-
-  // Frecuencia general suavizada.
-  let freq=.50*p12+.30*p36+.20*p120;
-
-  // Desacuerdo entre estimadores: si no coinciden, se penaliza.
-  let est=[pLast,pPair,pTriple,p2Matrix],
-      estMean=est.reduce((a,b)=>a+b,0)/est.length,
-      disagreement=Math.sqrt(
-       est.reduce((s,x)=>s+(x-estMean)*(x-estMean),0)/est.length
-      );
-
-  // Inestabilidad entre ventanas de frecuencia.
-  let fMean=(p12+p36+p120)/3,
-      instability=Math.sqrt(
-       ((p12-fMean)**2+(p36-fMean)**2+(p120-fMean)**2)/3
-      );
-
-  // Penalizaciones solo por exceso sobre el 10% teórico.
-  let excessTarget=Math.max(0,targetP-.10),
-      excess12=Math.max(0,p12-.10),
-      excess36=Math.max(0,p36-.10),
-      excess120=Math.max(0,p120-.10);
-
-  // Chi-cuadrado local sobre 36 ticks.
-  let expected36=3.6,
-      chiOver=f36[d]>expected36
-       ? ((f36[d]-expected36)**2)/expected36
-       : 0;
-
-  // Riesgo interno V8.
-  // Mantiene una escala compatible con el filtro visual actual (<= 3.5%).
-  let risk=.19*targetP+
-           .05*freq+
-           .10*excessTarget+
-           .07*excess12+
-           .045*excess36+
-           .02*excess120+
-           .025*uncertainty+
-           .05*disagreement+
-           .05*instability+
-           .0012*chiOver;
+  // Riesgo interno V9.
+  // Escala calibrada para conservar el filtro visual existente <= 3.5%.
+  let risk=.010+
+           .145*targetP+
+           .075*excess+
+           .115*entropyPenalty+
+           .055*rowEntropyPenalty+
+           .008*supportPenalty+
+           .006*(1-confidence);
 
   rows.push({
-   d,risk,
-   p12,
-   p36,
-   p120,
+   d,
+   risk,
+   p12:P[last][d],
+   p36:targetP,
+   p120:targetP,
    pt:targetP,
-   pe:freq,
-   p2Matrix,
-   pLast,
-   pPair,
-   pTriple,
-   uncertainty
+   pe:targetP,
+   renyi:H2,
+   renyiNorm:h2Norm,
+   rowRenyi:rowEntropy,
+   rowRenyiNorm:rowEntropyNorm,
+   support,
+   confidence
   });
  }
 
@@ -190,19 +137,19 @@ function analyse(){
  if(!q||!second)return null;
 
  let spread=second.risk-q.risk,
-     near=pnl>=target()*.75,
-     need=near?.05:.03,
-     maxRisk=near?.085:.105;
+     near=pnl>=target()*.75;
 
- // Mantiene el mismo contrato para no tocar la interfaz ni el resto del programa.
- let safe=q.risk<maxRisk&&
-          spread>=need&&
-          q.p12<=.10&&
-          q.p36<=.12&&
-          q.pt<=.13&&
-          q.pe<=.12;
+ // Filtro interno Rényi:
+ // - riesgo Markov a t+2 razonablemente bajo
+ // - suficiente soporte del estado actual
+ // - evita estados casi completamente uniformes
+ let safe=q.risk<.085&&
+          q.pt<.10&&
+          q.support>=.45&&
+          q.renyiNorm<.992;
 
- return{q,spread,H,near,safe};
+ // La UI ya tiene un campo ENTROPÍA; ahora muestra H2 de Rényi.
+ return{q,spread,H:H2,near,safe};
 }
 function showSignal(s){
  lastSignal=s;
