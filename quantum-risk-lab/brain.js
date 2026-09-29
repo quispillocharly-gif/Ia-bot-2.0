@@ -8,161 +8,154 @@ const DISPLAY_MAX_RISK=.035;
 function log(s){$('log').textContent=s+'\n'+$('log').textContent}
 function ent(a){let c=Array(10).fill(0);a.forEach(x=>c[x]++);let h=0;c.forEach(v=>{if(v){let p=v/a.length;h-=p*Math.log2(p)}});return h}
 function analyse(){
- if(hist.length<180)return null;
+ if(hist.length<220)return null;
 
- // QUANTUM ANALYSIS V4 · ANTI-APARICIÓN EN LOS PRÓXIMOS 3 TICKS
- // Objetivo: si el candidato es D4, favorecer contextos históricos donde,
- // después de un contexto parecido al actual, D4 NO apareció en t+1, t+2 ni t+3.
- let last=hist[hist.length-1],prev=hist[hist.length-2],
-     w12=hist.slice(-12),w36=hist.slice(-36),w120=hist.slice(-120),
-     f12=Array(10).fill(0),f36=Array(10).fill(0),f120=Array(10).fill(0),
-     r18=Array(10).fill(0),p18=Array(10).fill(0),
-     tr1=Array(10).fill(0),tr2=Array(10).fill(0);
+ // QUANTUM ANALYSIS V5 · GAP HAZARD
+ // Lógica distinta a la anterior:
+ // - mide el tiempo entre apariciones de cada dígito;
+ // - estima el "hazard" de que vuelva justo en el siguiente tick;
+ // - compara contextos históricos de 1, 2 y 3 dígitos;
+ // - estabiliza con frecuencia reciente y castigo por ráfagas.
+ let n=hist.length,
+     last=hist[n-1],
+     prev=hist[n-2],
+     prev2=hist[n-3],
+     w12=hist.slice(-12),
+     w36=hist.slice(-36),
+     w96=hist.slice(-96),
+     f12=Array(10).fill(0),
+     f36=Array(10).fill(0),
+     f96=Array(10).fill(0),
+     next1=Array(10).fill(0),
+     next2=Array(10).fill(0),
+     next3=Array(10).fill(0),
+     c1=0,c2=0,c3=0;
 
  w12.forEach(x=>f12[x]++);
  w36.forEach(x=>f36[x]++);
- w120.forEach(x=>f120[x]++);
- w36.slice(-18).forEach(x=>r18[x]++);
- w36.slice(0,18).forEach(x=>p18[x]++);
+ w96.forEach(x=>f96[x]++);
 
- for(let i=Math.max(1,hist.length-420);i<hist.length;i++){
-  if(hist[i-1]===last)tr1[hist[i]]++;
- }
- for(let i=Math.max(2,hist.length-700);i<hist.length;i++){
-  if(hist[i-2]===prev&&hist[i-1]===last)tr2[hist[i]]++;
- }
-
- let t1=tr1.reduce((a,b)=>a+b,0),
-     t2=tr2.reduce((a,b)=>a+b,0),
-     H=ent(w36),
-     entropyNorm=H/Math.log2(10),
-     rows=[];
-
- function shrink(count,n,k){
-  return (count+k*.10)/(n+k);
- }
-
- function ewmaProb(d,lookback,decay){
-  let start=Math.max(0,hist.length-lookback),num=0,den=0,w=1;
-  for(let i=hist.length-1;i>=start;i--){
-   if(hist[i]===d)num+=w;
-   den+=w;
-   w*=decay;
+ // Contexto exacto de 1, 2 y 3 dígitos.
+ for(let i=Math.max(3,n-900);i<n-1;i++){
+  if(hist[i]===last){
+   next1[hist[i+1]]++; c1++;
   }
-  return den?num/den:.10;
+  if(hist[i-1]===prev&&hist[i]===last){
+   next2[hist[i+1]]++; c2++;
+  }
+  if(hist[i-2]===prev2&&hist[i-1]===prev&&hist[i]===last){
+   next3[hist[i+1]]++; c3++;
+  }
  }
 
- // Estima el riesgo de que el candidato aparezca AL MENOS UNA VEZ
- // dentro de los próximos 3 ticks desde un contexto parecido al actual.
- function future3Risk(d){
-  const baseline=1-Math.pow(.9,3); // 27.1% si los dígitos fueran uniformes e independientes.
-  let n1=0,h1=0,n2=0,h2=0;
-  let begin=Math.max(1,hist.length-850);
+ let H=ent(w36),rows=[];
 
-  for(let i=begin;i<=hist.length-4;i++){
-   let hit=hist[i+1]===d||hist[i+2]===d||hist[i+3]===d;
+ function smooth(count,total,k,base=.10){
+  return (count+k*base)/(total+k);
+ }
 
-   if(hist[i]===last){
-    n1++;
-    if(hit)h1++;
-   }
+ function currentGap(d){
+  let g=0;
+  for(let i=n-1;i>=0&&g<120;i--){
+   if(hist[i]===d)break;
+   g++;
+  }
+  return g;
+ }
 
-   if(i>=1&&hist[i-1]===prev&&hist[i]===last){
-    n2++;
-    if(hit)h2++;
+ // Riesgo de reaparición en el próximo tick condicionado al gap actual.
+ // Se calcula con gaps históricos del mismo dígito y supervivencia del ciclo.
+ function gapHazard(d,gapNow){
+  let positions=[];
+  for(let i=Math.max(0,n-950);i<n;i++) if(hist[i]===d) positions.push(i);
+  if(positions.length<6)return .10;
+
+  let gaps=[];
+  for(let i=1;i<positions.length;i++) gaps.push(positions[i]-positions[i-1]-1);
+  if(!gaps.length)return .10;
+
+  let band=Math.min(3,Math.max(1,Math.floor(Math.sqrt(gapNow+1)/2))),
+      survived=0,endedNext=0;
+
+  for(let g of gaps){
+   if(g>=Math.max(0,gapNow-band)){
+    survived++;
+    if(Math.abs(g-gapNow)<=band) endedNext++;
    }
   }
 
-  // Suavizado hacia el 27.1% base para evitar extremos por muestras pequeñas.
-  let p1=(h1+10*baseline)/(n1+10);
-  let p2=(h2+7*baseline)/(n2+7);
+  // Suavizado fuerte: evita creer demasiado en pocos ciclos.
+  return (endedNext+8*.10)/(survived+8);
+ }
 
-  // El contexto de 2 dígitos pesa más solo cuando tiene suficientes observaciones.
-  let rel2=n2/(n2+12);
-  let w2=Math.min(.42,.42*rel2);
-  let p=(1-w2)*p1+w2*p2;
-
-  return{p,n1,n2};
+ // Detecta si el dígito está entrando en una ráfaga reciente.
+ function burstScore(d){
+  let a=hist.slice(-8).filter(x=>x===d).length/8;
+  let b=hist.slice(-24).filter(x=>x===d).length/24;
+  return Math.max(0,a-b);
  }
 
  for(let d=0;d<10;d++){
-  let gap=0;
-  for(let i=hist.length-1;i>=0&&gap<60;i--){if(hist[i]===d)break;gap++}
+  let gap=currentGap(d),
+      p12=f12[d]/12,
+      p36=f36[d]/36,
+      p96=f96[d]/96,
+      pg=gapHazard(d,gap),
 
-  let streak=0;
-  for(let i=hist.length-1;i>=0&&hist[i]===d;i--)streak++;
+      p1=smooth(next1[d],c1,14),
+      p2=smooth(next2[d],c2,10),
+      p3=smooth(next3[d],c3,7);
 
-  let p12=shrink(f12[d],12,.7),
-      p36=shrink(f36[d],36,1.2),
-      p120=shrink(f120[d],120,2.0),
-      peFast=ewmaProb(d,48,.91),
-      peSlow=ewmaProb(d,120,.972),
-      pe=.64*peFast+.36*peSlow;
+  // Los contextos más largos pesan solo si tienen soporte suficiente.
+  let r2=c2/(c2+12),
+      r3=c3/(c3+8),
+      w3=.34*r3,
+      w2=.30*r2,
+      w1=1-w2-w3,
+      pc=w1*p1+w2*p2+w3*p3;
 
-  let raw1=t1?tr1[d]/t1:.10,
-      rel1=t1/(t1+14),
-      pt1=rel1*raw1+(1-rel1)*.10;
+  // Tendencia de frecuencia: si el dígito se está calentando, sube riesgo.
+  let trend=Math.max(0,p12-p36)*.42+
+            Math.max(0,p36-p96)*.16;
 
-  let raw2=t2?tr2[d]/t2:.10,
-      rel2=t2/(t2+10),
-      pt2=rel2*raw2+(1-rel2)*.10;
+  // Ráfaga y cercanía inmediata.
+  let burst=burstScore(d)*.40,
+      recent=gap===0?.060:
+             gap===1?.035:
+             gap===2?.018:
+             gap===3?.008:0;
 
-  let pairWeight=Math.min(.32,.32*rel2),
-      pt=(1-pairWeight)*pt1+pairWeight*pt2;
+  // Consenso entre modelos: si contexto + hazard + frecuencia coinciden
+  // en que el dígito está bajo, el score baja; si discrepan, se penaliza.
+  let recentFreq=.62*p12+.38*p36,
+      mean=(pc+pg+recentFreq)/3,
+      disagreement=(
+       Math.abs(pc-mean)+Math.abs(pg-mean)+Math.abs(recentFreq-mean)
+      )*.14;
 
-  let recent18=r18[d]/18,
-      prior18=p18[d]/18,
-      accel18=Math.max(0,recent18-prior18);
+  // Núcleo del riesgo interno V5.
+  let risk=.34*pc+
+           .30*pg+
+           .18*recentFreq+
+           .10*p96+
+           trend+burst+recent+disagreement;
 
-  let short=.80*p12+.20*p36,
-      mid=.88*p36+.12*p120;
-
-  let rise=Math.max(0,p12-p36)*.24+
-           Math.max(0,p36-p120)*.08+
-           accel18*.16+
-           Math.max(0,peFast-peSlow)*.20;
-
-  let hot=Math.max(0,p12-.10)*.72+
-          Math.max(0,p36-.10)*.28+
-          Math.max(0,pe-.10)*.34;
-
-  let patternTrust=Math.max(.45,Math.min(1,1.65-entropyNorm));
-  let transition=Math.max(0,pt-.10)*.58*patternTrust;
-
-  let recency=gap===0?.060:
-              gap===1?.034:
-              gap===2?.017:
-              gap===3?.008:
-              gap===4?.003:0;
-
-  let repeat=Math.min(streak,3)*.028;
-
-  let hi=Math.max(short,mid,pe,pt),
-      lo=Math.min(short,mid,pe,pt),
-      disagreement=Math.max(0,(hi-lo)-.055)*.15;
-
-  let h3=future3Risk(d);
-
-  // Anti-3: 27.1% es el nivel aleatorio aproximado. Queremos candidatos
-  // claramente por debajo de ese nivel. A partir de 20% la penalización
-  // crece de forma no lineal para castigar apariciones tempranas.
-  let anti3Excess=Math.max(0,h3.p-.20),
-      anti3=anti3Excess*.18+anti3Excess*anti3Excess*1.25;
-
-  let risk=.28*short+
-           .17*mid+
-           .11*p120+
-           .15*pt+
-           .21*pe+
-           hot+transition+rise+recency+repeat+disagreement+anti3;
-
-  rows.push({d,risk,p12,p36,p120,pt,pe,peFast,peSlow,gap,h3:h3.p,h3n1:h3.n1,h3n2:h3.n2});
+  rows.push({
+   d,risk,
+   p12,p36,p120:p96,
+   pt:pc,
+   pe:pg,
+   gap,
+   ctx1:p1,ctx2:p2,ctx3:p3
+  });
  }
 
  rows.sort((a,b)=>a.risk-b.risk);
+
  let pool=rows.filter(x=>x.d!==lastPick),
      q=pool[0],
      second=pool[1];
+
  if(!q||!second)return null;
 
  let spread=second.risk-q.risk,
@@ -170,16 +163,13 @@ function analyse(){
      need=near?.05:.03,
      maxRisk=near?.085:.105;
 
- // El filtro interno ahora también exige que la estimación de aparición
- // dentro de 3 ticks sea menor que 25%. No garantiza el resultado:
- // es un filtro estadístico adicional.
+ // Mismo contrato de salida para no tocar nada más de la página.
  let safe=q.risk<maxRisk&&
           spread>=need&&
           q.p12<=.10&&
           q.p36<=.12&&
           q.pt<=.13&&
-          q.pe<=.12&&
-          q.h3<.25;
+          q.pe<=.13;
 
  return{q,spread,H,near,safe};
 }
