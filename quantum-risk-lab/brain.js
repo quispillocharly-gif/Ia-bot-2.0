@@ -8,145 +8,102 @@ const DISPLAY_MAX_RISK=.035;
 function log(s){$('log').textContent=s+'\n'+$('log').textContent}
 function ent(a){let c=Array(10).fill(0);a.forEach(x=>c[x]++);let h=0;c.forEach(v=>{if(v){let p=v/a.length;h-=p*Math.log2(p)}});return h}
 function analyse(){
- if(hist.length<220)return null;
+ if(hist.length<180)return null;
 
- // QUANTUM ANALYSIS V5 · GAP HAZARD
- // Lógica distinta a la anterior:
- // - mide el tiempo entre apariciones de cada dígito;
- // - estima el "hazard" de que vuelva justo en el siguiente tick;
- // - compara contextos históricos de 1, 2 y 3 dígitos;
- // - estabiliza con frecuencia reciente y castigo por ráfagas.
+ // QUANTUM ANALYSIS V6 · MATEMÁTICA DISCRETA PURA
+ // Sin GAP, EMA/EWMA ni indicadores de mercado.
+ // Solo usa: conteos, frecuencias, probabilidades condicionadas,
+ // desviación frente al 10% teórico y consistencia entre muestras.
+
  let n=hist.length,
      last=hist[n-1],
      prev=hist[n-2],
-     prev2=hist[n-3],
-     w12=hist.slice(-12),
-     w36=hist.slice(-36),
-     w96=hist.slice(-96),
-     f12=Array(10).fill(0),
-     f36=Array(10).fill(0),
-     f96=Array(10).fill(0),
-     next1=Array(10).fill(0),
-     next2=Array(10).fill(0),
-     next3=Array(10).fill(0),
-     c1=0,c2=0,c3=0;
+     w10=hist.slice(-10),
+     w30=hist.slice(-30),
+     w100=hist.slice(-100),
+     f10=Array(10).fill(0),
+     f30=Array(10).fill(0),
+     f100=Array(10).fill(0),
+     tr1=Array(10).fill(0),
+     tr2=Array(10).fill(0);
 
- w12.forEach(x=>f12[x]++);
- w36.forEach(x=>f36[x]++);
- w96.forEach(x=>f96[x]++);
+ w10.forEach(x=>f10[x]++);
+ w30.forEach(x=>f30[x]++);
+ w100.forEach(x=>f100[x]++);
 
- // Contexto exacto de 1, 2 y 3 dígitos.
- for(let i=Math.max(3,n-900);i<n-1;i++){
+ // Conteo condicional de orden 1 y 2.
+ let c1=0,c2=0;
+ for(let i=Math.max(1,n-600);i<n-1;i++){
   if(hist[i]===last){
-   next1[hist[i+1]]++; c1++;
+   tr1[hist[i+1]]++;
+   c1++;
   }
-  if(hist[i-1]===prev&&hist[i]===last){
-   next2[hist[i+1]]++; c2++;
-  }
-  if(hist[i-2]===prev2&&hist[i-1]===prev&&hist[i]===last){
-   next3[hist[i+1]]++; c3++;
+  if(i>=1&&hist[i-1]===prev&&hist[i]===last){
+   tr2[hist[i+1]]++;
+   c2++;
   }
  }
 
- let H=ent(w36),rows=[];
+ let H=ent(hist.slice(-36)),rows=[];
 
- function smooth(count,total,k,base=.10){
-  return (count+k*base)/(total+k);
- }
-
- function currentGap(d){
-  let g=0;
-  for(let i=n-1;i>=0&&g<120;i--){
-   if(hist[i]===d)break;
-   g++;
-  }
-  return g;
- }
-
- // Riesgo de reaparición en el próximo tick condicionado al gap actual.
- // Se calcula con gaps históricos del mismo dígito y supervivencia del ciclo.
- function gapHazard(d,gapNow){
-  let positions=[];
-  for(let i=Math.max(0,n-950);i<n;i++) if(hist[i]===d) positions.push(i);
-  if(positions.length<6)return .10;
-
-  let gaps=[];
-  for(let i=1;i<positions.length;i++) gaps.push(positions[i]-positions[i-1]-1);
-  if(!gaps.length)return .10;
-
-  let band=Math.min(3,Math.max(1,Math.floor(Math.sqrt(gapNow+1)/2))),
-      survived=0,endedNext=0;
-
-  for(let g of gaps){
-   if(g>=Math.max(0,gapNow-band)){
-    survived++;
-    if(Math.abs(g-gapNow)<=band) endedNext++;
-   }
-  }
-
-  // Suavizado fuerte: evita creer demasiado en pocos ciclos.
-  return (endedNext+8*.10)/(survived+8);
- }
-
- // Detecta si el dígito está entrando en una ráfaga reciente.
- function burstScore(d){
-  let a=hist.slice(-8).filter(x=>x===d).length/8;
-  let b=hist.slice(-24).filter(x=>x===d).length/24;
-  return Math.max(0,a-b);
+ // Suavizado de Laplace puro para evitar divisiones extremas
+ // cuando una combinación aparece pocas veces.
+ function laplace(count,total,alpha){
+  return (count+alpha)/(total+10*alpha);
  }
 
  for(let d=0;d<10;d++){
-  let gap=currentGap(d),
-      p12=f12[d]/12,
-      p36=f36[d]/36,
-      p96=f96[d]/96,
-      pg=gapHazard(d,gap),
+  let p10=f10[d]/10,
+      p30=f30[d]/30,
+      p100=f100[d]/100;
 
-      p1=smooth(next1[d],c1,14),
-      p2=smooth(next2[d],c2,10),
-      p3=smooth(next3[d],c3,7);
+  let p1=laplace(tr1[d],c1,1),
+      p2=laplace(tr2[d],c2,1);
 
-  // Los contextos más largos pesan solo si tienen soporte suficiente.
-  let r2=c2/(c2+12),
-      r3=c3/(c3+8),
-      w3=.34*r3,
-      w2=.30*r2,
-      w1=1-w2-w3,
-      pc=w1*p1+w2*p2+w3*p3;
+  // El orden 2 recibe más peso solamente cuando hay más observaciones.
+  let support2=c2/(c2+10),
+      pc=(1-.35*support2)*p1+(.35*support2)*p2;
 
-  // Tendencia de frecuencia: si el dígito se está calentando, sube riesgo.
-  let trend=Math.max(0,p12-p36)*.42+
-            Math.max(0,p36-p96)*.16;
+  // Frecuencia pura multi-muestra.
+  let pf=.50*p10+.30*p30+.20*p100;
 
-  // Ráfaga y cercanía inmediata.
-  let burst=burstScore(d)*.40,
-      recent=gap===0?.060:
-             gap===1?.035:
-             gap===2?.018:
-             gap===3?.008:0;
+  // Penaliza únicamente exceso sobre el 10% teórico.
+  let excess10=Math.max(0,p10-.10),
+      excess30=Math.max(0,p30-.10),
+      excess100=Math.max(0,p100-.10),
+      excessCond=Math.max(0,pc-.10);
 
-  // Consenso entre modelos: si contexto + hazard + frecuencia coinciden
-  // en que el dígito está bajo, el score baja; si discrepan, se penaliza.
-  let recentFreq=.62*p12+.38*p36,
-      mean=(pc+pg+recentFreq)/3,
-      disagreement=(
-       Math.abs(pc-mean)+Math.abs(pg-mean)+Math.abs(recentFreq-mean)
-      )*.14;
+  // Desviación/consistencia: si las tres muestras discrepan mucho,
+  // aumenta el score porque la estimación es menos estable.
+  let mean=(p10+p30+p100)/3,
+      variance=((p10-mean)**2+(p30-mean)**2+(p100-mean)**2)/3,
+      instability=Math.sqrt(variance);
 
-  // Núcleo del riesgo interno V5.
-  let risk=.34*pc+
-           .30*pg+
-           .18*recentFreq+
-           .10*p96+
-           trend+burst+recent+disagreement;
+  // Chi cuadrado local: castiga dígitos sobrerrepresentados en 30 ticks.
+  // Esperado = 3 apariciones por dígito.
+  let expected30=3,
+      chiOver=f30[d]>expected30
+       ? ((f30[d]-expected30)**2)/expected30
+       : 0;
+
+  // Score interno: cuanto menor, mejor candidato.
+  // Se mantiene en una escala compatible con los filtros actuales de la UI.
+  let risk=.18*pf+
+           .12*pc+
+           .17*excess10+
+           .10*excess30+
+           .05*excess100+
+           .12*excessCond+
+           .10*instability+
+           .0018*chiOver;
 
   rows.push({
    d,risk,
-   p12,p36,p120:p96,
+   p12:p10,
+   p36:p30,
+   p120:p100,
    pt:pc,
-   pe:pg,
-   gap,
-   ctx1:p1,ctx2:p2,ctx3:p3
+   pe:pf
   });
  }
 
@@ -163,13 +120,14 @@ function analyse(){
      need=near?.05:.03,
      maxRisk=near?.085:.105;
 
- // Mismo contrato de salida para no tocar nada más de la página.
+ // Conserva el mismo formato y filtros internos esperados
+ // por el resto del programa.
  let safe=q.risk<maxRisk&&
           spread>=need&&
           q.p12<=.10&&
           q.p36<=.12&&
           q.pt<=.13&&
-          q.pe<=.13;
+          q.pe<=.12;
 
  return{q,spread,H,near,safe};
 }
