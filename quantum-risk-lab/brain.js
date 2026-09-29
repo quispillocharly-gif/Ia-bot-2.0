@@ -10,13 +10,9 @@ function ent(a){let c=Array(10).fill(0);a.forEach(x=>c[x]++);let h=0;c.forEach(v
 function analyse(){
  if(hist.length<180)return null;
 
- // QUANTUM ANALYSIS V3
- // Mejora la robustez sin cambiar la interfaz ni los filtros visibles:
- // 1) frecuencias suavizadas en 12/36/120 ticks,
- // 2) dos memorias exponenciales (rápida y lenta),
- // 3) Markov de orden 1 y 2 con peso según confiabilidad,
- // 4) detector de aceleración por mitades de ventana,
- // 5) penalización por desacuerdo entre señales.
+ // QUANTUM ANALYSIS V4 · ANTI-APARICIÓN EN LOS PRÓXIMOS 3 TICKS
+ // Objetivo: si el candidato es D4, favorecer contextos históricos donde,
+ // después de un contexto parecido al actual, D4 NO apareció en t+1, t+2 ni t+3.
  let last=hist[hist.length-1],prev=hist[hist.length-2],
      w12=hist.slice(-12),w36=hist.slice(-36),w120=hist.slice(-120),
      f12=Array(10).fill(0),f36=Array(10).fill(0),f120=Array(10).fill(0),
@@ -43,7 +39,6 @@ function analyse(){
      rows=[];
 
  function shrink(count,n,k){
-  // Suavizado ligero hacia 10%; evita extremos falsos sin borrar la señal.
   return (count+k*.10)/(n+k);
  }
 
@@ -55,6 +50,39 @@ function analyse(){
    w*=decay;
   }
   return den?num/den:.10;
+ }
+
+ // Estima el riesgo de que el candidato aparezca AL MENOS UNA VEZ
+ // dentro de los próximos 3 ticks desde un contexto parecido al actual.
+ function future3Risk(d){
+  const baseline=1-Math.pow(.9,3); // 27.1% si los dígitos fueran uniformes e independientes.
+  let n1=0,h1=0,n2=0,h2=0;
+  let begin=Math.max(1,hist.length-850);
+
+  for(let i=begin;i<=hist.length-4;i++){
+   let hit=hist[i+1]===d||hist[i+2]===d||hist[i+3]===d;
+
+   if(hist[i]===last){
+    n1++;
+    if(hit)h1++;
+   }
+
+   if(i>=1&&hist[i-1]===prev&&hist[i]===last){
+    n2++;
+    if(hit)h2++;
+   }
+  }
+
+  // Suavizado hacia el 27.1% base para evitar extremos por muestras pequeñas.
+  let p1=(h1+10*baseline)/(n1+10);
+  let p2=(h2+7*baseline)/(n2+7);
+
+  // El contexto de 2 dígitos pesa más solo cuando tiene suficientes observaciones.
+  let rel2=n2/(n2+12);
+  let w2=Math.min(.42,.42*rel2);
+  let p=(1-w2)*p1+w2*p2;
+
+  return{p,n1,n2};
  }
 
  for(let d=0;d<10;d++){
@@ -71,7 +99,6 @@ function analyse(){
       peSlow=ewmaProb(d,120,.972),
       pe=.64*peFast+.36*peSlow;
 
-  // Transiciones suavizadas. El orden 2 solo gana peso cuando hay evidencia.
   let raw1=t1?tr1[d]/t1:.10,
       rel1=t1/(t1+14),
       pt1=rel1*raw1+(1-rel1)*.10;
@@ -90,7 +117,6 @@ function analyse(){
   let short=.80*p12+.20*p36,
       mid=.88*p36+.12*p120;
 
-  // Aceleración: penaliza un dígito que empieza a calentarse ahora.
   let rise=Math.max(0,p12-p36)*.24+
            Math.max(0,p36-p120)*.08+
            accel18*.16+
@@ -100,8 +126,6 @@ function analyse(){
           Math.max(0,p36-.10)*.28+
           Math.max(0,pe-.10)*.34;
 
-  // En un régimen muy entrópico (casi uniforme), reducimos el peso de patrones
-  // de transición para no perseguir ruido.
   let patternTrust=Math.max(.45,Math.min(1,1.65-entropyNorm));
   let transition=Math.max(0,pt-.10)*.58*patternTrust;
 
@@ -113,19 +137,26 @@ function analyse(){
 
   let repeat=Math.min(streak,3)*.028;
 
-  // Si las señales principales se contradicen mucho, sube un poco el riesgo.
   let hi=Math.max(short,mid,pe,pt),
       lo=Math.min(short,mid,pe,pt),
       disagreement=Math.max(0,(hi-lo)-.055)*.15;
 
-  let risk=.30*short+
-           .18*mid+
-           .12*p120+
-           .16*pt+
-           .24*pe+
-           hot+transition+rise+recency+repeat+disagreement;
+  let h3=future3Risk(d);
 
-  rows.push({d,risk,p12,p36,p120,pt,pe,peFast,peSlow,gap});
+  // Anti-3: 27.1% es el nivel aleatorio aproximado. Queremos candidatos
+  // claramente por debajo de ese nivel. A partir de 20% la penalización
+  // crece de forma no lineal para castigar apariciones tempranas.
+  let anti3Excess=Math.max(0,h3.p-.20),
+      anti3=anti3Excess*.18+anti3Excess*anti3Excess*1.25;
+
+  let risk=.28*short+
+           .17*mid+
+           .11*p120+
+           .15*pt+
+           .21*pe+
+           hot+transition+rise+recency+repeat+disagreement+anti3;
+
+  rows.push({d,risk,p12,p36,p120,pt,pe,peFast,peSlow,gap,h3:h3.p,h3n1:h3.n1,h3n2:h3.n2});
  }
 
  rows.sort((a,b)=>a.risk-b.risk);
@@ -139,12 +170,16 @@ function analyse(){
      need=near?.05:.03,
      maxRisk=near?.085:.105;
 
+ // El filtro interno ahora también exige que la estimación de aparición
+ // dentro de 3 ticks sea menor que 25%. No garantiza el resultado:
+ // es un filtro estadístico adicional.
  let safe=q.risk<maxRisk&&
           spread>=need&&
           q.p12<=.10&&
           q.p36<=.12&&
           q.pt<=.13&&
-          q.pe<=.12;
+          q.pe<=.12&&
+          q.h3<.25;
 
  return{q,spread,H,near,safe};
 }
