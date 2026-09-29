@@ -3,7 +3,6 @@ let running=true,pending=null,pnl=0,stake=1,wins=0,losses=0,ops=0,hist=[],lastEp
 const cfg=()=>window.QUANTUM_CONFIG||{baseStake:1,target:3};
 const baseStake=()=>Math.max(.01,Number(cfg().baseStake)||1);
 const target=()=>Math.max(.01,Number(cfg().target)||3);
-const DISPLAY_SEP=.02;
 const DISPLAY_MAX_RISK=.035;
 function log(s){$('log').textContent=s+'\n'+$('log').textContent}
 function ent(a){let c=Array(10).fill(0);a.forEach(x=>c[x]++);let h=0;c.forEach(v=>{if(v){let p=v/a.length;h-=p*Math.log2(p)}});return h}
@@ -134,13 +133,13 @@ function analyse(){
 function showSignal(s){
  lastSignal=s;
  if(!s){$('decision').textContent='OBSERVANDO';$('reason').textContent='Aún no existe suficiente historial.';$('buy').textContent='COMPRAR AHORA · CALIBRANDO';$('sepPick').textContent='—';return}
- let sep=s.spread*100,riskPct=s.q.risk*100,visible=s.spread>=DISPLAY_SEP&&s.q.risk<=DISPLAY_MAX_RISK;
+ let sep=s.spread*100,riskPct=s.q.risk*100,visible=s.q.risk<=DISPLAY_MAX_RISK;
  $('risk').textContent=riskPct.toFixed(1)+'%';
  $('sepPick').textContent=visible?'D'+s.q.d:'—';
- $('buy').textContent=visible?'COMPRAR AHORA · D'+s.q.d+' · RIESGO '+riskPct.toFixed(1)+'%':'ESPERANDO · SEP ≥ 2.0 Y RIESGO ≤ 3.5%';
+ $('buy').textContent=visible?'COMPRAR AHORA · D'+s.q.d+' · RIESGO '+riskPct.toFixed(1)+'%':'ESPERANDO · RIESGO ≤ 3.5%';
  $('spread').textContent=sep.toFixed(1);$('entropy').textContent=s.H.toFixed(2);$('phase').textContent=s.near?'MODO META':'ANÁLISIS';$('meter').style.width=Math.min(100,s.spread*1000)+'%';
- if(!visible){$('decision').textContent='NO MOSTRAR DÍGITO';$('reason').textContent='Requiere separación ≥ 2.0 y riesgo interno de 3.5% o menor. Actual: sep '+sep.toFixed(1)+' · riesgo '+riskPct.toFixed(1)+'%.'}
- else if(!s.safe){$('decision').textContent='CANDIDATO D'+s.q.d;$('reason').textContent='Cumple separación visual ≥ 2.0, pero aún no supera el filtro de seguridad para operar.'}
+ if(!visible){$('decision').textContent='NO MOSTRAR DÍGITO';$('reason').textContent='Requiere riesgo interno de 3.5% o menor. Actual: '+riskPct.toFixed(1)+'%.'}
+ else if(!s.safe){$('decision').textContent='CANDIDATO D'+s.q.d;$('reason').textContent='Cumple el filtro visual de riesgo, pero aún no supera el filtro interno de seguridad.'}
  else{$('decision').textContent='SEÑAL D'+s.q.d;$('reason').textContent='Candidato de menor riesgo interno; entrada habilitada.'}
 }
 function ui(d){
@@ -187,7 +186,7 @@ $('start').onclick=()=>{
  pnl=0;stake=baseStake();wins=0;losses=0;ops=0;pending=null;observe=0;lastPick=null;running=true;$('status').textContent='ANALIZANDO';log('NUEVA SESIÓN '+$('mode').value+' · STAKE $'+stake.toFixed(2)+' · META $'+target().toFixed(2));ui();
 };
 $('stop').onclick=()=>{running=false;$('status').textContent='STOP MANUAL'};
-$('buy').onclick=()=>{if(!running){$('status').textContent='PULSA REINICIAR SESIÓN';return}if(pending){$('status').textContent='OPERACIÓN EN CURSO';return}let s=analyse();if(!s){$('status').textContent='AÚN CALIBRANDO';return}if(s.spread<DISPLAY_SEP||s.q.risk>DISPLAY_MAX_RISK){$('status').textContent='ESPERANDO SEP ≥ 2.0 Y RIESGO ≤ 3.5%';return}enter(s)};
+$('buy').onclick=()=>{if(!running){$('status').textContent='PULSA REINICIAR SESIÓN';return}if(pending){$('status').textContent='OPERACIÓN EN CURSO';return}let s=analyse();if(!s){$('status').textContent='AÚN CALIBRANDO';return}if(s.q.risk>DISPLAY_MAX_RISK){$('status').textContent='ESPERANDO RIESGO ≤ 3.5%';return}enter(s)};
 window.demoSettlement=p=>finish(p,'DERIV DEMO');
 window.demoTradeError=tradeError;
 stake=baseStake();$('status').textContent='ANÁLISIS ACTIVO';ui();connect();
