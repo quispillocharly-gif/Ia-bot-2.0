@@ -7,132 +7,177 @@ const DISPLAY_MAX_RISK=.035;
 function log(s){$('log').textContent=s+'\n'+$('log').textContent}
 function ent(a){let c=Array(10).fill(0);a.forEach(x=>c[x]++);let h=0;c.forEach(v=>{if(v){let p=v/a.length;h-=p*Math.log2(p)}});return h}
 function analyse(){
- if(hist.length<220)return null;
+ if(hist.length<240)return null;
 
- // QUANTUM ANALYSIS V7 · DELAY 1 TICK
- // La señal se calcula ahora, pero la entrada efectiva ocurre 1 tick después.
- // Por eso el objetivo matemático principal es minimizar la probabilidad
- // de que el candidato aparezca en t+2 respecto al momento de la señal.
- // Sin GAP, EMA/EWMA ni indicadores de mercado.
+ // QUANTUM ANALYSIS V8 · MATEMÁTICA BAYESIANA PARA DELAY 1 TICK
+ // Sin GAP, EMA/EWMA ni indicadores técnicos.
+ // Objetivo: estimar el riesgo del dígito en t+2, porque existe 1 tick de delay.
+ // Combina:
+ // 1) P² de una matriz de transición,
+ // 2) conteo directo a t+2 según el último dígito,
+ // 3) conteo directo a t+2 según los últimos 2 y 3 dígitos,
+ // 4) pesos por tamaño de muestra,
+ // 5) penalización por incertidumbre y desacuerdo entre estimadores.
 
  let n=hist.length,
      last=hist[n-1],
      prev=hist[n-2],
-     w10=hist.slice(-10),
-     w30=hist.slice(-30),
-     w100=hist.slice(-100),
-     f10=Array(10).fill(0),
-     f30=Array(10).fill(0),
-     f100=Array(10).fill(0),
+     prev2=hist[n-3],
+     w12=hist.slice(-12),
+     w36=hist.slice(-36),
+     w120=hist.slice(-120),
+     f12=Array(10).fill(0),
+     f36=Array(10).fill(0),
+     f120=Array(10).fill(0),
      t1=Array.from({length:10},()=>Array(10).fill(0)),
      rowN=Array(10).fill(0),
      next2Last=Array(10).fill(0),
      next2Pair=Array(10).fill(0),
-     cLast2=0,
-     cPair2=0;
+     next2Triple=Array(10).fill(0),
+     cLast=0,cPair=0,cTriple=0;
 
- w10.forEach(x=>f10[x]++);
- w30.forEach(x=>f30[x]++);
- w100.forEach(x=>f100[x]++);
+ w12.forEach(x=>f12[x]++);
+ w36.forEach(x=>f36[x]++);
+ w120.forEach(x=>f120[x]++);
 
- // Matriz de transición de 1 paso P(a->b).
- for(let i=Math.max(0,n-900);i<n-1;i++){
+ // Matriz de transición de un paso.
+ for(let i=Math.max(0,n-1000);i<n-1;i++){
   let a=hist[i],b=hist[i+1];
   t1[a][b]++;
   rowN[a]++;
  }
 
- // Frecuencia empírica del dígito en t+2 dado el último dígito actual.
- for(let i=Math.max(0,n-900);i<n-2;i++){
+ // Observación directa del resultado a t+2.
+ for(let i=Math.max(0,n-1000);i<n-2;i++){
   if(hist[i]===last){
    next2Last[hist[i+2]]++;
-   cLast2++;
+   cLast++;
   }
- }
 
- // Frecuencia empírica del dígito en t+2 dado el par [prev,last].
- for(let i=Math.max(1,n-900);i<n-2;i++){
-  if(hist[i-1]===prev&&hist[i]===last){
+  if(i>=1&&hist[i-1]===prev&&hist[i]===last){
    next2Pair[hist[i+2]]++;
-   cPair2++;
+   cPair++;
+  }
+
+  if(i>=2&&hist[i-2]===prev2&&hist[i-1]===prev&&hist[i]===last){
+   next2Triple[hist[i+2]]++;
+   cTriple++;
   }
  }
 
  let H=ent(hist.slice(-36)),rows=[];
 
- function laplace(count,total,alpha){
+ function dirichletMean(count,total,alpha=1){
   return (count+alpha)/(total+10*alpha);
  }
 
+ // Varianza posterior aproximada para una categoría de un Dirichlet simétrico.
+ function dirichletVar(count,total,alpha=1){
+  let A=total+10*alpha,
+      a=count+alpha;
+  return (a*(A-a))/(A*A*(A+1));
+ }
+
  function p1(a,b){
-  return laplace(t1[a][b],rowN[a],1);
+  return dirichletMean(t1[a][b],rowN[a],1);
+ }
+
+ function reliability(total,k){
+  return total/(total+k);
  }
 
  for(let d=0;d<10;d++){
-  let p10=f10[d]/10,
-      p30=f30[d]/30,
-      p100=f100[d]/100;
+  // Frecuencias suavizadas en tres escalas.
+  let p12=dirichletMean(f12[d],12,.8),
+      p36=dirichletMean(f36[d],36,1),
+      p120=dirichletMean(f120[d],120,1.5);
 
-  // Método A: probabilidad a 2 pasos mediante P².
-  // P(X[t+2]=d | X[t]=last) = Σ_j P(last->j)P(j->d)
+  // Estimador A: transición de dos pasos P².
   let p2Matrix=0;
   for(let j=0;j<10;j++) p2Matrix+=p1(last,j)*p1(j,d);
 
-  // Método B: observación empírica directa a t+2.
-  let p2Last=laplace(next2Last[d],cLast2,1),
-      p2Pair=laplace(next2Pair[d],cPair2,1);
+  // Estimadores B/C/D: conteo directo a t+2.
+  let pLast=dirichletMean(next2Last[d],cLast,1),
+      pPair=dirichletMean(next2Pair[d],cPair,1),
+      pTriple=dirichletMean(next2Triple[d],cTriple,1);
 
-  // El contexto de 2 dígitos pesa más solo si tiene suficiente soporte.
-  let pairSupport=cPair2/(cPair2+12),
-      p2Emp=(1-.40*pairSupport)*p2Last+(.40*pairSupport)*p2Pair;
+  // Cada contexto recibe peso según la cantidad de evidencia.
+  let rLast=reliability(cLast,16),
+      rPair=reliability(cPair,14),
+      rTriple=reliability(cTriple,10),
+      rMatrix=.72;
 
-  // Consenso de dos métodos independientes para el tick objetivo.
-  let targetP=.56*p2Emp+.44*p2Matrix;
+  // El contexto más largo no puede dominar si la muestra es pequeña.
+  let wLast=.34*rLast,
+      wPair=.26*rPair,
+      wTriple=.18*rTriple,
+      wMatrix=.22*rMatrix,
+      wSum=wLast+wPair+wTriple+wMatrix;
 
-  // Frecuencia base multi-muestra.
-  let freq=.50*p10+.30*p30+.20*p100;
+  let targetP=(wLast*pLast+wPair*pPair+wTriple*pTriple+wMatrix*p2Matrix)/wSum;
 
-  // Penalizaciones matemáticas puras por sobre-representación.
-  let excess10=Math.max(0,p10-.10),
-      excess30=Math.max(0,p30-.10),
-      excess100=Math.max(0,p100-.10),
-      excessTarget=Math.max(0,targetP-.10);
+  // Incertidumbre posterior de los tres conteos directos.
+  let vLast=dirichletVar(next2Last[d],cLast,1),
+      vPair=dirichletVar(next2Pair[d],cPair,1),
+      vTriple=dirichletVar(next2Triple[d],cTriple,1);
 
-  // Estabilidad entre las tres ventanas de frecuencia.
-  let mean=(p10+p30+p100)/3,
-      variance=((p10-mean)**2+(p30-mean)**2+(p100-mean)**2)/3,
-      instability=Math.sqrt(variance);
+  let uncertainty=Math.sqrt(
+   (wLast*vLast+wPair*vPair+wTriple*vTriple)/Math.max(.0001,wLast+wPair+wTriple)
+  );
 
-  // Desacuerdo entre estimación empírica t+2 y P².
-  let modelDisagreement=Math.abs(p2Emp-p2Matrix);
+  // Frecuencia general suavizada.
+  let freq=.50*p12+.30*p36+.20*p120;
 
-  // Chi-cuadrado local, solo si el dígito está sobre-representado.
-  let expected30=3,
-      chiOver=f30[d]>expected30
-       ? ((f30[d]-expected30)**2)/expected30
+  // Desacuerdo entre estimadores: si no coinciden, se penaliza.
+  let est=[pLast,pPair,pTriple,p2Matrix],
+      estMean=est.reduce((a,b)=>a+b,0)/est.length,
+      disagreement=Math.sqrt(
+       est.reduce((s,x)=>s+(x-estMean)*(x-estMean),0)/est.length
+      );
+
+  // Inestabilidad entre ventanas de frecuencia.
+  let fMean=(p12+p36+p120)/3,
+      instability=Math.sqrt(
+       ((p12-fMean)**2+(p36-fMean)**2+(p120-fMean)**2)/3
+      );
+
+  // Penalizaciones solo por exceso sobre el 10% teórico.
+  let excessTarget=Math.max(0,targetP-.10),
+      excess12=Math.max(0,p12-.10),
+      excess36=Math.max(0,p36-.10),
+      excess120=Math.max(0,p120-.10);
+
+  // Chi-cuadrado local sobre 36 ticks.
+  let expected36=3.6,
+      chiOver=f36[d]>expected36
+       ? ((f36[d]-expected36)**2)/expected36
        : 0;
 
-  // Riesgo interno V7:
-  // mayor peso al tick t+2 para compensar el delay real de 1 tick.
-  let risk=.30*targetP+
-           .10*freq+
-           .14*excessTarget+
-           .10*excess10+
-           .07*excess30+
-           .03*excess100+
-           .08*instability+
-           .08*modelDisagreement+
-           .0015*chiOver;
+  // Riesgo interno V8.
+  // Mantiene una escala compatible con el filtro visual actual (<= 3.5%).
+  let risk=.19*targetP+
+           .05*freq+
+           .10*excessTarget+
+           .07*excess12+
+           .045*excess36+
+           .02*excess120+
+           .025*uncertainty+
+           .05*disagreement+
+           .05*instability+
+           .0012*chiOver;
 
   rows.push({
    d,risk,
-   p12:p10,
-   p36:p30,
-   p120:p100,
+   p12,
+   p36,
+   p120,
    pt:targetP,
    pe:freq,
-   p2Emp,
-   p2Matrix
+   p2Matrix,
+   pLast,
+   pPair,
+   pTriple,
+   uncertainty
   });
  }
 
@@ -149,8 +194,7 @@ function analyse(){
      need=near?.05:.03,
      maxRisk=near?.085:.105;
 
- // Mantiene la misma salida para no tocar ninguna otra parte del programa.
- // El filtro interno ahora interpreta q.pt como riesgo matemático del tick t+2.
+ // Mantiene el mismo contrato para no tocar la interfaz ni el resto del programa.
  let safe=q.risk<maxRisk&&
           spread>=need&&
           q.p12<=.10&&
