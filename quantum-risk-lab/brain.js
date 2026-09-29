@@ -15,8 +15,9 @@ function analyse(){
  // El modelo es estrictamente de primer orden:
  // P(X[t+1]=j | X[t]=i)
  //
- // Como existe 1 tick de delay entre señal y entrada, se proyecta a t+2:
- // P²(i,d) = sum_j P(i,j) * P(j,d)
+ // Compensación ampliada de delay:
+ // la señal se proyecta 3 pasos hacia delante (t+3).
+ // P³(i,d) = sum_j sum_k P(i,j) * P(j,k) * P(k,d)
  //
  // La Entropía Rényi de orden 2 mide cuán concentrada o uniforme es
  // la distribución proyectada. Si está demasiado cerca de uniforme,
@@ -47,12 +48,16 @@ function analyse(){
   Array.from({length:STATES},(_,b)=>prob(a,b))
  );
 
- // Proyección de dos pasos desde el estado actual para compensar el delay.
- let p2=Array(STATES).fill(0);
+ // Proyección de tres pasos desde el estado actual para compensar un delay mayor.
+ let p3=Array(STATES).fill(0);
  for(let d=0;d<STATES;d++){
   let s=0;
-  for(let j=0;j<STATES;j++) s+=P[last][j]*P[j][d];
-  p2[d]=s;
+  for(let j=0;j<STATES;j++){
+   for(let k=0;k<STATES;k++){
+    s+=P[last][j]*P[j][k]*P[k][d];
+   }
+  }
+  p3[d]=s;
  }
 
  // Entropía Rényi H_alpha(p) = 1/(1-alpha) log2(sum p_i^alpha)
@@ -62,7 +67,7 @@ function analyse(){
   return -Math.log2(Math.max(sumSq,1e-12));
  }
 
- let H2=renyi2(p2),
+ let H2=renyi2(p3),
      H2MAX=Math.log2(STATES),
      h2Norm=H2/H2MAX;
 
@@ -86,10 +91,10 @@ function analyse(){
  let rows=[];
 
  for(let d=0;d<STATES;d++){
-  let targetP=p2[d];
+  let targetP=p3[d];
 
   // Ventaja matemática frente al 10% teórico.
-  // Un candidato con P² menor que 0.10 recibe menor riesgo.
+  // Un candidato con P³ menor que 0.10 recibe menor riesgo.
   let excess=Math.max(0,targetP-.10);
 
   // Cuando Rényi está muy cerca del máximo, la cadena parece casi uniforme.
@@ -164,7 +169,7 @@ function analyse(){
      near=pnl>=target()*.75;
 
  // Filtro interno Rényi:
- // - riesgo Markov a t+2 razonablemente bajo
+ // - riesgo Markov a t+3 razonablemente bajo
  // - suficiente soporte del estado actual
  // - evita estados casi completamente uniformes
  let safe=q.risk<.085&&
