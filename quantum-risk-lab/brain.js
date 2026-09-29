@@ -1,5 +1,5 @@
 const $=x=>document.getElementById(x);
-let running=true,pending=null,pnl=0,stake=1,wins=0,losses=0,ops=0,hist=[],lastEpoch=0,ws,retry,observe=0,lastPick=null,lastSignal=null;
+let running=true,pending=null,pnl=0,stake=1,wins=0,losses=0,ops=0,hist=[],lastEpoch=0,ws,retry,observe=0,lastPick=null,lastSignal=null,candidateHistory=[];
 const cfg=()=>window.QUANTUM_CONFIG||{baseStake:1,target:3};
 const baseStake=()=>Math.max(.01,Number(cfg().baseStake)||1);
 const target=()=>Math.max(.01,Number(cfg().target)||3);
@@ -129,13 +129,38 @@ function analyse(){
 
  rows.sort((a,b)=>a.risk-b.risk);
 
- let pool=rows.filter(x=>x.d!==lastPick),
-     q=pool[0],
-     second=pool[1];
+ let pool=rows.filter(x=>x.d!==lastPick);
+ if(pool.length<2)return null;
+
+ // V10 · DIVERSIFICACIÓN MATEMÁTICA DE CANDIDATOS
+ // Antes se elegía siempre el mínimo absoluto, lo que podía encerrar
+ // la salida en 1-2 dígitos. Ahora:
+ // - se consideran los 4 mejores según Markov + Rényi,
+ // - se cuenta cuántas veces apareció cada uno como candidato en las
+ //   últimas 24 decisiones,
+ // - se aplica una penalización determinista por sobreuso.
+ // No hay aleatoriedad: el riesgo Markov sigue siendo la base.
+ let shortlist=pool.slice(0,Math.min(4,pool.length)),
+     recent=candidateHistory.slice(-24),
+     use=Array(10).fill(0);
+
+ recent.forEach(d=>use[d]++);
+
+ let lastCandidate=recent.length?recent[recent.length-1]:null;
+
+ let ranked=shortlist.map(x=>{
+  let repetitionPenalty=use[x.d]*.00135,
+      immediatePenalty=x.d===lastCandidate?.0022:0,
+      adjusted=x.risk+repetitionPenalty+immediatePenalty;
+  return{x,adjusted};
+ }).sort((a,b)=>a.adjusted-b.adjusted||a.x.risk-b.x.risk);
+
+ let q=ranked[0].x,
+     second=ranked[1]?ranked[1].x:pool.find(x=>x.d!==q.d);
 
  if(!q||!second)return null;
 
- let spread=second.risk-q.risk,
+ let spread=Math.max(0,ranked[1]?ranked[1].adjusted-ranked[0].adjusted:Math.abs(second.risk-q.risk)),
      near=pnl>=target()*.75;
 
  // Filtro interno Rényi:
@@ -189,7 +214,13 @@ function finish(profit,label){
 }
 function tick(d){
  if(pending&&pending.mode==='SIM'){let p=pending;finish(d===p.d?-p.stake:p.stake*.10,'SIM')}
- hist.push(d);if(hist.length>1000)hist.shift();if(running&&!pending)observe++;ui(d);showSignal(analyse());
+ hist.push(d);if(hist.length>1000)hist.shift();if(running&&!pending)observe++;ui(d);
+ let s=analyse();
+ if(s){
+  candidateHistory.push(s.q.d);
+  if(candidateHistory.length>40)candidateHistory.shift();
+ }
+ showSignal(s);
 }
 function connect(){
  clearTimeout(retry);ws=new WebSocket('wss://api.derivws.com/trading/v1/options/ws/public');
@@ -202,7 +233,7 @@ function connect(){
 }
 $('start').onclick=()=>{
  if($('mode').value==='DEMO'&&!window.demoReady){$('status').textContent='CONECTA DEMO DERIV PRIMERO';return}
- pnl=0;stake=baseStake();wins=0;losses=0;ops=0;pending=null;observe=0;lastPick=null;running=true;$('status').textContent='ANALIZANDO';log('NUEVA SESIÓN '+$('mode').value+' · STAKE $'+stake.toFixed(2)+' · META $'+target().toFixed(2));ui();
+ pnl=0;stake=baseStake();wins=0;losses=0;ops=0;pending=null;observe=0;lastPick=null;candidateHistory=[];running=true;$('status').textContent='ANALIZANDO';log('NUEVA SESIÓN '+$('mode').value+' · STAKE $'+stake.toFixed(2)+' · META $'+target().toFixed(2));ui();
 };
 $('stop').onclick=()=>{running=false;$('status').textContent='STOP MANUAL'};
 $('buy').onclick=()=>{if(!running){$('status').textContent='PULSA REINICIAR SESIÓN';return}if(pending){$('status').textContent='OPERACIÓN EN CURSO';return}let s=analyse();if(!s){$('status').textContent='AÚN CALIBRANDO';return}enter(s)};
