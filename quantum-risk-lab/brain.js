@@ -236,7 +236,7 @@ $('start').onclick=()=>{
  pnl=0;stake=baseStake();wins=0;losses=0;ops=0;pending=null;observe=0;lastPick=null;candidateHistory=[];running=true;$('status').textContent='ANALIZANDO';log('NUEVA SESIÓN '+$('mode').value+' · STAKE $'+stake.toFixed(2)+' · META $'+target().toFixed(2));ui();
 };
 $('stop').onclick=()=>{running=false;$('status').textContent='STOP MANUAL'};
-$('buy').onclick=()=>{if(!running){$('status').textContent='PULSA REINICIAR SESIÓN';return}if(pending){$('status').textContent='OPERACIÓN EN CURSO';return}let s=analyse();if(!s){$('status').textContent='AÚN CALIBRANDO';return}enter(s)};
+$('buy').onclick=()=>{if(!running){$('status').textContent='PULSA REINICIAR SESIÓN';return}if(pending){$('status').textContent='OPERACIÓN EN CURSO';return}let s=lastSignal;if(!s){$('status').textContent='AÚN CALIBRANDO';return}enter(s)};
 window.demoSettlement=p=>finish(p,'DERIV DEMO');
 window.demoTradeError=tradeError;
 stake=baseStake();$('status').textContent='ANÁLISIS ACTIVO';ui();connect();
