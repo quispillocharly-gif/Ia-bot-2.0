@@ -10,85 +10,128 @@ function ent(a){let c=Array(10).fill(0);a.forEach(x=>c[x]++);let h=0;c.forEach(v
 function analyse(){
  if(hist.length<180)return null;
 
- // QUANTUM ANALYSIS V2:
- // combina frecuencia multi-ventana, frecuencia con decaimiento temporal,
- // transiciones de orden 1 y 2, tendencia reciente, recencia y repetición.
+ // QUANTUM ANALYSIS V3
+ // Mejora la robustez sin cambiar la interfaz ni los filtros visibles:
+ // 1) frecuencias suavizadas en 12/36/120 ticks,
+ // 2) dos memorias exponenciales (rápida y lenta),
+ // 3) Markov de orden 1 y 2 con peso según confiabilidad,
+ // 4) detector de aceleración por mitades de ventana,
+ // 5) penalización por desacuerdo entre señales.
  let last=hist[hist.length-1],prev=hist[hist.length-2],
      w12=hist.slice(-12),w36=hist.slice(-36),w120=hist.slice(-120),
      f12=Array(10).fill(0),f36=Array(10).fill(0),f120=Array(10).fill(0),
+     r18=Array(10).fill(0),p18=Array(10).fill(0),
      tr1=Array(10).fill(0),tr2=Array(10).fill(0);
 
  w12.forEach(x=>f12[x]++);
  w36.forEach(x=>f36[x]++);
  w120.forEach(x=>f120[x]++);
+ w36.slice(-18).forEach(x=>r18[x]++);
+ w36.slice(0,18).forEach(x=>p18[x]++);
 
- // Markov orden 1: qué suele venir después del último dígito.
- for(let i=Math.max(1,hist.length-360);i<hist.length;i++){
+ for(let i=Math.max(1,hist.length-420);i<hist.length;i++){
   if(hist[i-1]===last)tr1[hist[i]]++;
  }
-
- // Markov orden 2: qué suele venir después del par [anterior, último].
- for(let i=Math.max(2,hist.length-600);i<hist.length;i++){
+ for(let i=Math.max(2,hist.length-700);i<hist.length;i++){
   if(hist[i-2]===prev&&hist[i-1]===last)tr2[hist[i]]++;
  }
 
- let t1=tr1.reduce((a,b)=>a+b,0),t2=tr2.reduce((a,b)=>a+b,0),
-     H=ent(w36),rows=[];
+ let t1=tr1.reduce((a,b)=>a+b,0),
+     t2=tr2.reduce((a,b)=>a+b,0),
+     H=ent(w36),
+     entropyNorm=H/Math.log2(10),
+     rows=[];
 
- // Probabilidad ponderada: los ticks recientes pesan más que los antiguos.
- function decayProb(d){
-  let start=Math.max(0,hist.length-64),num=0,den=0,w=1;
+ function shrink(count,n,k){
+  // Suavizado ligero hacia 10%; evita extremos falsos sin borrar la señal.
+  return (count+k*.10)/(n+k);
+ }
+
+ function ewmaProb(d,lookback,decay){
+  let start=Math.max(0,hist.length-lookback),num=0,den=0,w=1;
   for(let i=hist.length-1;i>=start;i--){
    if(hist[i]===d)num+=w;
    den+=w;
-   w*=.94;
+   w*=decay;
   }
   return den?num/den:.10;
  }
 
  for(let d=0;d<10;d++){
   let gap=0;
-  for(let i=hist.length-1;i>=0&&gap<50;i--){if(hist[i]===d)break;gap++}
+  for(let i=hist.length-1;i>=0&&gap<60;i--){if(hist[i]===d)break;gap++}
 
   let streak=0;
   for(let i=hist.length-1;i>=0&&hist[i]===d;i--)streak++;
 
-  let p12=f12[d]/12,p36=f36[d]/36,p120=f120[d]/120,pe=decayProb(d);
+  let p12=shrink(f12[d],12,.7),
+      p36=shrink(f36[d],36,1.2),
+      p120=shrink(f120[d],120,2.0),
+      peFast=ewmaProb(d,48,.91),
+      peSlow=ewmaProb(d,120,.972),
+      pe=.64*peFast+.36*peSlow;
 
-  // Suavizado: si hay pocas transiciones, acercamos el cálculo al 10% base
-  // para no sobrevalorar coincidencias casuales con muestras pequeñas.
-  let raw1=t1?tr1[d]/t1:.10,rel1=t1/(t1+12),pt1=rel1*raw1+(1-rel1)*.10;
-  let raw2=t2?tr2[d]/t2:.10,rel2=t2/(t2+8),pt2=rel2*raw2+(1-rel2)*.10;
-  let pt=.72*pt1+.28*pt2;
+  // Transiciones suavizadas. El orden 2 solo gana peso cuando hay evidencia.
+  let raw1=t1?tr1[d]/t1:.10,
+      rel1=t1/(t1+14),
+      pt1=rel1*raw1+(1-rel1)*.10;
 
-  // Evita que una ventana de 12 ticks con cero apariciones domine demasiado.
-  let short=.82*p12+.18*p36;
-  let mid=.90*p36+.10*p120;
+  let raw2=t2?tr2[d]/t2:.10,
+      rel2=t2/(t2+10),
+      pt2=rel2*raw2+(1-rel2)*.10;
 
-  // Penalizaciones solo cuando el dígito está acelerando o concentrándose.
-  let rise=Math.max(0,p12-p36)*.32+Math.max(0,p36-p120)*.10;
-  let hot=Math.max(0,p12-.10)*.82+
-          Math.max(0,p36-.10)*.32+
-          Math.max(0,pe-.10)*.38;
-  let transition=Math.max(0,pt-.10)*.62;
+  let pairWeight=Math.min(.32,.32*rel2),
+      pt=(1-pairWeight)*pt1+pairWeight*pt2;
 
-  // Recencia continua: castiga sobre todo 0-3 ticks, sin premiar ausencias largas.
-  let recency=gap===0?.065:gap===1?.038:gap===2?.018:gap===3?.008:0;
-  let repeat=Math.min(streak,3)*.030;
+  let recent18=r18[d]/18,
+      prior18=p18[d]/18,
+      accel18=Math.max(0,recent18-prior18);
 
-  // Núcleo de riesgo: conserva una escala similar a la versión anterior.
-  let risk=.32*short+
+  let short=.80*p12+.20*p36,
+      mid=.88*p36+.12*p120;
+
+  // Aceleración: penaliza un dígito que empieza a calentarse ahora.
+  let rise=Math.max(0,p12-p36)*.24+
+           Math.max(0,p36-p120)*.08+
+           accel18*.16+
+           Math.max(0,peFast-peSlow)*.20;
+
+  let hot=Math.max(0,p12-.10)*.72+
+          Math.max(0,p36-.10)*.28+
+          Math.max(0,pe-.10)*.34;
+
+  // En un régimen muy entrópico (casi uniforme), reducimos el peso de patrones
+  // de transición para no perseguir ruido.
+  let patternTrust=Math.max(.45,Math.min(1,1.65-entropyNorm));
+  let transition=Math.max(0,pt-.10)*.58*patternTrust;
+
+  let recency=gap===0?.060:
+              gap===1?.034:
+              gap===2?.017:
+              gap===3?.008:
+              gap===4?.003:0;
+
+  let repeat=Math.min(streak,3)*.028;
+
+  // Si las señales principales se contradicen mucho, sube un poco el riesgo.
+  let hi=Math.max(short,mid,pe,pt),
+      lo=Math.min(short,mid,pe,pt),
+      disagreement=Math.max(0,(hi-lo)-.055)*.15;
+
+  let risk=.30*short+
            .18*mid+
            .12*p120+
            .16*pt+
-           .22*pe+
-           hot+transition+rise+recency+repeat;
+           .24*pe+
+           hot+transition+rise+recency+repeat+disagreement;
 
-  rows.push({d,risk,p12,p36,p120,pt,pe,gap});
+  rows.push({d,risk,p12,p36,p120,pt,pe,peFast,peSlow,gap});
  }
 
  rows.sort((a,b)=>a.risk-b.risk);
- let pool=rows.filter(x=>x.d!==lastPick),q=pool[0],second=pool[1];
+ let pool=rows.filter(x=>x.d!==lastPick),
+     q=pool[0],
+     second=pool[1];
  if(!q||!second)return null;
 
  let spread=second.risk-q.risk,
@@ -96,8 +139,6 @@ function analyse(){
      need=near?.05:.03,
      maxRisk=near?.085:.105;
 
- // Seguridad interna: exige acuerdo razonable entre corto plazo,
- // transición y frecuencia ponderada.
  let safe=q.risk<maxRisk&&
           spread>=need&&
           q.p12<=.10&&
