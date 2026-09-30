@@ -8,7 +8,7 @@ function ent(a){let c=Array(10).fill(0);a.forEach(x=>c[x]++);let h=0;c.forEach(v
 function analyse(){
  if(hist.length<240)return null;
 
- // QUANTUM ANALYSIS V9
+ // QUANTUM ANALYSIS V13 · V9 + REFUERZOS ADITIVOS
  // CADENA DE MARKOV DE PRIMER ORDEN + ENTROPÍA RÉNYI (alpha = 2)
  // Sin GAP, EMA/EWMA ni indicadores técnicos.
  //
@@ -31,7 +31,9 @@ function analyse(){
  let n=hist.length,
      last=hist[n-1],
      counts=Array.from({length:STATES},()=>Array(STATES).fill(0)),
-     rowN=Array(STATES).fill(0);
+     rowN=Array(STATES).fill(0),
+     recentCounts=Array.from({length:STATES},()=>Array(STATES).fill(0)),
+     recentRowN=Array(STATES).fill(0);
 
  // Matriz de transición de primer orden con hasta 1000 transiciones recientes.
  for(let i=Math.max(0,n-1001);i<n-1;i++){
@@ -39,15 +41,42 @@ function analyse(){
   counts[a][b]++;
   rowN[a]++;
  }
+ // Segunda matriz, solo reciente, para medir estabilidad del patrón.
+ for(let i=Math.max(0,n-301);i<n-1;i++){
+  let a=hist[i],b=hist[i+1];
+  recentCounts[a][b]++;
+  recentRowN[a]++;
+ }
 
  function prob(a,b){
   return (counts[a][b]+ALPHA)/(rowN[a]+STATES*ALPHA);
+ }
+ function recentProb(a,b){
+  return (recentCounts[a][b]+ALPHA)/(recentRowN[a]+STATES*ALPHA);
  }
 
  // Matriz P suavizada.
  let P=Array.from({length:STATES},(_,a)=>
   Array.from({length:STATES},(_,b)=>prob(a,b))
  );
+ let PRecent=Array.from({length:STATES},(_,a)=>
+  Array.from({length:STATES},(_,b)=>recentProb(a,b))
+ );
+
+ function advance(dist,matrix){
+  let out=Array(STATES).fill(0);
+  for(let d=0;d<STATES;d++){
+   let s=0;
+   for(let j=0;j<STATES;j++)s+=dist[j]*matrix[j][d];
+   out[d]=s;
+  }
+  return out;
+ }
+
+ // Horizontes vecinos: solo validan P⁴, no lo reemplazan.
+ let p1=P[last].slice(),
+     p2=advance(p1,P),
+     p3=advance(p2,P);
 
  // Proyección de cuatro pasos para compensar 3 ticks de delay real.
  let p4=Array(STATES).fill(0);
@@ -62,6 +91,15 @@ function analyse(){
   }
   p4[d]=s;
  }
+
+ // Horizonte posterior P⁵ para comprobar estabilidad alrededor de P⁴.
+ let p5=advance(p4,P);
+
+ // Proyección P⁴ con la matriz reciente para detectar cambios de régimen.
+ let rp1=PRecent[last].slice(),
+     rp2=advance(rp1,PRecent),
+     rp3=advance(rp2,PRecent),
+     p4Recent=advance(rp3,PRecent);
 
  // Entropía Rényi H_alpha(p) = 1/(1-alpha) log2(sum p_i^alpha)
  // Para alpha=2: H2 = -log2(sum p_i^2)
@@ -108,7 +146,25 @@ function analyse(){
   // Penalización por poco soporte de la fila del estado actual.
   let supportPenalty=1-support;
 
-  // Riesgo interno V9.
+  // V13 · REFUERZOS ADITIVOS, sin sustituir P⁴:
+  // 1) consenso entre P³, P⁴ y P⁵;
+  // 2) estabilidad entre la matriz larga y la matriz reciente;
+  // 3) incertidumbre de la ruta Markov por soporte efectivo.
+  let horizonMean=(p3[d]+2*targetP+p5[d])/4,
+      horizonDisagreement=Math.sqrt(
+       ((p3[d]-horizonMean)**2+
+        (targetP-horizonMean)**2+
+        (p5[d]-horizonMean)**2)/3
+      ),
+      regimeShift=Math.abs(targetP-p4Recent[d]);
+
+  let routeSupport=0;
+  for(let j=0;j<STATES;j++){
+   routeSupport+=p3[j]*(rowN[j]/(rowN[j]+25));
+  }
+  let routeUncertainty=1-Math.min(1,routeSupport);
+
+  // Riesgo interno V9 + capas V13 aditivas.
   // Escala calibrada para conservar el filtro visual existente <= 3.5%.
   let risk=.010+
            .145*targetP+
@@ -116,7 +172,10 @@ function analyse(){
            .115*entropyPenalty+
            .055*rowEntropyPenalty+
            .008*supportPenalty+
-           .006*(1-confidence);
+           .006*(1-confidence)+
+           .030*horizonDisagreement+
+           .024*regimeShift+
+           .004*routeUncertainty;
 
   rows.push({
    d,
@@ -131,7 +190,13 @@ function analyse(){
    rowRenyi:rowEntropy,
    rowRenyiNorm:rowEntropyNorm,
    support,
-   confidence
+   confidence,
+   p3:p3[d],
+   p5:p5[d],
+   p4Recent:p4Recent[d],
+   horizonDisagreement,
+   regimeShift,
+   routeUncertainty
   });
  }
 
@@ -178,7 +243,9 @@ function analyse(){
  let safe=q.risk<.085&&
           q.pt<.10&&
           q.support>=.45&&
-          q.renyiNorm<.992;
+          q.renyiNorm<.992&&
+          q.horizonDisagreement<.035&&
+          q.regimeShift<.045;
 
  // La UI ya tiene un campo ENTROPÍA; ahora muestra H2 de Rényi.
  return{q,spread,H:H2,near,safe};
