@@ -15,10 +15,10 @@ function analyse(){
  // El modelo es estrictamente de primer orden:
  // P(X[t+1]=j | X[t]=i)
  //
- // Compensación ampliada de delay: 3 ticks reales.
- // La señal se proyecta 4 pasos hacia delante (t+4):
- // señal t -> delay 1 -> delay 2 -> delay 3 -> tick objetivo t+4.
- // P⁴(i,d) = sum_j sum_k sum_m P(i,j) * P(j,k) * P(k,m) * P(m,d)
+ // Compensación de delay: 2 ticks reales.
+ // La señal se proyecta 3 pasos hacia delante (t+3):
+ // señal t -> delay 1 -> delay 2 -> tick objetivo t+3.
+ // P³(i,d) = sum_j sum_k P(i,j) * P(j,k) * P(k,d)
  //
  // La Entropía Rényi de orden 2 mide cuán concentrada o uniforme es
  // la distribución proyectada. Si está demasiado cerca de uniforme,
@@ -73,33 +73,17 @@ function analyse(){
   return out;
  }
 
- // Horizontes vecinos: solo validan P⁴, no lo reemplazan.
+ // P³ es el objetivo principal para compensar 2 ticks de delay.
+ // P² y P⁴ solo validan la estabilidad alrededor del objetivo.
  let p1=P[last].slice(),
      p2=advance(p1,P),
-     p3=advance(p2,P);
+     p3=advance(p2,P),
+     p4=advance(p3,P);
 
- // Proyección de cuatro pasos para compensar 3 ticks de delay real.
- let p4=Array(STATES).fill(0);
- for(let d=0;d<STATES;d++){
-  let s=0;
-  for(let j=0;j<STATES;j++){
-   for(let k=0;k<STATES;k++){
-    for(let m=0;m<STATES;m++){
-     s+=P[last][j]*P[j][k]*P[k][m]*P[m][d];
-    }
-   }
-  }
-  p4[d]=s;
- }
-
- // Horizonte posterior P⁵ para comprobar estabilidad alrededor de P⁴.
- let p5=advance(p4,P);
-
- // Proyección P⁴ con la matriz reciente para detectar cambios de régimen.
+ // Proyección P³ con la matriz reciente para detectar cambios de régimen.
  let rp1=PRecent[last].slice(),
      rp2=advance(rp1,PRecent),
-     rp3=advance(rp2,PRecent),
-     p4Recent=advance(rp3,PRecent);
+     p3Recent=advance(rp2,PRecent);
 
  // Entropía Rényi H_alpha(p) = 1/(1-alpha) log2(sum p_i^alpha)
  // Para alpha=2: H2 = -log2(sum p_i^2)
@@ -108,7 +92,7 @@ function analyse(){
   return -Math.log2(Math.max(sumSq,1e-12));
  }
 
- let H2=renyi2(p4),
+ let H2=renyi2(p3),
      H2MAX=Math.log2(STATES),
      h2Norm=H2/H2MAX;
 
@@ -132,10 +116,10 @@ function analyse(){
  let rows=[];
 
  for(let d=0;d<STATES;d++){
-  let targetP=p4[d];
+  let targetP=p3[d];
 
   // Ventaja matemática frente al 10% teórico.
-  // Un candidato con P⁴ menor que 0.10 recibe menor riesgo.
+  // Un candidato con P³ menor que 0.10 recibe menor riesgo.
   let excess=Math.max(0,targetP-.10);
 
   // Cuando Rényi está muy cerca del máximo, la cadena parece casi uniforme.
@@ -146,21 +130,21 @@ function analyse(){
   // Penalización por poco soporte de la fila del estado actual.
   let supportPenalty=1-support;
 
-  // V13 · REFUERZOS ADITIVOS, sin sustituir P⁴:
-  // 1) consenso entre P³, P⁴ y P⁵;
+  // V13 · REFUERZOS ADITIVOS, sin sustituir P³:
+  // 1) consenso entre P², P³ y P⁴;
   // 2) estabilidad entre la matriz larga y la matriz reciente;
   // 3) incertidumbre de la ruta Markov por soporte efectivo.
-  let horizonMean=(p3[d]+2*targetP+p5[d])/4,
+  let horizonMean=(p2[d]+2*targetP+p4[d])/4,
       horizonDisagreement=Math.sqrt(
-       ((p3[d]-horizonMean)**2+
+       ((p2[d]-horizonMean)**2+
         (targetP-horizonMean)**2+
-        (p5[d]-horizonMean)**2)/3
+        (p4[d]-horizonMean)**2)/3
       ),
-      regimeShift=Math.abs(targetP-p4Recent[d]);
+      regimeShift=Math.abs(targetP-p3Recent[d]);
 
   let routeSupport=0;
   for(let j=0;j<STATES;j++){
-   routeSupport+=p3[j]*(rowN[j]/(rowN[j]+25));
+   routeSupport+=p2[j]*(rowN[j]/(rowN[j]+25));
   }
   let routeUncertainty=1-Math.min(1,routeSupport);
 
@@ -191,9 +175,9 @@ function analyse(){
    rowRenyiNorm:rowEntropyNorm,
    support,
    confidence,
-   p3:p3[d],
-   p5:p5[d],
-   p4Recent:p4Recent[d],
+   p2:p2[d],
+   p4:p4[d],
+   p3Recent:p3Recent[d],
    horizonDisagreement,
    regimeShift,
    routeUncertainty
@@ -237,7 +221,7 @@ function analyse(){
      near=pnl>=target()*.75;
 
  // Filtro interno Rényi:
- // - riesgo Markov a t+4 razonablemente bajo
+ // - riesgo Markov a t+3 razonablemente bajo
  // - suficiente soporte del estado actual
  // - evita estados casi completamente uniformes
  let safe=q.risk<.085&&
