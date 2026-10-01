@@ -488,7 +488,7 @@ function enter(s){
  if(!running||pending||!s||!s.safe||s!==lastSignal){$('status').textContent='ESPERANDO SEÑAL COMPLETA';return}
  let d=s.q.d,mode=$('mode').value;
  if(mode==='DEMO'&&!window.demoReady){$('status').textContent='CONECTA DEMO DERIV';return}
- lastPick=d;observe=0;pending={d,stake,mode};ops++;
+ lastPick=d;observe=0;pending={d,stake,mode};ops++;$('buy').disabled=true;
  $('decision').textContent='COMPRA '+mode+' · DIFFER D'+d;$('reason').textContent='$'+stake.toFixed(2)+' · duración 1 tick';log('COMPRA '+mode+' D'+d+' $'+stake.toFixed(2));ui();
  if(mode==='DEMO'){ $('status').textContent='ENVIANDO A DERIV…'; window.sendDemoTrade(d,stake).catch(e=>tradeError(e));}
  else $('status').textContent='SIM ABIERTA';
@@ -497,28 +497,61 @@ function tradeError(e){
  log('ERROR DEMO '+(e?.message||e));pending=null;observe=0;$('status').textContent='ERROR DEMO · REVISA LOG';ui();
 }
 function finish(profit,label){
- profit=Number(profit);if(!Number.isFinite(profit)){tradeError(new Error('Resultado inválido'));return}
+ profit=Number(profit);
+ if(!Number.isFinite(profit)){tradeError(new Error('Resultado inválido'));return}
  pnl+=profit;
+
  if(profit>0){
-  wins++;stake=Math.max(baseStake(),stake+profit);log('WIN '+label+' +
- if(pnl>=target()){running=false;$('status').textContent='META +$'+target().toFixed(2)+' · STOP';$('phase').textContent='META'}
- else if(running)$('status').textContent='OBSERVANDO';
+  wins++;
+  stake=Math.max(baseStake(),stake+profit);
+  log('WIN '+label+' +$'+profit.toFixed(2));
+ }else{
+  losses++;
+  stake=baseStake();
+  cooldownTicks=Math.max(cooldownTicks,3);
+  log('MATCH '+label+' $'+profit.toFixed(2)+' · recalibración 3T');
+ }
+
+ pending=null;
+ observe=0;
+ arming=null;
+ lastSignal=null;
+ $('buy').disabled=true;
+ $('buy').textContent='ESPERANDO SEÑAL';
+ $('sepPick').textContent='—';
+
+ if(pnl>=target()){
+  running=false;
+  $('status').textContent='META +$'+target().toFixed(2)+' · STOP';
+  $('phase').textContent='META';
+ }else if(running){
+  $('status').textContent=profit>0?'REVALIDANDO':'RECALIBRANDO TRAS MATCH';
+ }
  ui();
 }
 function tick(d,price){
  tickCounter++;
+
+ // Descuenta protecciones que ya venían activas antes de este tick.
+ if(cooldownTicks>0)cooldownTicks--;
+ if(deteriorationTicks>0)deteriorationTicks--;
+
+ // Evalúa resultados shadow cuyo vencimiento corresponde a este tick.
  settleShadow(d);
 
+ // Liquida simulación antes de recalcular la nueva señal.
  if(pending&&pending.mode==='SIM'){
   let p=pending;
   finish(d===p.d?-p.stake:p.stake*.10,'SIM');
  }
 
- hist.push(d);if(hist.length>1000)hist.shift();
- if(Number.isFinite(price)){quotes.push(price);if(quotes.length>1000)quotes.shift()}
+ hist.push(d);
+ if(hist.length>1000)hist.shift();
+ if(Number.isFinite(price)){
+  quotes.push(price);
+  if(quotes.length>1000)quotes.shift();
+ }
  if(running&&!pending)observe++;
- if(cooldownTicks>0)cooldownTicks--;
- if(deteriorationTicks>0)deteriorationTicks--;
  ui(d);
 
  let raw=analyse(),ready=null,reason='';
@@ -555,6 +588,7 @@ function tick(d,price){
   }else{
    arming.age++;
    arming.minScore=Math.min(arming.minScore,raw.finalScore);
+
    if(arming.age<2){
     reason='Validación real '+arming.age+'/2 ticks.';
    }else if(arming.minScore>=70){
