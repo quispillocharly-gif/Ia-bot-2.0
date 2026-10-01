@@ -248,7 +248,7 @@ function showSignal(s){
   return;
  }
  let sep=s.spread*100,riskPct=s.q.risk*100,
-     adjacent=currentTick!==null&&Math.abs(s.q.d-currentTick)===1;
+     adjacent=currentTick!==null&&Math.abs(s.q.d-currentTick)<=1;
  $('risk').textContent=riskPct.toFixed(1)+'%';
  if($('sepPick'))$('sepPick').textContent='D'+s.q.d;
  $('spread').textContent=sep.toFixed(1);
@@ -256,7 +256,7 @@ function showSignal(s){
  $('phase').textContent=s.near?'MODO META':'ANÁLISIS';
  $('meter').style.width=Math.min(100,s.spread*1000)+'%';
  if($('evidenceCandidates')){
-  $('evidenceCandidates').textContent='CANDIDATO D'+s.q.d+' · TICK D'+currentTick+' · ±1 '+(adjacent?'SÍ':'NO');
+  $('evidenceCandidates').textContent='CANDIDATO D'+s.q.d+' · TICK D'+currentTick+' · 0/±1 '+(adjacent?'SÍ':'NO');
  }
  if(!running){
   $('decision').textContent='CANDIDATO D'+s.q.d;
@@ -264,14 +264,14 @@ function showSignal(s){
   buy.textContent='INICIAR AUTO';
   buy.disabled=false;
  }else if(adjacent&&!pending){
-  $('decision').textContent='AUTO ±1 · D'+s.q.d;
+  $('decision').textContent='AUTO 0/±1 · D'+s.q.d;
   $('reason').textContent='Condición cumplida: candidato D'+s.q.d+' y tick D'+currentTick+'.';
   buy.textContent='AUTO · COMPRA D'+s.q.d;
   buy.disabled=true;
  }else{
   $('decision').textContent='AUTO · CANDIDATO D'+s.q.d;
-  $('reason').textContent='Esperando que |DIFFER − TICK| = 1.';
-  buy.textContent='AUTO ACTIVO · ESPERANDO ±1';
+  $('reason').textContent='Esperando que |DIFFER − TICK| ≤ 1.';
+  buy.textContent='AUTO ACTIVO · ESPERANDO 0/±1';
   buy.disabled=true;
  }
 }
@@ -288,7 +288,7 @@ function enter(s){
  }
  lastPick=d;observe=0;pending={d,stake,mode};ops++;
  $('decision').textContent='AUTO '+mode+' · DIFFER D'+d;
- $('reason').textContent='Tick D'+currentTick+' · regla ±1 · $'+stake.toFixed(2)+' · duración 1 tick';
+ $('reason').textContent='Tick D'+currentTick+' · regla 0/±1 · $'+stake.toFixed(2)+' · duración 1 tick';
  log('AUTO '+mode+' · D'+d+' con tick D'+currentTick+' · $'+stake.toFixed(2));
  ui();
  if(mode==='DEMO'){
@@ -331,9 +331,9 @@ function tick(d){
  }
  showSignal(s);
 
- // Capa AUTO: compra solo cuando el candidato Real Pro está a ±1
+ // Capa AUTO: compra solo cuando el candidato Real Pro está igual o a ±1
  // del tick actual. Ej.: D4 con tick D3 o D5.
- if(running&&!pending&&s&&Math.abs(s.q.d-d)===1){
+ if(running&&!pending&&s&&Math.abs(s.q.d-d)<=1){
   enter(s);
  }
 }
@@ -354,8 +354,8 @@ function startAuto(){
  }
  pnl=0;stake=baseStake();wins=0;losses=0;ops=0;pending=null;observe=0;
  lastPick=null;lastSignal=null;candidateHistory=[];running=true;
- $('status').textContent='AUTO ACTIVO · BUSCANDO ±1';
- $('buy').textContent='AUTO ACTIVO · ESPERANDO ±1';
+ $('status').textContent='AUTO ACTIVO · BUSCANDO 0/±1';
+ $('buy').textContent='AUTO ACTIVO · ESPERANDO 0/±1';
  $('buy').disabled=true;
  log('AUTO INICIADO '+mode+' · STAKE $'+stake.toFixed(2)+' · META STOP $'+target().toFixed(2));
  ui();
