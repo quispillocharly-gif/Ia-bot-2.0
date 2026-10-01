@@ -1,22 +1,20 @@
 {
   "version": "6.0-autonomous-research-director",
-  "timestamp": 1790827672,
-  "decision": "FORWARD_EDGE_SIGNAL_DETECTED",
-  "forward_confirmed_systems": [
-    "V6.1"
-  ],
-  "economic_status": "STAT_EDGE_BELOW_BREAK_EVEN",
+  "timestamp": 1790831236,
+  "decision": "NO_CONFIRMED_EDGE_CONTINUE_RESEARCH",
+  "forward_confirmed_systems": [],
+  "economic_status": "PAYOUT_READY_FORWARD_NOT_CONFIRMED",
   "payout_status": "OK",
   "break_even_rate": 0.11198208286674133,
-  "payout_age_seconds": 1779,
+  "payout_age_seconds": 1706,
   "payout_fresh": true,
   "payout_max_age_seconds": 7200,
   "drift_status": "DRIFT_WATCH",
-  "historical_to_future_gap": -0.010641365231137304,
+  "historical_to_future_gap": -0.010592450240929863,
   "multiple_testing": {
     "v4": {
       "tests": 64,
-      "adjusted_p": 0.8925482834689956
+      "adjusted_p": 1.0
     },
     "v5": {
       "tests": 54,
@@ -24,35 +22,35 @@
     }
   },
   "forward_evidence": {
-    "v4_1_p": 0.45154268531883157,
-    "v5_2_p": 0.5611174468071969,
-    "v6_1_p": 0.023463009169683902,
-    "v7_economic_placebo_p": 0.401
+    "v4_1_p": 0.4806377513768368,
+    "v5_2_p": 0.5271606365566334,
+    "v6_1_p": 0.02717692016439788,
+    "v7_economic_placebo_p": 0.2518
   },
   "adaptive_v7": {
     "status": "NOT_CONFIRMED",
-    "current_regime": "UNIFORM",
-    "shadow_pnl": -3290.460000000186,
-    "ev_per_signal": -0.08886410284109825,
-    "calibration_ece": 0.07683897630316477
+    "current_regime": "REPEAT_HEAVY",
+    "shadow_pnl": -3296.9300000001895,
+    "ev_per_signal": -0.08857476761055799,
+    "calibration_ece": 0.07687393757931994
   },
   "challenger_v8": {
     "status": "RESEARCHING",
     "leader_id": "conf14_agree3",
-    "leader_signals": 18685,
-    "leader_hit_rate": 0.10093658014450094,
-    "leader_wilson": 0.0966988197692602,
+    "leader_signals": 18808,
+    "leader_hit_rate": 0.1009145044661846,
+    "leader_wilson": 0.09669078059781813,
     "leader_bonferroni_p": 1.0,
     "confirmed_variants": []
   },
   "evidence_sprint": {
     "status": "RESEARCHING_EDGE",
-    "days_left": 8.0410417015625,
+    "days_left": 7.99952123306713,
     "core_gates_passed": 1,
     "core_gates_total": 4,
-    "projected_signals_at_deadline": 83437.76352370974
+    "projected_signals_at_deadline": 83330.4253051308
   },
-  "registry_total": 163,
+  "registry_total": 164,
   "graveyard_size": 1,
   "priorities": [
     "Do not reuse the rejected V4.1 transition_3 candidate without new independent evidence.",
@@ -60,7 +58,7 @@
     "Treat V5 historical gains as exploratory after multiple-testing correction.",
     "V7 adaptive shadow strategy did not confirm economic edge; use its regime and calibration diagnostics only.",
     "Continue V8 prospective challenger tournament; do not select a winner before independent forward evidence and Bonferroni correction.",
-    "Forward evidence has not cleared the current conservative break-even rate 0.1120."
+    "Current conservative MATCH break-even is 0.1120; wait for forward confirmation before economic evaluation."
   ],
   "note": "V6 records evidence, corrects exploratory multiple testing, monitors drift and failed candidates, and does not equate hit rate with profitability."
 }
