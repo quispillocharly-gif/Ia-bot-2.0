@@ -174,7 +174,7 @@ function signalDiversityState(){
 function diversifyRows(rows){
  const div=signalDiversityState(),
        qualified=[...rows]
-         .filter(r=>r.evidence>=60)
+         .filter(r=>r.evidence>=70)
          .sort((a,b)=>a.upperRisk-b.upperRisk||b.evidence-a.evidence),
        // Diversification only acts inside the mathematically qualified group.
        pool=qualified.slice(0,6),
@@ -283,7 +283,7 @@ function analyse(){
      edge=.10-q.pt,
      uncertainty=Math.max(1e-6,q.upperRisk-q.pt),
      evidenceRatio=edge/uncertainty,
-     mathPass=!!diversified.q && q.evidence>=60;
+     mathPass=!!diversified.q && q.evidence>=70;
 
  return{
   q,spread,H,near:pnl>=target()*.75,
@@ -469,7 +469,7 @@ function tick(d,price){
    arming={startedAt:tickCounter};
    reason='Ventaja matemática detectada · esperando 1 tick real.';
   }else{
-   reason='Buscando candidatos con evidencia ≥60 entre D0–D9.';
+   reason='Buscando candidatos con evidencia ≥70 entre D0–D9.';
   }
  }else{
   // Después del delay se recalculan TODOS los dígitos.
@@ -482,7 +482,7 @@ function tick(d,price){
    if(recentSignalDigits.length>30)recentSignalDigits.shift();
    reason='Señal matemática diversificada lista · válida para una compra.';
   }else{
-   reason='Ningún candidato ≥60 tras el tick · continúa analizando.';
+   reason='Ningún candidato ≥70 tras el tick · continúa analizando.';
   }
  }
 
