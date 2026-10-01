@@ -1,0 +1,448 @@
+const $=x=>document.getElementById(x);
+let running=true,pending=null,pnl=0,stake=1,wins=0,losses=0,ops=0,hist=[],quotes=[],lastEpoch=0,ws,retry,observe=0,lastPick=null,lastSignal=null,candidateHistory=[];
+let tickCounter=0,arming=null,cooldownTicks=0,deteriorationTicks=0,shadowQueue=[];
+let shadowStats={rawWins:0,rawLosses:0,confirmedWins:0,confirmedLosses:0,confirmedRecent:[]};
+try{let z=JSON.parse(localStorage.getItem('quantumShadowMathUltra1')||'null');if(z&&typeof z==='object')shadowStats={...shadowStats,...z}}catch(_){}
+const cfg=()=>window.QUANTUM_CONFIG||{baseStake:1,target:3};
+const baseStake=()=>Math.max(.01,Number(cfg().baseStake)||1);
+const target=()=>Math.max(.01,Number(cfg().target)||3);
+function log(s){$('log').textContent=s+'\n'+$('log').textContent}
+function ent(a){let c=Array(10).fill(0);a.forEach(x=>c[x]++);let h=0;c.forEach(v=>{if(v){let p=v/a.length;h-=p*Math.log2(p)}});return h}
+
+function clamp(x,a=0,b=1){return Math.max(a,Math.min(b,x))}
+function logSafe(x){return Math.log(Math.max(x,1e-15))}
+function renyi2(dist){
+ let s=dist.reduce((z,p)=>z+p*p,0);
+ return -Math.log2(Math.max(s,1e-15));
+}
+function entropyNorm(dist){
+ let h=0;
+ for(const p of dist)if(p>0)h-=p*Math.log2(p);
+ return h/Math.log2(10);
+}
+function jsDivergence(p,q){
+ let m=p.map((x,i)=>(x+q[i])/2),kl=(a,b)=>{
+  let s=0;
+  for(let i=0;i<a.length;i++)if(a[i]>0)s+=a[i]*Math.log(a[i]/Math.max(b[i],1e-15));
+  return s;
+ };
+ return .5*kl(p,m)+.5*kl(q,m);
+}
+function digitDistribution(a,alpha=.5){
+ let c=Array(10).fill(alpha),n=10*alpha;
+ for(const d of a){c[d]++;n++}
+ return c.map(x=>x/n);
+}
+function pairDistribution(a,alpha=.05){
+ let c=Array(100).fill(alpha),n=100*alpha;
+ for(let i=1;i<a.length;i++){c[a[i-1]*10+a[i]]++;n++}
+ return c.map(x=>x/n);
+}
+function regimeMath(){
+ if(hist.length<180)return{shift:1,score:0,gate:false};
+ let recent=hist.slice(-70),long=hist.slice(-260),
+     older=long.slice(0,Math.max(1,long.length-recent.length)),
+     dm=jsDivergence(digitDistribution(recent),digitDistribution(older)),
+     dp=jsDivergence(pairDistribution(recent),pairDistribution(older)),
+     shift=.4*dm+.6*dp,
+     score=100*(1-clamp(shift/.12)),
+     gate=shift<.095;
+ return{shift,score,gate};
+}
+function ctxKey(seq,i,depth){
+ if(depth===0)return'*';
+ if(i<depth)return null;
+ return seq.slice(i-depth,i).join('');
+}
+function tailKey(tail,depth){
+ if(depth===0)return'*';
+ if(tail.length<depth)return null;
+ return tail.slice(-depth).join('');
+}
+function makeExpert(seq,depth,window,evalN=140){
+ const alpha=.5,start=Math.max(0,seq.length-window),table=new Map();
+ let loss=0,evals=0;
+ for(let i=start;i<seq.length;i++){
+  let k=ctxKey(seq,i,depth);
+  if(k===null)continue;
+  let node=table.get(k);
+  if(!node){node={c:Array(10).fill(0),n:0};table.set(k,node)}
+  let y=seq[i],p=(node.c[y]+alpha)/(node.n+10*alpha);
+  if(i>=Math.max(start,seq.length-evalN)){loss-=logSafe(p);evals++}
+  node.c[y]++;node.n++;
+ }
+ let prior=1/Math.pow(depth+1,1.15);
+ return{depth,window,table,loss,evals,prior,avgLoss:loss/Math.max(1,evals)};
+}
+function expertDist(expert,tail){
+ const alpha=.5,k=tailKey(tail,expert.depth);
+ if(k===null)return{p:Array(10).fill(.1),support:0};
+ let node=expert.table.get(k);
+ if(!node)return{p:Array(10).fill(.1),support:0};
+ let den=node.n+10*alpha;
+ return{p:node.c.map(x=>(x+alpha)/den),support:node.n/(node.n+18)};
+}
+function expertWeights(experts){
+ let min=Math.min(...experts.map(e=>e.loss)),eta=.38,raw=[];
+ for(const e of experts){
+  let z=e.prior*Math.exp(-eta*(e.loss-min));
+  raw.push(Number.isFinite(z)?z:0);
+ }
+ let s=raw.reduce((a,b)=>a+b,0)||1;
+ return raw.map(x=>x/s);
+}
+function mixtureDist(experts,weights,tail){
+ let p=Array(10).fill(0),support=0;
+ for(let i=0;i<experts.length;i++){
+  let z=expertDist(experts[i],tail),w=weights[i];
+  support+=w*z.support;
+  for(let d=0;d<10;d++)p[d]+=w*z.p[d];
+ }
+ return{p,support};
+}
+function forecastWith(experts,weights,tail,steps,maxDepth=3){
+ let states=new Map([[tail.slice(-maxDepth).join(''),{tail:tail.slice(-maxDepth),prob:1}]]);
+ let horizons=[];
+ for(let step=1;step<=steps;step++){
+  let next=new Map(),agg=Array(10).fill(0);
+  for(const st of states.values()){
+   let dist=mixtureDist(experts,weights,st.tail).p;
+   for(let d=0;d<10;d++){
+    let pr=st.prob*dist[d];
+    if(pr<1e-12)continue;
+    agg[d]+=pr;
+    let nt=st.tail.concat(d).slice(-maxDepth),key=nt.join('');
+    let old=next.get(key);
+    if(old)old.prob+=pr;else next.set(key,{tail:nt,prob:pr});
+   }
+  }
+  horizons.push(agg);
+  states=next;
+ }
+ return horizons;
+}
+function forecastSingle(expert,tail,steps,maxDepth=3){
+ return forecastWith([expert],[1],tail,steps,maxDepth)[steps-1];
+}
+function weightedStd(vals,weights,mean){
+ let s=0;
+ for(let i=0;i<vals.length;i++)s+=weights[i]*(vals[i]-mean)*(vals[i]-mean);
+ return Math.sqrt(Math.max(0,s));
+}
+function buildMathModel(seq){
+ const depths=[0,1,2,3],windows=[120,240,480],experts=[];
+ for(const w of windows)for(const d of depths)experts.push(makeExpert(seq,d,w,140));
+ let weights=expertWeights(experts),tail=seq.slice(-3),
+     horizons=forecastWith(experts,weights,tail,4,3),
+     p2=horizons[1],p3=horizons[2],p4=horizons[3],
+     p3Experts=experts.map(e=>forecastSingle(e,tail,3,3)),
+     support=mixtureDist(experts,weights,tail).support,
+     eff=1/weights.reduce((s,w)=>s+w*w,0),
+     bestI=weights.indexOf(Math.max(...weights));
+ return{experts,weights,p2,p3,p4,p3Experts,support,eff,best:experts[bestI],bestWeight:weights[bestI]};
+}
+function mathScore(row,model,regime,hNorm){
+ let edge=clamp((.10-row.upperRisk)/.016),
+     meanEdge=clamp((.10-row.pt)/.018),
+     cert=1-clamp(row.disagreement/.018),
+     horizon=1-clamp(row.horizonDisagreement/.020),
+     support=clamp(model.support/.72),
+     stable=clamp(regime.score/100),
+     modelMix=clamp((model.eff-1)/5),
+     info=clamp((1-hNorm)/.025);
+ return 100*(.24*edge+.14*meanEdge+.16*cert+.13*horizon+.11*support+.10*stable+.07*modelMix+.05*info);
+}
+function saveShadow(){
+ try{localStorage.setItem('quantumShadowMathUltra1',JSON.stringify(shadowStats))}catch(_){}
+}
+function queueShadow(d,type,due){
+ shadowQueue.push({d,type,due});
+ if(shadowQueue.length>120)shadowQueue.shift();
+}
+function settleShadow(actual){
+ let keep=[];
+ for(const x of shadowQueue){
+  if(x.due>tickCounter){keep.push(x);continue}
+  let win=actual!==x.d;
+  if(x.type==='confirmed'){
+   if(win)shadowStats.confirmedWins++;else shadowStats.confirmedLosses++;
+   shadowStats.confirmedRecent.push(win?1:0);
+   if(shadowStats.confirmedRecent.length>20)shadowStats.confirmedRecent.shift();
+  }else{
+   if(win)shadowStats.rawWins++;else shadowStats.rawLosses++;
+  }
+ }
+ shadowQueue=keep;
+ let r=shadowStats.confirmedRecent;
+ if(r.length>=20){
+  let losses=r.filter(x=>x===0).length;
+  if(losses>=5)deteriorationTicks=Math.max(deteriorationTicks,8);
+ }
+ saveShadow();
+}
+
+function analyse(){
+ if(hist.length<240)return null;
+
+ // MATH SUPER ULTRA PLUS v1
+ // - KT / Dirichlet(alpha=1/2) posterior prediction
+ // - variable-order contexts 0..3
+ // - 3 memory windows as online experts
+ // - exponential weighting by prequential log-loss
+ // - exact discrete forecast to t+3 for the 2-tick delay + 1-tick contract
+ // - uncertainty from expert disagreement
+ // - Jensen-Shannon regime shift filter
+ const seq=hist.slice(-900),model=buildMathModel(seq),regime=regimeMath(),
+       p2=model.p2,p3=model.p3,p4=model.p4,
+       H=renyi2(p3),hNorm=H/Math.log2(10),rows=[];
+
+ for(let d=0;d<10;d++){
+  let vals=model.p3Experts.map(x=>x[d]),
+      disagreement=weightedStd(vals,model.weights,p3[d]),
+      hMean=(p2[d]+2*p3[d]+p4[d])/4,
+      horizonDisagreement=Math.sqrt(((p2[d]-hMean)**2+(p3[d]-hMean)**2+(p4[d]-hMean)**2)/3),
+      upperRisk=p3[d]+.55*disagreement+.35*horizonDisagreement,
+      lowerRisk=Math.max(0,p3[d]-.55*disagreement),
+      row={
+       d,
+       risk:upperRisk,
+       upperRisk,
+       lowerRisk,
+       pt:p3[d],
+       p2:p2[d],
+       p4:p4[d],
+       disagreement,
+       horizonDisagreement,
+       support:model.support,
+       effModels:model.eff
+      };
+  row.score=mathScore(row,model,regime,hNorm);
+  rows.push(row);
+ }
+
+ rows.sort((a,b)=>a.upperRisk-b.upperRisk||a.pt-b.pt);
+ let q=rows[0],second=rows[1];
+ if(!q||!second)return null;
+
+ let spread=Math.max(0,second.upperRisk-q.upperRisk),
+     finalScore=q.score,
+     baseSafe=
+       q.pt<.100 &&
+       q.upperRisk<.103 &&
+       q.disagreement<.020 &&
+       q.horizonDisagreement<.022 &&
+       model.support>=.18 &&
+       model.eff>=1.35 &&
+       hNorm<.9998,
+     regimeSafe=regime.gate,
+     safe=baseSafe&&regimeSafe&&finalScore>=64,
+     leader='D'+model.best.depth+' W'+model.best.window;
+
+ return{
+  q,spread,H,near:pnl>=target()*.75,
+  safe,baseSafe,techSafe:true,regimeSafe,
+  tech:null,regime,finalScore,
+  math:{
+   eff:model.eff,
+   support:model.support,
+   bestDepth:model.best.depth,
+   bestWindow:model.best.window,
+   bestWeight:model.bestWeight,
+   leader,
+   hNorm
+  }
+ };
+}
+function showSignal(raw,ready,waitReason=''){
+ const buy=$('buy');
+ lastSignal=ready||null;
+
+ if(!raw){
+  $('decision').textContent='MATH ULTRA · ANALIZANDO';
+  $('reason').textContent=waitReason||'KT + contextos variables + mezcla por log-loss.';
+  $('sepPick').textContent='—';
+  $('risk').textContent='—';$('spread').textContent='—';$('entropy').textContent='—';
+  $('phase').textContent='OBSERVAR';$('meter').style.width='0%';
+  buy.textContent='ESPERANDO SEÑAL';buy.disabled=true;
+  if($('techScore'))$('techScore').textContent='—';
+  if($('techRsi'))$('techRsi').textContent='—';
+  if($('techMacd'))$('techMacd').textContent='—';
+  if($('techTrend'))$('techTrend').textContent='—';
+  if($('finalScore'))$('finalScore').textContent='—';
+  if($('regimeState'))$('regimeState').textContent='—';
+  updateShadowUI();
+  return;
+ }
+
+ $('risk').textContent=(raw.q.upperRisk*100).toFixed(2)+'%';
+ $('spread').textContent=(raw.spread*100).toFixed(2);
+ $('entropy').textContent=raw.H.toFixed(3);
+ $('phase').textContent=raw.near?'MODO META':'MATH ULTRA';
+
+ if($('techScore'))$('techScore').textContent=raw.math.eff.toFixed(1);
+ if($('techRsi'))$('techRsi').textContent=(raw.q.pt*100).toFixed(2)+'%';
+ if($('techMacd'))$('techMacd').textContent=(raw.q.disagreement*100).toFixed(2)+'%';
+ if($('techTrend'))$('techTrend').textContent=raw.math.leader;
+ if($('finalScore'))$('finalScore').textContent=raw.finalScore.toFixed(0)+'/100';
+ if($('regimeState'))$('regimeState').textContent=raw.regime.gate?'ESTABLE':'CAMBIO';
+ updateShadowUI();
+
+ if(pending){
+  $('sepPick').textContent='—';
+  $('decision').textContent='OPERACIÓN EN CURSO';
+  $('reason').textContent='Esperando liquidación.';
+  buy.textContent='OPERACIÓN EN CURSO';buy.disabled=true;
+  return;
+ }
+
+ if(!ready){
+  $('sepPick').textContent='—';
+  $('decision').textContent='MATH ULTRA · ANALIZANDO';
+  $('reason').textContent=waitReason||'Todavía no hay señal matemática completa.';
+  buy.textContent='ESPERANDO SEÑAL';buy.disabled=true;
+  $('meter').style.width=Math.min(95,raw.finalScore)+'%';
+  return;
+ }
+
+ $('sepPick').textContent='D'+ready.q.d;
+ $('decision').textContent='MATH ULTRA · SEÑAL D'+ready.q.d;
+ $('reason').textContent='KT/CTW-style + log-loss + t+3 + régimen · score '+ready.finalScore.toFixed(0)+'/100.';
+ buy.textContent='COMPRAR AHORA · D'+ready.q.d+' · RIESGO '+(ready.q.upperRisk*100).toFixed(2)+'%';
+ buy.disabled=false;
+ $('meter').style.width='100%';
+}
+function updateShadowUI(){
+ if(!$('shadowState'))return;
+ let w=shadowStats.confirmedWins,l=shadowStats.confirmedLosses,n=w+l;
+ $('shadowState').textContent=n?((100*w/n).toFixed(1)+'% · '+n+' señales'):'SIN DATOS';
+}
+function ui(d){
+ if(d!==undefined)$('tick').textContent='D'+d;
+ $('pnl').textContent=(pnl>=0?'+':'')+'$'+pnl.toFixed(2);$('stake').textContent='$'+stake.toFixed(2);$('wins').textContent=wins;$('losses').textContent=losses;$('ops').textContent=ops;$('pick').textContent=lastPick===null?'—':'D'+lastPick;
+}
+function enter(s){
+ if(!running||pending||!s||!s.safe||s!==lastSignal){$('status').textContent='ESPERANDO SEÑAL COMPLETA';return}
+ let d=s.q.d,mode=$('mode').value;
+ if(mode==='DEMO'&&!window.demoReady){$('status').textContent='CONECTA DEMO DERIV';return}
+ lastPick=d;observe=0;pending={d,stake,mode};ops++;$('buy').disabled=true;
+ $('decision').textContent='COMPRA '+mode+' · DIFFER D'+d;$('reason').textContent='$'+stake.toFixed(2)+' · duración 1 tick';log('COMPRA '+mode+' D'+d+' $'+stake.toFixed(2));ui();
+ if(mode==='DEMO'){ $('status').textContent='ENVIANDO A DERIV…'; window.sendDemoTrade(d,stake).catch(e=>tradeError(e));}
+ else $('status').textContent='SIM ABIERTA';
+}
+function tradeError(e){
+ log('ERROR DEMO '+(e?.message||e));pending=null;observe=0;$('status').textContent='ERROR DEMO · REVISA LOG';ui();
+}
+function finish(profit,label){
+ profit=Number(profit);
+ if(!Number.isFinite(profit)){tradeError(new Error('Resultado inválido'));return}
+ pnl+=profit;
+
+ if(profit>0){
+  wins++;
+  stake=Math.max(baseStake(),stake+profit);
+  log('WIN '+label+' +$'+profit.toFixed(2));
+ }else{
+  losses++;
+  stake=baseStake();
+  cooldownTicks=Math.max(cooldownTicks,3);
+  log('MATCH '+label+' $'+profit.toFixed(2)+' · recalibración 3T');
+ }
+
+ pending=null;
+ observe=0;
+ arming=null;
+ lastSignal=null;
+ $('buy').disabled=true;
+ $('buy').textContent='ESPERANDO SEÑAL';
+ $('sepPick').textContent='—';
+
+ if(pnl>=target()){
+  running=false;
+  $('status').textContent='META +$'+target().toFixed(2)+' · STOP';
+  $('phase').textContent='META';
+ }else if(running){
+  $('status').textContent=profit>0?'REVALIDANDO':'RECALIBRANDO TRAS MATCH';
+ }
+ ui();
+}
+function tick(d,price){
+ tickCounter++;
+ if(cooldownTicks>0)cooldownTicks--;
+ if(deteriorationTicks>0)deteriorationTicks--;
+ settleShadow(d);
+
+ if(pending&&pending.mode==='SIM'){
+  let p=pending;
+  finish(d===p.d?-p.stake:p.stake*.10,'SIM');
+ }
+
+ hist.push(d);if(hist.length>1000)hist.shift();
+ if(Number.isFinite(price)){quotes.push(price);if(quotes.length>1000)quotes.shift()}
+ if(running&&!pending)observe++;
+ ui(d);
+
+ let raw=analyse(),ready=null,reason='';
+
+ if(raw){
+  candidateHistory.push(raw.q.d);
+  if(candidateHistory.length>40)candidateHistory.shift();
+ }
+
+ if(!running){
+  arming=null;reason='STOP MANUAL';
+ }else if(pending){
+  arming=null;reason='Operación en curso.';
+ }else if(cooldownTicks>0){
+  arming=null;reason='Recalibración matemática tras MATCH · '+cooldownTicks+'T.';
+ }else if(deteriorationTicks>0){
+  arming=null;reason='Protección shadow por deterioro reciente · '+deteriorationTicks+'T.';
+ }else if(!raw||!raw.safe){
+  arming=null;
+  if(!raw)reason='Recolectando historial.';
+  else if(!raw.baseSafe)reason='La evidencia matemática aún no es suficiente · score '+raw.finalScore.toFixed(0)+'/100.';
+  else if(!raw.regimeSafe)reason='Cambio de distribución detectado.';
+  else reason='Score matemático insuficiente: '+raw.finalScore.toFixed(0)+'/100.';
+ }else{
+  if(!arming||arming.d!==raw.q.d){
+   arming={d:raw.q.d,age:0,minScore:raw.finalScore,confirmedShadow:false};
+   queueShadow(raw.q.d,'raw',tickCounter+3);
+   reason='Preseñal matemática · validando 2 ticks reales.';
+  }else{
+   arming.age++;
+   arming.minScore=Math.min(arming.minScore,raw.finalScore);
+   if(arming.age<2){
+    reason='Validación matemática real '+arming.age+'/2 ticks.';
+   }else if(arming.minScore>=64){
+    ready={...raw,finalScore:Math.min(raw.finalScore,arming.minScore)};
+    reason='Confirmación matemática completa.';
+    if(!arming.confirmedShadow){
+     queueShadow(raw.q.d,'confirmed',tickCounter+1);
+     arming.confirmedShadow=true;
+    }
+   }else{
+    arming=null;reason='La evidencia cayó durante el delay.';
+   }
+  }
+ }
+
+ if($('delayState'))$('delayState').textContent=ready?'2/2 LISTO':arming?(Math.min(2,arming.age)+'/2'):'—';
+ showSignal(raw,ready,reason);
+}
+function connect(){
+ clearTimeout(retry);ws=new WebSocket('wss://api.derivws.com/trading/v1/options/ws/public');
+ ws.onopen=()=>ws.send(JSON.stringify({ticks_history:'R_75',count:300,end:'latest',style:'ticks'}));
+ ws.onmessage=e=>{let m=JSON.parse(e.data);
+  if(m.history&&m.history.prices){let p=Number(m.pip_size||4);quotes=m.history.prices.map(Number);hist=quotes.map(x=>Number(Number(x).toFixed(p).slice(-1)));ws.send(JSON.stringify({ticks:'R_75',subscribe:1}));$('status').textContent='LISTO · '+hist.length+' TICKS · HÍBRIDO'}
+  if(m.tick){let ep=+m.tick.epoch;if(ep===lastEpoch)return;lastEpoch=ep;let p=Number(m.tick.pip_size||4),price=Number(m.tick.quote),d=Number(price.toFixed(p).slice(-1));tick(d,price)}
+ };
+ ws.onclose=()=>retry=setTimeout(connect,2500);
+}
+$('start').onclick=()=>{
+ if($('mode').value==='DEMO'&&!window.demoReady){$('status').textContent='CONECTA DEMO DERIV PRIMERO';return}
+ pnl=0;stake=baseStake();wins=0;losses=0;ops=0;pending=null;observe=0;lastPick=null;lastSignal=null;candidateHistory=[];arming=null;cooldownTicks=0;deteriorationTicks=0;running=true;$('status').textContent='ANALIZANDO';log('NUEVA SESIÓN '+$('mode').value+' · STAKE $'+stake.toFixed(2)+' · META $'+target().toFixed(2));ui();
+};
+$('stop').onclick=()=>{running=false;$('status').textContent='STOP MANUAL'};
+$('buy').onclick=()=>{if(!running){$('status').textContent='PULSA REINICIAR SESIÓN';return}if(pending){$('status').textContent='OPERACIÓN EN CURSO';return}let s=lastSignal;if(!s){$('status').textContent='AÚN CALIBRANDO';return}enter(s)};
+window.demoSettlement=p=>finish(p,'DERIV DEMO');
+window.demoTradeError=tradeError;
+stake=baseStake();$('status').textContent='MATH SUPER ULTRA PLUS · ACTIVO';$('buy').disabled=true;ui();updateShadowUI();connect();
