@@ -339,7 +339,7 @@ function enter(s){
  lastPick=d;observe=0;pending={d,stake,mode};ops++;
  $('decision').textContent='AUTO '+mode+' · DIFFER D'+d;
  $('reason').textContent='V9 · evidencia bayesiana · $'+stake.toFixed(2)+' · duración 1 tick';
- log('V10 BOCPD · COMPRA D'+d+' · Q'+s.quality.toFixed(0)+' · $'+stake.toFixed(2));
+ log('V9 BOCPD · COMPRA D'+d+' · Q'+s.quality.toFixed(0)+' · $'+stake.toFixed(2));
  ui();
 
  if(mode==='DEMO'){
