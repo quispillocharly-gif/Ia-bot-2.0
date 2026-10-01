@@ -83,9 +83,9 @@ function expertDist(expert,tail){
  return{p:node.c.map(x=>(x+alpha)/den),support:node.n/(node.n+18)};
 }
 function expertWeights(experts){
- let min=Math.min(...experts.map(e=>e.loss)),eta=.38,raw=[];
+ let min=Math.min(...experts.map(e=>e.avgLoss)),eta=3.2,raw=[];
  for(const e of experts){
-  let z=e.prior*Math.exp(-eta*(e.loss-min));
+  let z=e.prior*Math.exp(-eta*(e.avgLoss-min));
   raw.push(Number.isFinite(z)?z:0);
  }
  let s=raw.reduce((a,b)=>a+b,0)||1;
@@ -247,7 +247,6 @@ function analyse(){
        q.disagreement<.020 &&
        q.horizonDisagreement<.022 &&
        model.support>=.18 &&
-       model.eff>=1.35 &&
        hNorm<.9998,
      regimeSafe=regime.gate,
      safe=baseSafe&&regimeSafe&&finalScore>=64,
@@ -433,7 +432,7 @@ function tick(d,price){
   }
  }else if(!raw||!raw.safe){
   if(!raw)reason='Recolectando historial.';
-  else if(!raw.baseSafe)reason='La evidencia matemática aún no es suficiente · score '+raw.finalScore.toFixed(0)+'/100.';
+  else if(!raw.baseSafe)reason='La evidencia matemática aún no es suficiente · revisando riesgo, soporte e incertidumbre · score '+raw.finalScore.toFixed(0)+'/100.';
   else if(!raw.regimeSafe)reason='Cambio de distribución detectado.';
   else reason='Score matemático insuficiente: '+raw.finalScore.toFixed(0)+'/100.';
  }else{
