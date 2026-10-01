@@ -298,39 +298,55 @@ function showSignal(s){
  if(!s){
   $('decision').textContent='OBSERVANDO';
   $('reason').textContent='Recolectando historial Markov/Rényi + datos técnicos.';
-  $('buy').textContent='COMPRAR AHORA · CALIBRANDO';
+  $('buy').textContent='COMPRAR AHORA · ESPERANDO';
   $('sepPick').textContent='—';
+  $('risk').textContent='—';
+  $('spread').textContent='—';
+  $('entropy').textContent='—';
+  $('phase').textContent='OBSERVAR';
+  $('meter').style.width='0%';
   if($('techScore'))$('techScore').textContent='—';
   if($('techRsi'))$('techRsi').textContent='—';
   if($('techMacd'))$('techMacd').textContent='—';
   if($('techTrend'))$('techTrend').textContent='—';
   return;
  }
- let sep=s.spread*100,riskPct=s.q.risk*100,visible=true,t=s.tech;
+
+ let sep=s.spread*100,riskPct=s.q.risk*100,t=s.tech;
  $('risk').textContent=riskPct.toFixed(1)+'%';
- $('sepPick').textContent=visible?'D'+s.q.d:'—';
- $('buy').textContent='COMPRAR AHORA · D'+s.q.d+' · RIESGO '+riskPct.toFixed(1)+'%';
  $('spread').textContent=sep.toFixed(1);
  $('entropy').textContent=s.H.toFixed(2);
  $('phase').textContent=s.near?'MODO META':'ANÁLISIS HÍBRIDO';
- $('meter').style.width=Math.min(100,s.spread*1000)+'%';
+
  if(t){
   if($('techScore'))$('techScore').textContent=t.score.toFixed(0)+'/100';
   if($('techRsi'))$('techRsi').textContent=t.R.toFixed(1);
   if($('techMacd'))$('techMacd').textContent=t.M.hist.toFixed(4);
   if($('techTrend'))$('techTrend').textContent=t.trend;
  }
+
  let techTxt=t?('TÉCNICO '+t.score.toFixed(0)+'/100 · RSI '+t.R.toFixed(1)+' · '+t.trend):'TÉCNICO CALIBRANDO';
- if(!s.baseSafe){
-  $('decision').textContent='CANDIDATO D'+s.q.d;
-  $('reason').textContent='Markov/Rényi todavía no confirma · '+techTxt;
- }else if(!s.techSafe){
-  $('decision').textContent='CANDIDATO D'+s.q.d+' · ESPERA TÉCNICA';
-  $('reason').textContent='Markov/Rényi confirma, pero falta confirmación técnica · '+techTxt;
- }else{
-  $('decision').textContent='SEÑAL HÍBRIDA D'+s.q.d;
-  $('reason').textContent='Markov/Rényi + análisis técnico confirmados · '+techTxt;
+
+ // IMPORTANTE: no mostrar ningún dígito candidato hasta que
+ // Markov/Rényi Y análisis técnico confirmen al mismo tiempo.
+ if(!s.safe){
+  $('sepPick').textContent='—';
+  $('buy').textContent='COMPRAR AHORA · ESPERANDO DOBLE CONFIRMACIÓN';
+  $('decision').textContent='ESPERANDO DOBLE CONFIRMACIÓN';
+  if(!s.baseSafe){
+   $('reason').textContent='Markov/Rényi todavía no confirma · '+techTxt;
+  }else{
+   $('reason').textContent='Markov/Rényi confirmado · falta análisis técnico · '+techTxt;
+  }
+  $('meter').style.width=Math.min(100,t?t.score:0)+'%';
+  return;
  }
+
+ $('sepPick').textContent='D'+s.q.d;
+ $('buy').textContent='COMPRAR AHORA · D'+s.q.d+' · RIESGO '+riskPct.toFixed(1)+'%';
+ $('decision').textContent='CANDIDATO CONFIRMADO · D'+s.q.d;
+ $('reason').textContent='Markov/Rényi + análisis técnico confirmados · '+techTxt;
+ $('meter').style.width='100%';
 }
 function ui(d){
  if(d!==undefined)$('tick').textContent='D'+d;
