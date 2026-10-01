@@ -22,9 +22,9 @@ function calcMACD(a){
  let sig=emaSeries(line,9),i=line.length-1;
  return{line:line[i]||0,signal:sig[i]||0,hist:(line[i]||0)-(sig[i]||0)};
 }
-function technicalAnalysis(){
- if(quotes.length<60)return null;
- let a=quotes.slice(-600),last=a[a.length-1],
+function technicalSnapshot(a){
+ if(a.length<60)return null;
+ let last=a[a.length-1],
      e9=emaSeries(a,9),e21=emaSeries(a,21),e50=emaSeries(a,50),
      ema9=e9[e9.length-1],ema21=e21[e21.length-1],ema50=e50[e50.length-1],
      R=calcRSI(a,14),M=calcMACD(a),
@@ -53,9 +53,62 @@ function technicalAnalysis(){
      bbStrength=Math.min(1,Math.abs(bbPos)),
      score=100*(.28*alignment+.24*emaStrength+.20*macdStrength+.12*rsiStrength+.10*momentumStrength+.06*bbStrength);
  score=Math.max(0,Math.min(100,score));
- let extreme=R>=82||R<=18||Math.abs(bbPos)>=1.45,
-     gate=score>=45&&!extreme;
- return{score,R,M,trend,ema9,ema21,ema50,bbPos,upper,lower,momentum,gate};
+ let extreme=R>=82||R<=18||Math.abs(bbPos)>=1.45;
+ return{score,R,M,trend,ema9,ema21,ema50,bbPos,upper,lower,momentum,extreme,vol};
+}
+function technicalAnalysis(){
+ if(quotes.length<60)return null;
+ let a=quotes.slice(-600),
+     now=technicalSnapshot(a);
+ if(!now)return null;
+
+ // COMPENSACIÓN TÉCNICA DEL DELAY DE 2 TICKS.
+ // Se estima la deriva inmediata con los últimos cambios y se proyectan
+ // dos ticks sintéticos. La señal técnica solo pasa si el contexto actual
+ // y el contexto proyectado a +2 ticks siguen siendo compatibles.
+ let diffs=[];
+ for(let i=Math.max(1,a.length-9);i<a.length;i++)diffs.push(a[i]-a[i-1]);
+ let weighted=0,weights=0;
+ for(let i=0;i<diffs.length;i++){let w=i+1;weighted+=diffs[i]*w;weights+=w}
+ let drift=weights?weighted/weights:0,
+     cap=Math.max(now.vol*1.35,Math.abs(a[a.length-1])*1e-7,1e-8);
+ drift=Math.max(-cap,Math.min(cap,drift));
+
+ let p1=a[a.length-1]+drift,
+     p2=p1+drift,
+     future=technicalSnapshot(a.concat([p1,p2]));
+
+ let trendCompatible=!!future&&(
+   now.trend===future.trend ||
+   now.trend==='LATERAL' ||
+   future.trend==='LATERAL'
+ );
+ let gate=!!future &&
+          now.score>=45 &&
+          future.score>=45 &&
+          !now.extreme &&
+          !future.extreme &&
+          trendCompatible;
+
+ return{
+  score:now.score,
+  R:now.R,
+  M:now.M,
+  trend:now.trend,
+  ema9:now.ema9,
+  ema21:now.ema21,
+  ema50:now.ema50,
+  bbPos:now.bbPos,
+  upper:now.upper,
+  lower:now.lower,
+  momentum:now.momentum,
+  projectedScore:future?future.score:0,
+  projectedTrend:future?future.trend:'—',
+  projectedRSI:future?future.R:50,
+  drift,
+  delayTicks:2,
+  gate
+ };
 }
 function analyse(){
  if(hist.length<240||quotes.length<60)return null;
@@ -294,17 +347,20 @@ function analyse(){
  return{q,spread,H:H2,near,safe,baseSafe,techSafe,tech};
 }
 function showSignal(s){
- lastSignal=s;
+ const buy=$('buy');
+
  if(!s){
-  $('decision').textContent='OBSERVANDO';
-  $('reason').textContent='Recolectando historial Markov/Rényi + datos técnicos.';
-  $('buy').textContent='COMPRAR AHORA · ESPERANDO';
+  lastSignal=null;
+  $('decision').textContent='ANALIZANDO';
+  $('reason').textContent='Buscando confirmación Markov/Rényi + técnica con delay 2T.';
   $('sepPick').textContent='—';
   $('risk').textContent='—';
   $('spread').textContent='—';
   $('entropy').textContent='—';
   $('phase').textContent='OBSERVAR';
   $('meter').style.width='0%';
+  buy.textContent='ESPERANDO SEÑAL';
+  buy.disabled=true;
   if($('techScore'))$('techScore').textContent='—';
   if($('techRsi'))$('techRsi').textContent='—';
   if($('techMacd'))$('techMacd').textContent='—';
@@ -313,10 +369,13 @@ function showSignal(s){
  }
 
  let sep=s.spread*100,riskPct=s.q.risk*100,t=s.tech;
+
+ // Los indicadores pueden seguir actualizándose, pero el dígito queda oculto
+ // hasta que la operación esté realmente habilitada.
  $('risk').textContent=riskPct.toFixed(1)+'%';
  $('spread').textContent=sep.toFixed(1);
  $('entropy').textContent=s.H.toFixed(2);
- $('phase').textContent=s.near?'MODO META':'ANÁLISIS HÍBRIDO';
+ $('phase').textContent=s.near?'MODO META':'ANÁLISIS';
 
  if(t){
   if($('techScore'))$('techScore').textContent=t.score.toFixed(0)+'/100';
@@ -325,27 +384,23 @@ function showSignal(s){
   if($('techTrend'))$('techTrend').textContent=t.trend;
  }
 
- let techTxt=t?('TÉCNICO '+t.score.toFixed(0)+'/100 · RSI '+t.R.toFixed(1)+' · '+t.trend):'TÉCNICO CALIBRANDO';
-
- // IMPORTANTE: no mostrar ningún dígito candidato hasta que
- // Markov/Rényi Y análisis técnico confirmen al mismo tiempo.
  if(!s.safe){
+  lastSignal=null;
   $('sepPick').textContent='—';
-  $('buy').textContent='COMPRAR AHORA · ESPERANDO DOBLE CONFIRMACIÓN';
-  $('decision').textContent='ESPERANDO DOBLE CONFIRMACIÓN';
-  if(!s.baseSafe){
-   $('reason').textContent='Markov/Rényi todavía no confirma · '+techTxt;
-  }else{
-   $('reason').textContent='Markov/Rényi confirmado · falta análisis técnico · '+techTxt;
-  }
-  $('meter').style.width=Math.min(100,t?t.score:0)+'%';
+  $('decision').textContent='ANALIZANDO';
+  $('reason').textContent='Sin señal completa todavía · validando también el contexto técnico a +2 ticks.';
+  buy.textContent='ESPERANDO SEÑAL';
+  buy.disabled=true;
+  $('meter').style.width=Math.min(95,t?t.score:0)+'%';
   return;
  }
 
+ lastSignal=s;
  $('sepPick').textContent='D'+s.q.d;
- $('buy').textContent='COMPRAR AHORA · D'+s.q.d+' · RIESGO '+riskPct.toFixed(1)+'%';
- $('decision').textContent='CANDIDATO CONFIRMADO · D'+s.q.d;
- $('reason').textContent='Markov/Rényi + análisis técnico confirmados · '+techTxt;
+ $('decision').textContent='SEÑAL LISTA · D'+s.q.d;
+ $('reason').textContent='Markov/Rényi + técnico actual + técnico proyectado 2T confirmados.';
+ buy.textContent='COMPRAR AHORA · D'+s.q.d+' · RIESGO '+riskPct.toFixed(1)+'%';
+ buy.disabled=false;
  $('meter').style.width='100%';
 }
 function ui(d){
@@ -353,8 +408,7 @@ function ui(d){
  $('pnl').textContent=(pnl>=0?'+':'')+'$'+pnl.toFixed(2);$('stake').textContent='$'+stake.toFixed(2);$('wins').textContent=wins;$('losses').textContent=losses;$('ops').textContent=ops;$('pick').textContent=lastPick===null?'—':'D'+lastPick;
 }
 function enter(s){
- if(!running||pending||!s)return;
- if(!s.safe){$('status').textContent='ESPERANDO CONFIRMACIÓN HÍBRIDA';return}
+ if(!running||pending||!s||!s.safe){$('status').textContent='ESPERANDO SEÑAL COMPLETA';return}
  let d=s.q.d,mode=$('mode').value;
  if(mode==='DEMO'&&!window.demoReady){$('status').textContent='CONECTA DEMO DERIV';return}
  lastPick=d;observe=0;pending={d,stake,mode};ops++;
@@ -396,10 +450,10 @@ function connect(){
 }
 $('start').onclick=()=>{
  if($('mode').value==='DEMO'&&!window.demoReady){$('status').textContent='CONECTA DEMO DERIV PRIMERO';return}
- pnl=0;stake=baseStake();wins=0;losses=0;ops=0;pending=null;observe=0;lastPick=null;candidateHistory=[];running=true;$('status').textContent='ANALIZANDO';log('NUEVA SESIÓN '+$('mode').value+' · STAKE $'+stake.toFixed(2)+' · META $'+target().toFixed(2));ui();
+ pnl=0;stake=baseStake();wins=0;losses=0;ops=0;pending=null;observe=0;lastPick=null;lastSignal=null;candidateHistory=[];running=true;$('status').textContent='ANALIZANDO';log('NUEVA SESIÓN '+$('mode').value+' · STAKE $'+stake.toFixed(2)+' · META $'+target().toFixed(2));ui();
 };
 $('stop').onclick=()=>{running=false;$('status').textContent='STOP MANUAL'};
 $('buy').onclick=()=>{if(!running){$('status').textContent='PULSA REINICIAR SESIÓN';return}if(pending){$('status').textContent='OPERACIÓN EN CURSO';return}let s=lastSignal;if(!s){$('status').textContent='AÚN CALIBRANDO';return}enter(s)};
 window.demoSettlement=p=>finish(p,'DERIV DEMO');
 window.demoTradeError=tradeError;
-stake=baseStake();$('status').textContent='ANÁLISIS ACTIVO';ui();connect();
+stake=baseStake();$('status').textContent='ANÁLISIS ACTIVO';$('buy').disabled=true;ui();connect();
