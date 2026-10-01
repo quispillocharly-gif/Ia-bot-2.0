@@ -1,6 +1,6 @@
 {
   "version": "2.0-differ-director",
-  "timestamp": 1790854503,
+  "timestamp": 1790855633,
   "decision": "COLLECT_V2_FORWARD_DATA",
   "baseline_random": 0.9,
   "payout_status": "OK",
@@ -25,34 +25,34 @@
   },
   "v2_leader": {
     "id": "vote2_margin005",
-    "signals": 1226,
-    "wins": 1112,
-    "losses": 114,
-    "hit_rate": 0.9070146818923328,
-    "wilson_lower": 0.8894625709791527,
-    "raw_economic_p": 0.9139057741820765,
+    "signals": 1276,
+    "wins": 1153,
+    "losses": 123,
+    "hit_rate": 0.9036050156739812,
+    "wilson_lower": 0.8861788039753975,
+    "raw_economic_p": 0.9651672426389482,
     "bonferroni_p": 1.0,
-    "shadow_pnl": -13.920000000000087,
-    "shadow_roi": -0.01135399673735733,
-    "max_drawdown_flat_stake": 21.56000000000007,
+    "shadow_pnl": -19.230000000000093,
+    "shadow_roi": -0.015070532915360575,
+    "max_drawdown_flat_stake": 23.60000000000009,
     "temporal_blocks": [
       {
-        "n": 409,
-        "wins": 373,
-        "hit_rate": 0.9119804400977995,
-        "wilson_lower": 0.8805488532740379
+        "n": 426,
+        "wins": 388,
+        "hit_rate": 0.9107981220657277,
+        "wilson_lower": 0.8799314086684226
       },
       {
-        "n": 409,
+        "n": 425,
+        "wins": 391,
+        "hit_rate": 0.92,
+        "wilson_lower": 0.8902862885083006
+      },
+      {
+        "n": 425,
         "wins": 374,
-        "hit_rate": 0.9144254278728606,
-        "wilson_lower": 0.8833106454523095
-      },
-      {
-        "n": 408,
-        "wins": 365,
-        "hit_rate": 0.8946078431372549,
-        "wilson_lower": 0.8610435157279679
+        "hit_rate": 0.88,
+        "wilson_lower": 0.8456514348708892
       }
     ],
     "block_stable": false,
@@ -61,13 +61,13 @@
       "stop_loss": 5.0,
       "base_stake": 1.0,
       "max_stake": 5.0,
-      "completed": 15,
+      "completed": 16,
       "targets": 2,
-      "stops": 13,
-      "target_rate": 0.13333333333333333,
-      "open_pnl": 3.709024929434607,
-      "open_stake": 2.367363674592119,
-      "open_trades": 93
+      "stops": 14,
+      "target_rate": 0.125,
+      "open_pnl": -0.9099999999999999,
+      "open_stake": 1.09,
+      "open_trades": 5
     },
     "status": "COLLECTING"
   },
@@ -78,7 +78,7 @@
   "ensemble_id": "ca07f0780cb1978d",
   "live_policy": {
     "version": "2.0-live-policy",
-    "timestamp": 1790854503,
+    "timestamp": 1790855633,
     "source": "v2",
     "rule": "vote2_margin005",
     "candidate_id": "3fa3b8fa19377b57",
@@ -86,10 +86,10 @@
     "confirmed": false,
     "economic_qualified": false,
     "break_even_rate": 0.9174311926605504,
-    "leader_signals": 1226,
-    "leader_hit_rate": 0.9070146818923328,
-    "leader_wilson": 0.8894625709791527,
-    "leader_shadow_pnl": -13.920000000000087,
+    "leader_signals": 1276,
+    "leader_hit_rate": 0.9036050156739812,
+    "leader_wilson": 0.8861788039753975,
+    "leader_shadow_pnl": -19.230000000000093,
     "money_policy": null,
     "note": "Demo-only policy. Research continues in parallel. The DIFFER digit is recalculated across 0-9 every tick; no digit is frozen. Money-management policy remains session-scoped."
   },
