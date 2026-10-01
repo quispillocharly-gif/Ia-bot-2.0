@@ -173,10 +173,11 @@ function signalDiversityState(){
 }
 function diversifyRows(rows){
  const div=signalDiversityState(),
-       base=[...rows].sort((a,b)=>a.upperRisk-b.upperRisk||a.pt-b.pt),
-       // Stay close to the mathematical frontier: diversification acts only
-       // among the six best conservative candidates of the current tick.
-       pool=base.slice(0,6),
+       qualified=[...rows]
+         .filter(r=>r.evidence>=60)
+         .sort((a,b)=>a.upperRisk-b.upperRisk||b.evidence-a.evidence),
+       // Diversification only acts inside the mathematically qualified group.
+       pool=qualified.slice(0,6),
        lambda=.0025+.0175*div.deficit,
        last=div.recent.length?div.recent[div.recent.length-1]:null;
 
@@ -184,14 +185,13 @@ function diversifyRows(rows){
   let usage=div.usage[r.d],
       usagePenalty=lambda*Math.log1p(usage*2.2),
       repeatPenalty=(r.d===last)?(.0015+.0045*div.deficit):0,
-      // Soft novelty bonus only when diversity has collapsed; never bans.
       noveltyBonus=(div.deficit>0&&usage<.15)?(.0035*div.deficit):0,
       frontierPenalty=rank>=5?.0015:0,
       selectionRisk=r.upperRisk+usagePenalty+repeatPenalty+frontierPenalty-noveltyBonus;
   return{...r,selectionRisk,usagePenalty,repeatPenalty,noveltyBonus};
- }).sort((a,b)=>a.selectionRisk-b.selectionRisk||a.upperRisk-b.upperRisk);
+ }).sort((a,b)=>a.selectionRisk-b.selectionRisk||b.evidence-a.evidence||a.upperRisk-b.upperRisk);
 
- return{q:ranked[0],second:ranked[1]||ranked[0],div,pool:ranked};
+ return{q:ranked[0]||null,second:ranked[1]||ranked[0]||null,div,pool:ranked,qualified};
 }
 
 function saveShadow(){
@@ -248,6 +248,7 @@ function analyse(){
        support:model.support,effModels:model.eff
       };
   row.score=mathScore(row,model,regime,hNorm);
+  row.evidence=clamp(row.score,0,100);
   rows.push(row);
 
   // Revalidación un tick después: ahora el mismo objetivo está a T+1.
@@ -269,29 +270,28 @@ function analyse(){
  }
 
  const diversified=diversifyRows(rows),
-       q=diversified.q,
-       second=diversified.second;
- if(!q||!second)return null;
+       fallback=[...rows].sort((a,b)=>b.evidence-a.evidence||a.upperRisk-b.upperRisk)[0],
+       q=diversified.q||fallback,
+       second=diversified.second||q;
+ if(!q)return null;
 
- let spread=Math.max(0,second.selectionRisk-q.selectionRisk),
-     finalScore=q.score,
-     baseSafe=true,
+ let spread=(diversified.q&&second)?Math.max(0,(second.selectionRisk??second.upperRisk)-(q.selectionRisk??q.upperRisk)):0,
+     finalScore=q.evidence,
+     baseSafe=!!diversified.q,
      regimeSafe=true,
      leader='D'+model.best.depth+' W'+model.best.window,
      edge=.10-q.pt,
      uncertainty=Math.max(1e-6,q.upperRisk-q.pt),
-     evidenceRatio=edge/uncertainty;
-
- // ÚNICO filtro de señal:
- // la probabilidad central debe estar por debajo del 10% y la ventaja
- // debe cubrir al menos una fracción razonable de la incertidumbre.
- // Es deliberadamente más flexible que exigir upperRisk < 10%.
- let mathPass=q.pt<.10 && evidenceRatio>.28 && q.upperRisk<.106;
+     evidenceRatio=edge/uncertainty,
+     mathPass=!!diversified.q && q.evidence>=60;
 
  return{
   q,spread,H,near:pnl>=target()*.75,
   safe:mathPass,baseSafe:mathPass,techSafe:true,regimeSafe:true,
   tech:null,regime,finalScore,recheck,mathPass,
+  evidenceCandidates:diversified.qualified
+    .sort((a,b)=>b.evidence-a.evidence||a.upperRisk-b.upperRisk)
+    .map(r=>({d:r.d,evidence:r.evidence,pt:r.pt,upperRisk:r.upperRisk})),
   math:{
    eff:model.eff,
    support:model.support,
@@ -305,16 +305,29 @@ function analyse(){
    diversity:diversified.div.effective,
    distinct10:diversified.div.distinct,
    diversityDeficit:diversified.div.deficit,
-   selectionRisk:q.selectionRisk,
-   usagePenalty:q.usagePenalty
+   selectionRisk:q.selectionRisk??q.upperRisk,
+   usagePenalty:q.usagePenalty??0
   }
  };
 }
+function updateEvidenceCandidates(raw){
+ const el=$('evidenceCandidates');
+ if(!el)return;
+ if(!raw||!raw.evidenceCandidates||!raw.evidenceCandidates.length){
+  el.textContent='NINGUNO ≥60';
+  return;
+ }
+ el.textContent=raw.evidenceCandidates
+   .map(x=>'D'+x.d+' · '+x.evidence.toFixed(0))
+   .join('   |   ');
+}
+
 function showSignal(raw,ready,waitReason=''){
  const buy=$('buy');
  lastSignal=ready||null;
 
  if(!raw){
+  updateEvidenceCandidates(null);
   $('decision').textContent='MATH ULTRA · ANALIZANDO';
   $('reason').textContent=waitReason||'KT + contextos variables + mezcla por log-loss.';
   $('sepPick').textContent='—';
@@ -331,6 +344,7 @@ function showSignal(raw,ready,waitReason=''){
   return;
  }
 
+ updateEvidenceCandidates(raw);
  $('risk').textContent=(raw.q.upperRisk*100).toFixed(2)+'%';
  $('spread').textContent=(raw.spread*100).toFixed(2);
  $('entropy').textContent=raw.H.toFixed(3);
@@ -340,7 +354,7 @@ function showSignal(raw,ready,waitReason=''){
  if($('techRsi'))$('techRsi').textContent=(raw.q.pt*100).toFixed(2)+'%';
  if($('techMacd'))$('techMacd').textContent=(raw.q.disagreement*100).toFixed(2)+'%';
  if($('techTrend'))$('techTrend').textContent=raw.math.distinct10+' distintos';
- if($('finalScore'))$('finalScore').textContent=raw.math.evidenceRatio.toFixed(2)+'×';
+ if($('finalScore'))$('finalScore').textContent=raw.finalScore.toFixed(0)+'/100';
  if($('regimeState'))$('regimeState').textContent=raw.regime.gate?'ESTABLE':'CAMBIO';
  updateShadowUI();
 
@@ -455,7 +469,7 @@ function tick(d,price){
    arming={startedAt:tickCounter};
    reason='Ventaja matemática detectada · esperando 1 tick real.';
   }else{
-   reason='Buscando evidencia matemática entre D0–D9.';
+   reason='Buscando candidatos con evidencia ≥60 entre D0–D9.';
   }
  }else{
   // Después del delay se recalculan TODOS los dígitos.
@@ -468,7 +482,7 @@ function tick(d,price){
    if(recentSignalDigits.length>30)recentSignalDigits.shift();
    reason='Señal matemática diversificada lista · válida para una compra.';
   }else{
-   reason='Sin evidencia suficiente tras el tick · continúa analizando.';
+   reason='Ningún candidato ≥60 tras el tick · continúa analizando.';
   }
  }
 
