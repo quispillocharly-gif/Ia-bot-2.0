@@ -1,6 +1,6 @@
 const $=x=>document.getElementById(x);
 let running=true,pending=null,pnl=0,stake=1,wins=0,losses=0,ops=0,hist=[],quotes=[],lastEpoch=0,ws,retry,observe=0,lastPick=null,lastSignal=null,candidateHistory=[];
-let tickCounter=0,arming=null,cooldownTicks=0,deteriorationTicks=0,shadowQueue=[],signalSeq=0,consumedSignal=0,recentSignalDigits=[];
+let tickCounter=0,arming=null,cooldownTicks=0,deteriorationTicks=0,shadowQueue=[],signalSeq=0,consumedSignal=0,recentSignalDigits=[],candidateBatch=null;
 let shadowStats={rawWins:0,rawLosses:0,confirmedWins:0,confirmedLosses:0,confirmedRecent:[]};
 try{let z=JSON.parse(localStorage.getItem('quantumShadowMathUltra2')||'null');if(z&&typeof z==='object')shadowStats={...shadowStats,...z}}catch(_){}
 const cfg=()=>window.QUANTUM_CONFIG||{baseStake:1,target:3};
@@ -173,25 +173,22 @@ function signalDiversityState(){
 }
 function diversifyRows(rows){
  const div=signalDiversityState(),
-       qualified=[...rows]
-         .filter(r=>r.evidence>=70)
-         .sort((a,b)=>a.upperRisk-b.upperRisk||b.evidence-a.evidence),
-       // Diversification only acts inside the mathematically qualified group.
-       pool=qualified.slice(0,6),
+       base=[...rows].sort((a,b)=>a.upperRisk-b.upperRisk||b.evidence-a.evidence),
        lambda=.0025+.0175*div.deficit,
        last=div.recent.length?div.recent[div.recent.length-1]:null;
 
- let ranked=pool.map((r,rank)=>{
+ // All 10 digits remain mathematically eligible. This is a soft ranking only.
+ let ranked=base.map((r,rank)=>{
   let usage=div.usage[r.d],
       usagePenalty=lambda*Math.log1p(usage*2.2),
       repeatPenalty=(r.d===last)?(.0015+.0045*div.deficit):0,
       noveltyBonus=(div.deficit>0&&usage<.15)?(.0035*div.deficit):0,
-      frontierPenalty=rank>=5?.0015:0,
+      frontierPenalty=rank>=6?.0020:0,
       selectionRisk=r.upperRisk+usagePenalty+repeatPenalty+frontierPenalty-noveltyBonus;
   return{...r,selectionRisk,usagePenalty,repeatPenalty,noveltyBonus};
  }).sort((a,b)=>a.selectionRisk-b.selectionRisk||b.evidence-a.evidence||a.upperRisk-b.upperRisk);
 
- return{q:ranked[0]||null,second:ranked[1]||ranked[0]||null,div,pool:ranked,qualified};
+ return{q:ranked[0],second:ranked[1]||ranked[0],div,ranked};
 }
 
 function saveShadow(){
@@ -270,28 +267,36 @@ function analyse(){
  }
 
  const diversified=diversifyRows(rows),
-       fallback=[...rows].sort((a,b)=>b.evidence-a.evidence||a.upperRisk-b.upperRisk)[0],
-       q=diversified.q||fallback,
-       second=diversified.second||q;
+       q=diversified.q,
+       second=diversified.second;
  if(!q)return null;
 
- let spread=(diversified.q&&second)?Math.max(0,(second.selectionRisk??second.upperRisk)-(q.selectionRisk??q.upperRisk)):0,
+ let spread=second?Math.max(0,second.selectionRisk-q.selectionRisk):0,
      finalScore=q.evidence,
-     baseSafe=!!diversified.q,
-     regimeSafe=true,
      leader='D'+model.best.depth+' W'+model.best.window,
      edge=.10-q.pt,
      uncertainty=Math.max(1e-6,q.upperRisk-q.pt),
      evidenceRatio=edge/uncertainty,
-     mathPass=!!diversified.q && q.evidence>=70;
+     buyableCandidates=diversified.ranked
+       .filter(r=>r.evidence>=70)
+       .sort((a,b)=>a.selectionRisk-b.selectionRisk||b.evidence-a.evidence)
+       .map(r=>({
+         d:r.d,
+         evidence:r.evidence,
+         pt:r.pt,
+         upperRisk:r.upperRisk,
+         selectionRisk:r.selectionRisk,
+         disagreement:r.disagreement,
+         horizonDisagreement:r.horizonDisagreement
+       }));
 
  return{
   q,spread,H,near:pnl>=target()*.75,
-  safe:mathPass,baseSafe:mathPass,techSafe:true,regimeSafe:true,
-  tech:null,regime,finalScore,recheck,mathPass,
-  evidenceCandidates:diversified.qualified
-    .sort((a,b)=>b.evidence-a.evidence||a.upperRisk-b.upperRisk)
-    .map(r=>({d:r.d,evidence:r.evidence,pt:r.pt,upperRisk:r.upperRisk})),
+  safe:true,baseSafe:true,techSafe:true,regimeSafe:true,
+  tech:null,regime,finalScore,recheck,
+  // >=70 is ONLY the list of candidates the user is allowed to buy.
+  evidenceCandidates:buyableCandidates,
+  mathPass:true,
   math:{
    eff:model.eff,
    support:model.support,
@@ -305,21 +310,46 @@ function analyse(){
    diversity:diversified.div.effective,
    distinct10:diversified.div.distinct,
    diversityDeficit:diversified.div.deficit,
-   selectionRisk:q.selectionRisk??q.upperRisk,
-   usagePenalty:q.usagePenalty??0
+   selectionRisk:q.selectionRisk,
+   usagePenalty:q.usagePenalty
   }
  };
 }
-function updateEvidenceCandidates(raw){
+function updateEvidenceCandidates(ready){
  const el=$('evidenceCandidates');
  if(!el)return;
- if(!raw||!raw.evidenceCandidates||!raw.evidenceCandidates.length){
-  el.textContent='NINGUNO ≥60';
+ el.innerHTML='';
+ if(!ready||!candidateBatch||candidateBatch.id!==ready.signalId||!candidateBatch.candidates.length){
+  el.textContent='NINGUNO ≥70 LISTO PARA COMPRAR';
   return;
  }
- el.textContent=raw.evidenceCandidates
-   .map(x=>'D'+x.d+' · '+x.evidence.toFixed(0))
-   .join('   |   ');
+ for(const c of candidateBatch.candidates){
+  const b=document.createElement('button');
+  b.className='candidateBtn';
+  b.textContent='D'+c.d+' · '+c.evidence.toFixed(0)+'/100';
+  b.onclick=()=>enterCandidate(c.d,candidateBatch.id);
+  el.appendChild(b);
+ }
+}
+function enterCandidate(d,batchId){
+ if(!candidateBatch||candidateBatch.id!==batchId){
+  $('status').textContent='CANDIDATOS ACTUALIZADOS · ESPERA NUEVA LISTA';
+  return;
+ }
+ const c=candidateBatch.candidates.find(x=>x.d===d);
+ if(!c||c.evidence<70){
+  $('status').textContent='CANDIDATO YA NO ES VÁLIDO';
+  return;
+ }
+ const s={
+  ...candidateBatch.raw,
+  q:{...candidateBatch.raw.q,...c,d:c.d},
+  finalScore:c.evidence,
+  safe:true,
+  signalId:batchId
+ };
+ lastSignal=s;
+ enter(s);
 }
 
 function showSignal(raw,ready,waitReason=''){
@@ -344,7 +374,7 @@ function showSignal(raw,ready,waitReason=''){
   return;
  }
 
- updateEvidenceCandidates(raw);
+ updateEvidenceCandidates(ready);
  $('risk').textContent=(raw.q.upperRisk*100).toFixed(2)+'%';
  $('spread').textContent=(raw.spread*100).toFixed(2);
  $('entropy').textContent=raw.H.toFixed(3);
@@ -377,7 +407,7 @@ function showSignal(raw,ready,waitReason=''){
 
  $('sepPick').textContent='D'+ready.q.d;
  $('decision').textContent='MATH ULTRA · SEÑAL D'+ready.q.d;
- $('reason').textContent='KT + pesos exponenciales + diversidad suave · evidencia '+ready.finalScore.toFixed(0)+'/100.';
+ $('reason').textContent='Candidato recomendado ≥70 · evidencia '+ready.finalScore.toFixed(0)+'/100.';
  buy.textContent='COMPRAR AHORA · D'+ready.q.d+' · RIESGO '+(ready.q.upperRisk*100).toFixed(2)+'%';
  buy.disabled=false;
  $('meter').style.width='100%';
@@ -392,11 +422,13 @@ function ui(d){
  $('pnl').textContent=(pnl>=0?'+':'')+'$'+pnl.toFixed(2);$('stake').textContent='$'+stake.toFixed(2);$('wins').textContent=wins;$('losses').textContent=losses;$('ops').textContent=ops;$('pick').textContent=lastPick===null?'—':'D'+lastPick;
 }
 function enter(s){
- if(!running||pending||!s||s!==lastSignal){$('status').textContent='ESPERANDO SEÑAL 1T';return}
+ if(!running||pending||!s||!s.signalId||!candidateBatch||s.signalId!==candidateBatch.id){$('status').textContent='ESPERANDO CANDIDATOS ≥70';return}
  if(!s.signalId||s.signalId===consumedSignal){$('status').textContent='SEÑAL YA UTILIZADA';return}
  let d=s.q.d,mode=$('mode').value;
  if(mode==='DEMO'&&!window.demoReady){$('status').textContent='CONECTA DEMO DERIV';return}
  consumedSignal=s.signalId;
+ candidateBatch=null;
+ updateEvidenceCandidates(null);
  lastSignal=null;
  arming=null;
  lastPick=d;observe=0;pending={d,stake,mode};ops++;$('buy').disabled=true;
@@ -456,34 +488,48 @@ function tick(d,price){
  let ready=null,reason='';
 
  if(!running){
-  arming=null;
+  arming=null;candidateBatch=null;
   reason='STOP MANUAL';
  }else if(pending){
-  arming=null;
+  arming=null;candidateBatch=null;
   reason='Operación en curso.';
  }else if(!raw){
-  arming=null;
+  arming=null;candidateBatch=null;
   reason='Recolectando historial matemático.';
- }else if(!arming){
-  if(raw.mathPass){
-   arming={startedAt:tickCounter};
-   reason='Ventaja matemática detectada · esperando 1 tick real.';
-  }else{
-   reason='Buscando candidatos con evidencia ≥70 entre D0–D9.';
-  }
  }else{
-  // Después del delay se recalculan TODOS los dígitos.
-  // Ninguno queda bloqueado. La regularización entrópica solo desalienta
-  // la concentración excesiva si otros candidatos tienen riesgo parecido.
-  arming=null;
-  if(raw.mathPass){
-   ready={...raw,safe:true,signalId:++signalSeq};
-   recentSignalDigits.push(ready.q.d);
+  const has70=raw.evidenceCandidates&&raw.evidenceCandidates.length>0;
+  const delayComplete=!!arming;
+
+  if(delayComplete&&has70){
+   const batchId=++signalSeq;
+   candidateBatch={
+    id:batchId,
+    raw,
+    candidates:raw.evidenceCandidates.map(x=>({...x}))
+   };
+
+   // Recommended/main button = first diversified candidate among the >=70 list.
+   const best=candidateBatch.candidates[0];
+   ready={
+    ...raw,
+    q:{...raw.q,...best,d:best.d},
+    finalScore:best.evidence,
+    safe:true,
+    signalId:batchId
+   };
+
+   recentSignalDigits.push(best.d);
    if(recentSignalDigits.length>30)recentSignalDigits.shift();
-   reason='Señal matemática diversificada lista · válida para una compra.';
+   reason=candidateBatch.candidates.length+' candidato'+(candidateBatch.candidates.length===1?'':'s')+' ≥70 listo'+(candidateBatch.candidates.length===1?'':'s')+' para comprar.';
   }else{
-   reason='Ningún candidato ≥70 tras el tick · continúa analizando.';
+   candidateBatch=null;
+   reason=has70
+     ?'Hay candidatos ≥70 · esperando 1 tick real.'
+     :'Analizando los 10 dígitos · ninguno ≥70 para compra.';
   }
+
+  // Rolling delay: current qualified set starts the next 1T validation.
+  arming=has70?{startedAt:tickCounter}:null;
  }
 
  if($('delayState'))$('delayState').textContent=ready?'1/1 LISTO':arming?'0/1':'—';
@@ -500,7 +546,7 @@ function connect(){
 }
 $('start').onclick=()=>{
  if($('mode').value==='DEMO'&&!window.demoReady){$('status').textContent='CONECTA DEMO DERIV PRIMERO';return}
- pnl=0;stake=baseStake();wins=0;losses=0;ops=0;pending=null;observe=0;lastPick=null;lastSignal=null;candidateHistory=[];arming=null;cooldownTicks=0;deteriorationTicks=0;signalSeq=0;consumedSignal=0;recentSignalDigits=[];running=true;$('status').textContent='ANALIZANDO';log('NUEVA SESIÓN '+$('mode').value+' · STAKE $'+stake.toFixed(2)+' · META $'+target().toFixed(2));ui();
+ pnl=0;stake=baseStake();wins=0;losses=0;ops=0;pending=null;observe=0;lastPick=null;lastSignal=null;candidateHistory=[];arming=null;cooldownTicks=0;deteriorationTicks=0;signalSeq=0;consumedSignal=0;recentSignalDigits=[];candidateBatch=null;running=true;$('status').textContent='ANALIZANDO';log('NUEVA SESIÓN '+$('mode').value+' · STAKE $'+stake.toFixed(2)+' · META $'+target().toFixed(2));ui();
 };
 $('stop').onclick=()=>{running=false;$('status').textContent='STOP MANUAL'};
 $('buy').onclick=()=>{if(!running){$('status').textContent='PULSA REINICIAR SESIÓN';return}if(pending){$('status').textContent='OPERACIÓN EN CURSO';return}let s=lastSignal;if(!s){$('status').textContent='AÚN CALIBRANDO';return}enter(s)};
