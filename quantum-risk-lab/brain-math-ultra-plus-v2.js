@@ -241,17 +241,24 @@ function analyse(){
      safe=true,
      leader='D'+model.best.depth+' W'+model.best.window;
 
+ let mathPass=q.upperRisk<.10;
+ for(const r of recheck){
+  if(r)r.mathPass=r.upperRisk<.10;
+ }
+
  return{
   q,spread,H,near:pnl>=target()*.75,
-  safe,baseSafe,techSafe:true,regimeSafe,
-  tech:null,regime,finalScore,recheck,
+  safe:mathPass,baseSafe:mathPass,techSafe:true,regimeSafe:true,
+  tech:null,regime,finalScore,recheck,mathPass,
   math:{
    eff:model.eff,
    support:model.support,
    bestDepth:model.best.depth,
    bestWindow:model.best.window,
    bestWeight:model.bestWeight,
-   leader,hNorm
+   leader,hNorm,
+   edge:.10-q.pt,
+   uncertainty:q.upperRisk-q.pt
   }
  };
 }
@@ -308,7 +315,7 @@ function showSignal(raw,ready,waitReason=''){
 
  $('sepPick').textContent='D'+ready.q.d;
  $('decision').textContent='MATH ULTRA · SEÑAL D'+ready.q.d;
- $('reason').textContent='Lógica matemática pura · delay 1T · score info '+ready.finalScore.toFixed(0)+'/100.';
+ $('reason').textContent='Ventaja matemática confirmada · delay 1T · score info '+ready.finalScore.toFixed(0)+'/100.';
  buy.textContent='COMPRAR AHORA · D'+ready.q.d+' · RIESGO '+(ready.q.upperRisk*100).toFixed(2)+'%';
  buy.disabled=false;
  $('meter').style.width='100%';
@@ -391,20 +398,37 @@ function tick(d,price){
  }else if(!raw){
   arming=null;
   reason='Recolectando historial matemático.';
- }else{
-  // PIPELINE PURO DE 1 TICK:
-  // 1) La señal calculada en el tick anterior se libera AHORA.
-  // 2) La señal matemática actual queda guardada para el próximo tick.
-  if(arming&&arming.signal){
-   ready={...arming.signal,safe:true};
-   reason='Señal liberada tras 1 tick real.';
+ }else if(arming){
+  // Tras 1 tick real se reevalúa EXACTAMENTE el candidato anterior.
+  // No se exige que siga siendo el #1; se exige que su riesgo conservador
+  // (probabilidad + incertidumbre del modelo) siga por debajo del 10%.
+  const r=raw.recheck&&raw.recheck[arming.d];
+  if(r&&r.mathPass){
+   ready={
+    ...raw,
+    q:{...r,d:arming.d},
+    safe:true,
+    mathPass:true
+   };
+   reason='Ventaja matemática confirmada después de 1 tick.';
+   arming=null;
   }else{
-   reason='Calculando primera señal · espera 1 tick.';
+   // Si el candidato anterior perdió su ventaja, se descarta.
+   // El mejor candidato actual puede iniciar un nuevo delay solo si
+   // también tiene evidencia matemática real.
+   arming=raw.mathPass?{d:raw.q.d}:null;
+   reason=raw.mathPass
+     ?'La señal anterior cayó · nueva señal matemática en delay 1T.'
+     :'Sin ventaja matemática suficiente todavía.';
   }
-  arming={signal:{...raw,safe:true}};
+ }else if(raw.mathPass){
+  arming={d:raw.q.d};
+  reason='Ventaja matemática detectada · esperando 1 tick real.';
+ }else{
+  reason='Sin ventaja matemática suficiente todavía.';
  }
 
- if($('delayState'))$('delayState').textContent=ready?'1/1 LISTO':raw?'0/1':'—';
+ if($('delayState'))$('delayState').textContent=ready?'1/1 LISTO':arming?'0/1':'—';
  showSignal(raw,ready,reason);
 }
 function connect(){
@@ -424,4 +448,4 @@ $('stop').onclick=()=>{running=false;$('status').textContent='STOP MANUAL'};
 $('buy').onclick=()=>{if(!running){$('status').textContent='PULSA REINICIAR SESIÓN';return}if(pending){$('status').textContent='OPERACIÓN EN CURSO';return}let s=lastSignal;if(!s){$('status').textContent='AÚN CALIBRANDO';return}enter(s)};
 window.demoSettlement=p=>finish(p,'DERIV DEMO');
 window.demoTradeError=tradeError;
-stake=baseStake();$('status').textContent='MATH ULTRA LIMPIO · LÓGICA + 1T';$('buy').disabled=true;ui();updateShadowUI();connect();
+stake=baseStake();$('status').textContent='MATH ULTRA · EVIDENCIA + 1T';$('buy').disabled=true;ui();updateShadowUI();connect();
