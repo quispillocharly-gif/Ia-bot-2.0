@@ -1,6 +1,6 @@
 const $=x=>document.getElementById(x);
 let running=true,pending=null,pnl=0,stake=1,wins=0,losses=0,ops=0,hist=[],quotes=[],lastEpoch=0,ws,retry,observe=0,lastPick=null,lastSignal=null,candidateHistory=[];
-let tickCounter=0,arming=null,cooldownTicks=0,deteriorationTicks=0,shadowQueue=[];
+let tickCounter=0,arming=null,cooldownTicks=0,deteriorationTicks=0,shadowQueue=[],signalSeq=0,consumedSignal=0;
 let shadowStats={rawWins:0,rawLosses:0,confirmedWins:0,confirmedLosses:0,confirmedRecent:[]};
 try{let z=JSON.parse(localStorage.getItem('quantumShadowMathUltra2')||'null');if(z&&typeof z==='object')shadowStats={...shadowStats,...z}}catch(_){}
 const cfg=()=>window.QUANTUM_CONFIG||{baseStake:1,target:3};
@@ -315,7 +315,7 @@ function showSignal(raw,ready,waitReason=''){
 
  $('sepPick').textContent='D'+ready.q.d;
  $('decision').textContent='MATH ULTRA · SEÑAL D'+ready.q.d;
- $('reason').textContent='Ventaja matemática confirmada · delay 1T · score info '+ready.finalScore.toFixed(0)+'/100.';
+ $('reason').textContent='Señal matemática única · 10 dígitos libres · score info '+ready.finalScore.toFixed(0)+'/100.';
  buy.textContent='COMPRAR AHORA · D'+ready.q.d+' · RIESGO '+(ready.q.upperRisk*100).toFixed(2)+'%';
  buy.disabled=false;
  $('meter').style.width='100%';
@@ -331,8 +331,12 @@ function ui(d){
 }
 function enter(s){
  if(!running||pending||!s||s!==lastSignal){$('status').textContent='ESPERANDO SEÑAL 1T';return}
+ if(!s.signalId||s.signalId===consumedSignal){$('status').textContent='SEÑAL YA UTILIZADA';return}
  let d=s.q.d,mode=$('mode').value;
  if(mode==='DEMO'&&!window.demoReady){$('status').textContent='CONECTA DEMO DERIV';return}
+ consumedSignal=s.signalId;
+ lastSignal=null;
+ arming=null;
  lastPick=d;observe=0;pending={d,stake,mode};ops++;$('buy').disabled=true;
  $('decision').textContent='COMPRA '+mode+' · DIFFER D'+d;$('reason').textContent='$'+stake.toFixed(2)+' · duración 1 tick';log('COMPRA '+mode+' D'+d+' $'+stake.toFixed(2));ui();
  if(mode==='DEMO'){ $('status').textContent='ENVIANDO A DERIV…'; window.sendDemoTrade(d,stake).catch(e=>tradeError(e));}
@@ -398,34 +402,24 @@ function tick(d,price){
  }else if(!raw){
   arming=null;
   reason='Recolectando historial matemático.';
- }else if(arming){
-  // Tras 1 tick real se reevalúa EXACTAMENTE el candidato anterior.
-  // No se exige que siga siendo el #1; se exige que su riesgo conservador
-  // (probabilidad + incertidumbre del modelo) siga por debajo del 10%.
-  const r=raw.recheck&&raw.recheck[arming.d];
-  if(r&&r.mathPass){
-   ready={
-    ...raw,
-    q:{...r,d:arming.d},
-    safe:true,
-    mathPass:true
-   };
-   reason='Ventaja matemática confirmada después de 1 tick.';
-   arming=null;
+ }else if(!arming){
+  if(raw.mathPass){
+   // No bloqueamos el dígito. Solo iniciamos un reloj de 1 tick.
+   arming={startedAt:tickCounter};
+   reason='Evidencia matemática detectada · esperando 1 tick real.';
   }else{
-   // Si el candidato anterior perdió su ventaja, se descarta.
-   // El mejor candidato actual puede iniciar un nuevo delay solo si
-   // también tiene evidencia matemática real.
-   arming=raw.mathPass?{d:raw.q.d}:null;
-   reason=raw.mathPass
-     ?'La señal anterior cayó · nueva señal matemática en delay 1T.'
-     :'Sin ventaja matemática suficiente todavía.';
+   reason='Buscando ventaja matemática entre D0–D9.';
   }
- }else if(raw.mathPass){
-  arming={d:raw.q.d};
-  reason='Ventaja matemática detectada · esperando 1 tick real.';
  }else{
-  reason='Sin ventaja matemática suficiente todavía.';
+  // Transcurrió 1 tick. Se vuelve a analizar LOS 10 DÍGITOS DESDE CERO.
+  // El candidato liberado es el mejor de AHORA, no un número bloqueado antes.
+  arming=null;
+  if(raw.mathPass){
+   ready={...raw,safe:true,signalId:++signalSeq};
+   reason='Nueva señal matemática lista · válida para una sola compra.';
+  }else{
+   reason='El cálculo cambió · buscando nueva ventaja entre D0–D9.';
+  }
  }
 
  if($('delayState'))$('delayState').textContent=ready?'1/1 LISTO':arming?'0/1':'—';
@@ -442,10 +436,10 @@ function connect(){
 }
 $('start').onclick=()=>{
  if($('mode').value==='DEMO'&&!window.demoReady){$('status').textContent='CONECTA DEMO DERIV PRIMERO';return}
- pnl=0;stake=baseStake();wins=0;losses=0;ops=0;pending=null;observe=0;lastPick=null;lastSignal=null;candidateHistory=[];arming=null;cooldownTicks=0;deteriorationTicks=0;running=true;$('status').textContent='ANALIZANDO';log('NUEVA SESIÓN '+$('mode').value+' · STAKE $'+stake.toFixed(2)+' · META $'+target().toFixed(2));ui();
+ pnl=0;stake=baseStake();wins=0;losses=0;ops=0;pending=null;observe=0;lastPick=null;lastSignal=null;candidateHistory=[];arming=null;cooldownTicks=0;deteriorationTicks=0;signalSeq=0;consumedSignal=0;running=true;$('status').textContent='ANALIZANDO';log('NUEVA SESIÓN '+$('mode').value+' · STAKE $'+stake.toFixed(2)+' · META $'+target().toFixed(2));ui();
 };
 $('stop').onclick=()=>{running=false;$('status').textContent='STOP MANUAL'};
 $('buy').onclick=()=>{if(!running){$('status').textContent='PULSA REINICIAR SESIÓN';return}if(pending){$('status').textContent='OPERACIÓN EN CURSO';return}let s=lastSignal;if(!s){$('status').textContent='AÚN CALIBRANDO';return}enter(s)};
 window.demoSettlement=p=>finish(p,'DERIV DEMO');
 window.demoTradeError=tradeError;
-stake=baseStake();$('status').textContent='MATH ULTRA · EVIDENCIA + 1T';$('buy').disabled=true;ui();updateShadowUI();connect();
+stake=baseStake();$('status').textContent='MATH ULTRA · 10 DÍGITOS + 1T';$('buy').disabled=true;ui();updateShadowUI();connect();
