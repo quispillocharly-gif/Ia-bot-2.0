@@ -308,7 +308,7 @@ function showSignal(raw,ready,waitReason=''){
 
  $('sepPick').textContent='D'+ready.q.d;
  $('decision').textContent='MATH ULTRA · SEÑAL D'+ready.q.d;
- $('reason').textContent='Lógica matemática + T+2 · score informativo '+ready.finalScore.toFixed(0)+'/100.';
+ $('reason').textContent='Lógica matemática pura · delay 1T · score info '+ready.finalScore.toFixed(0)+'/100.';
  buy.textContent='COMPRAR AHORA · D'+ready.q.d+' · RIESGO '+(ready.q.upperRisk*100).toFixed(2)+'%';
  buy.disabled=false;
  $('meter').style.width='100%';
@@ -323,7 +323,7 @@ function ui(d){
  $('pnl').textContent=(pnl>=0?'+':'')+'$'+pnl.toFixed(2);$('stake').textContent='$'+stake.toFixed(2);$('wins').textContent=wins;$('losses').textContent=losses;$('ops').textContent=ops;$('pick').textContent=lastPick===null?'—':'D'+lastPick;
 }
 function enter(s){
- if(!running||pending||!s||!s.safe||s!==lastSignal){$('status').textContent='ESPERANDO SEÑAL COMPLETA';return}
+ if(!running||pending||!s||s!==lastSignal){$('status').textContent='ESPERANDO SEÑAL 1T';return}
  let d=s.q.d,mode=$('mode').value;
  if(mode==='DEMO'&&!window.demoReady){$('status').textContent='CONECTA DEMO DERIV';return}
  lastPick=d;observe=0;pending={d,stake,mode};ops++;$('buy').disabled=true;
@@ -362,13 +362,12 @@ function finish(profit,label){
   $('status').textContent='META +$'+target().toFixed(2)+' · STOP';
   $('phase').textContent='META';
  }else if(running){
-  $('status').textContent=profit>0?'REVALIDANDO':'RECALIBRANDO TRAS MATCH';
+  $('status').textContent='ESPERANDO NUEVA SEÑAL 1T';
  }
  ui();
 }
 function tick(d,price){
  tickCounter++;
- settleShadow(d);
 
  if(pending&&pending.mode==='SIM'){
   let p=pending;
@@ -380,12 +379,8 @@ function tick(d,price){
  if(running&&!pending)observe++;
  ui(d);
 
- let raw=analyse(),ready=null,reason='';
-
- if(raw){
-  candidateHistory.push(raw.q.d);
-  if(candidateHistory.length>40)candidateHistory.shift();
- }
+ const raw=analyse();
+ let ready=null,reason='';
 
  if(!running){
   arming=null;
@@ -396,22 +391,20 @@ function tick(d,price){
  }else if(!raw){
   arming=null;
   reason='Recolectando historial matemático.';
- }else if(!arming){
-  arming={d:raw.q.d,confirmedShadow:false};
-  reason='Mejor dígito calculado · esperando 1 tick real.';
- }else if(raw.q.d===arming.d){
-  ready={...raw,safe:true};
-  reason='Mismo mejor dígito confirmado tras 1 tick real.';
-  if(!arming.confirmedShadow){
-   queueShadow(arming.d,'confirmed',tickCounter+1);
-   arming.confirmedShadow=true;
-  }
  }else{
-  arming={d:raw.q.d,confirmedShadow:false};
-  reason='Cambió el mejor dígito · nuevo delay de 1 tick.';
+  // PIPELINE PURO DE 1 TICK:
+  // 1) La señal calculada en el tick anterior se libera AHORA.
+  // 2) La señal matemática actual queda guardada para el próximo tick.
+  if(arming&&arming.signal){
+   ready={...arming.signal,safe:true};
+   reason='Señal liberada tras 1 tick real.';
+  }else{
+   reason='Calculando primera señal · espera 1 tick.';
+  }
+  arming={signal:{...raw,safe:true}};
  }
 
- if($('delayState'))$('delayState').textContent=ready?'1/1 LISTO':arming?'0/1':'—';
+ if($('delayState'))$('delayState').textContent=ready?'1/1 LISTO':raw?'0/1':'—';
  showSignal(raw,ready,reason);
 }
 function connect(){
@@ -431,4 +424,4 @@ $('stop').onclick=()=>{running=false;$('status').textContent='STOP MANUAL'};
 $('buy').onclick=()=>{if(!running){$('status').textContent='PULSA REINICIAR SESIÓN';return}if(pending){$('status').textContent='OPERACIÓN EN CURSO';return}let s=lastSignal;if(!s){$('status').textContent='AÚN CALIBRANDO';return}enter(s)};
 window.demoSettlement=p=>finish(p,'DERIV DEMO');
 window.demoTradeError=tradeError;
-stake=baseStake();$('status').textContent='MATH ULTRA SIMPLE · LÓGICA + 1T';$('buy').disabled=true;ui();updateShadowUI();connect();
+stake=baseStake();$('status').textContent='MATH ULTRA LIMPIO · LÓGICA + 1T';$('buy').disabled=true;ui();updateShadowUI();connect();
