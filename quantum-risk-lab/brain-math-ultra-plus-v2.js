@@ -226,12 +226,7 @@ function analyse(){
        support:model.support,effModels:model.eff
       };
   row1.score=mathScore(row1,model,regime,hNorm);
-  row1.safe=
-       row1.pt<.100 &&
-       row1.upperRisk<.103 &&
-       row1.disagreement<.020 &&
-       row1.horizonDisagreement<.026 &&
-       row1.score>=64;
+  row1.safe=true;
   recheck[d]=row1;
  }
 
@@ -241,15 +236,9 @@ function analyse(){
 
  let spread=Math.max(0,second.upperRisk-q.upperRisk),
      finalScore=q.score,
-     baseSafe=
-       q.pt<.100 &&
-       q.upperRisk<.103 &&
-       q.disagreement<.020 &&
-       q.horizonDisagreement<.022 &&
-       model.support>=.18 &&
-       hNorm<.9998,
-     regimeSafe=regime.gate,
-     safe=baseSafe&&regimeSafe&&finalScore>=64,
+     baseSafe=true,
+     regimeSafe=true,
+     safe=true,
      leader='D'+model.best.depth+' W'+model.best.window;
 
  return{
@@ -319,7 +308,7 @@ function showSignal(raw,ready,waitReason=''){
 
  $('sepPick').textContent='D'+ready.q.d;
  $('decision').textContent='MATH ULTRA · SEÑAL D'+ready.q.d;
- $('reason').textContent='KT/CTW-style + log-loss + t+2 + régimen · score '+ready.finalScore.toFixed(0)+'/100.';
+ $('reason').textContent='Lógica matemática + T+2 · score informativo '+ready.finalScore.toFixed(0)+'/100.';
  buy.textContent='COMPRAR AHORA · D'+ready.q.d+' · RIESGO '+(ready.q.upperRisk*100).toFixed(2)+'%';
  buy.disabled=false;
  $('meter').style.width='100%';
@@ -357,8 +346,7 @@ function finish(profit,label){
  }else{
   losses++;
   stake=baseStake();
-  cooldownTicks=Math.max(cooldownTicks,3);
-  log('MATCH '+label+' $'+profit.toFixed(2)+' · recalibración 3T');
+  log('MATCH '+label+' $'+profit.toFixed(2));
  }
 
  pending=null;
@@ -380,8 +368,6 @@ function finish(profit,label){
 }
 function tick(d,price){
  tickCounter++;
- if(cooldownTicks>0)cooldownTicks--;
- if(deteriorationTicks>0)deteriorationTicks--;
  settleShadow(d);
 
  if(pending&&pending.mode==='SIM'){
@@ -402,44 +388,27 @@ function tick(d,price){
  }
 
  if(!running){
-  arming=null;reason='STOP MANUAL';
+  arming=null;
+  reason='STOP MANUAL';
  }else if(pending){
-  arming=null;reason='Operación en curso.';
- }else if(cooldownTicks>0){
-  arming=null;reason='Recalibración matemática tras MATCH · '+cooldownTicks+'T.';
- }else if(deteriorationTicks>0){
-  arming=null;reason='Protección shadow por deterioro reciente · '+deteriorationTicks+'T.';
- }else if(arming){
-  // Ha transcurrido exactamente 1 tick real desde la preseñal.
-  let r=raw&&raw.recheck?raw.recheck[arming.d]:null;
-  let stable=!!raw&&raw.regimeSafe&&r&&r.safe;
-  if(stable){
-   let score=Math.min(arming.score,r.score);
-   ready={
-    ...raw,
-    q:{...r,d:arming.d},
-    finalScore:score,
-    safe:true
-   };
-   reason='Confirmación matemática 1/1 completa.';
-   if(!arming.confirmedShadow){
-    queueShadow(arming.d,'confirmed',tickCounter+1);
-    arming.confirmedShadow=true;
-   }
-  }else{
-   arming=null;
-   reason='La evidencia del mismo dígito no sobrevivió el tick de delay.';
+  arming=null;
+  reason='Operación en curso.';
+ }else if(!raw){
+  arming=null;
+  reason='Recolectando historial matemático.';
+ }else if(!arming){
+  arming={d:raw.q.d,confirmedShadow:false};
+  reason='Mejor dígito calculado · esperando 1 tick real.';
+ }else if(raw.q.d===arming.d){
+  ready={...raw,safe:true};
+  reason='Mismo mejor dígito confirmado tras 1 tick real.';
+  if(!arming.confirmedShadow){
+   queueShadow(arming.d,'confirmed',tickCounter+1);
+   arming.confirmedShadow=true;
   }
- }else if(!raw||!raw.safe){
-  if(!raw)reason='Recolectando historial.';
-  else if(!raw.baseSafe)reason='La evidencia matemática aún no es suficiente · revisando riesgo, soporte e incertidumbre · score '+raw.finalScore.toFixed(0)+'/100.';
-  else if(!raw.regimeSafe)reason='Cambio de distribución detectado.';
-  else reason='Score matemático insuficiente: '+raw.finalScore.toFixed(0)+'/100.';
  }else{
-  // Nueva preseñal: su objetivo está a T+2.
-  arming={d:raw.q.d,score:raw.finalScore,confirmedShadow:false};
-  queueShadow(raw.q.d,'raw',tickCounter+2);
-  reason='Preseñal matemática · esperando 1 tick real.';
+  arming={d:raw.q.d,confirmedShadow:false};
+  reason='Cambió el mejor dígito · nuevo delay de 1 tick.';
  }
 
  if($('delayState'))$('delayState').textContent=ready?'1/1 LISTO':arming?'0/1':'—';
@@ -462,4 +431,4 @@ $('stop').onclick=()=>{running=false;$('status').textContent='STOP MANUAL'};
 $('buy').onclick=()=>{if(!running){$('status').textContent='PULSA REINICIAR SESIÓN';return}if(pending){$('status').textContent='OPERACIÓN EN CURSO';return}let s=lastSignal;if(!s){$('status').textContent='AÚN CALIBRANDO';return}enter(s)};
 window.demoSettlement=p=>finish(p,'DERIV DEMO');
 window.demoTradeError=tradeError;
-stake=baseStake();$('status').textContent='MATH SUPER ULTRA PLUS · 1T ACTIVO';$('buy').disabled=true;ui();updateShadowUI();connect();
+stake=baseStake();$('status').textContent='MATH ULTRA SIMPLE · LÓGICA + 1T';$('buy').disabled=true;ui();updateShadowUI();connect();
