@@ -1,5 +1,8 @@
 const $=x=>document.getElementById(x);
 let running=true,pending=null,pnl=0,stake=1,wins=0,losses=0,ops=0,hist=[],quotes=[],lastEpoch=0,ws,retry,observe=0,lastPick=null,lastSignal=null,candidateHistory=[];
+let tickCounter=0,arming=null,cooldownTicks=0,deteriorationTicks=0,shadowQueue=[];
+let shadowStats={rawWins:0,rawLosses:0,confirmedWins:0,confirmedLosses:0,confirmedRecent:[]};
+try{let z=JSON.parse(localStorage.getItem('quantumShadowV4')||'null');if(z&&typeof z==='object')shadowStats={...shadowStats,...z}}catch(_){}
 const cfg=()=>window.QUANTUM_CONFIG||{baseStake:1,target:3};
 const baseStake=()=>Math.max(.01,Number(cfg().baseStake)||1);
 const target=()=>Math.max(.01,Number(cfg().target)||3);
@@ -110,6 +113,68 @@ function technicalAnalysis(){
   gate
  };
 }
+function digitDistribution(a){
+ let c=Array(10).fill(0),n=Math.max(1,a.length);
+ a.forEach(d=>c[d]++);
+ return c.map(x=>x/n);
+}
+function tvDistance(a,b){
+ let s=0;
+ for(let i=0;i<10;i++)s+=Math.abs(a[i]-b[i]);
+ return .5*s;
+}
+function regimeAnalysis(){
+ if(hist.length<300)return{score:0,shift:1,gate:false};
+ let d50=digitDistribution(hist.slice(-50)),
+     d100=digitDistribution(hist.slice(-100)),
+     d300=digitDistribution(hist.slice(-300)),
+     s1=tvDistance(d50,d100),
+     s2=tvDistance(d100,d300),
+     shift=.6*s1+.4*s2,
+     score=Math.max(0,100*(1-Math.min(1,shift/.24))),
+     gate=shift<.20;
+ return{score,shift,gate};
+}
+function qualityScore(q,tech,regime){
+ if(!q||!tech||!regime)return 0;
+ let riskQ=Math.max(0,Math.min(1,(.10-q.risk)/.045)),
+     probQ=Math.max(0,Math.min(1,(.10-q.pt)/.025)),
+     supportQ=Math.max(0,Math.min(1,(q.support-.35)/.45)),
+     horizonQ=Math.max(0,1-Math.min(1,q.horizonDisagreement/.035)),
+     shiftQ=Math.max(0,1-Math.min(1,q.regimeShift/.045)),
+     techQ=Math.max(0,Math.min(1,((tech.score+tech.projectedScore)/2)/100)),
+     regimeQ=Math.max(0,Math.min(1,regime.score/100));
+ return 100*(.20*riskQ+.12*probQ+.12*supportQ+.12*horizonQ+.10*shiftQ+.22*techQ+.12*regimeQ);
+}
+function saveShadow(){
+ try{localStorage.setItem('quantumShadowV4',JSON.stringify(shadowStats))}catch(_){}
+}
+function queueShadow(d,type,due){
+ shadowQueue.push({d,type,due});
+ if(shadowQueue.length>120)shadowQueue.shift();
+}
+function settleShadow(actual){
+ let keep=[];
+ for(const x of shadowQueue){
+  if(x.due>tickCounter){keep.push(x);continue}
+  let win=actual!==x.d;
+  if(x.type==='confirmed'){
+   if(win)shadowStats.confirmedWins++;else shadowStats.confirmedLosses++;
+   shadowStats.confirmedRecent.push(win?1:0);
+   if(shadowStats.confirmedRecent.length>20)shadowStats.confirmedRecent.shift();
+  }else{
+   if(win)shadowStats.rawWins++;else shadowStats.rawLosses++;
+  }
+ }
+ shadowQueue=keep;
+ let r=shadowStats.confirmedRecent;
+ if(r.length>=20){
+  let losses=r.filter(x=>x===0).length;
+  if(losses>=5)deteriorationTicks=Math.max(deteriorationTicks,8);
+ }
+ saveShadow();
+}
+
 function analyse(){
  if(hist.length<240||quotes.length<60)return null;
 
@@ -341,74 +406,86 @@ function analyse(){
  // Solo confirma si el contexto del precio tiene estructura suficiente.
  let tech=technicalAnalysis(),
      techSafe=!!tech&&tech.gate,
-     safe=baseSafe&&techSafe;
+     regime=regimeAnalysis(),
+     finalScore=qualityScore(q,tech,regime),
+     regimeSafe=regime.gate,
+     safe=baseSafe&&techSafe&&regimeSafe&&finalScore>=70;
 
- // La UI conserva Rényi y además expone el análisis técnico.
- return{q,spread,H:H2,near,safe,baseSafe,techSafe,tech};
+ // V4: la señal cruda todavía NO se muestra. Debe sobrevivir 2 ticks reales.
+ return{q,spread,H:H2,near,safe,baseSafe,techSafe,regimeSafe,tech,regime,finalScore};
 }
-function showSignal(s){
+function showSignal(raw,ready,waitReason=''){
  const buy=$('buy');
+ lastSignal=ready||null;
 
- if(!s){
-  lastSignal=null;
+ if(!raw){
   $('decision').textContent='ANALIZANDO';
-  $('reason').textContent='Buscando confirmación Markov/Rényi + técnica con delay 2T.';
+  $('reason').textContent=waitReason||'Buscando confirmación estadística y técnica.';
   $('sepPick').textContent='—';
-  $('risk').textContent='—';
-  $('spread').textContent='—';
-  $('entropy').textContent='—';
-  $('phase').textContent='OBSERVAR';
-  $('meter').style.width='0%';
-  buy.textContent='ESPERANDO SEÑAL';
-  buy.disabled=true;
+  $('risk').textContent='—';$('spread').textContent='—';$('entropy').textContent='—';
+  $('phase').textContent='OBSERVAR';$('meter').style.width='0%';
+  buy.textContent='ESPERANDO SEÑAL';buy.disabled=true;
   if($('techScore'))$('techScore').textContent='—';
   if($('techRsi'))$('techRsi').textContent='—';
   if($('techMacd'))$('techMacd').textContent='—';
   if($('techTrend'))$('techTrend').textContent='—';
+  if($('finalScore'))$('finalScore').textContent='—';
+  if($('delayState'))$('delayState').textContent='—';
+  if($('regimeState'))$('regimeState').textContent='—';
+  updateShadowUI();
   return;
  }
 
- let sep=s.spread*100,riskPct=s.q.risk*100,t=s.tech;
-
- // Los indicadores pueden seguir actualizándose, pero el dígito queda oculto
- // hasta que la operación esté realmente habilitada.
- $('risk').textContent=riskPct.toFixed(1)+'%';
- $('spread').textContent=sep.toFixed(1);
- $('entropy').textContent=s.H.toFixed(2);
- $('phase').textContent=s.near?'MODO META':'ANÁLISIS';
-
+ let t=raw.tech;
+ $('risk').textContent=(raw.q.risk*100).toFixed(1)+'%';
+ $('spread').textContent=(raw.spread*100).toFixed(1);
+ $('entropy').textContent=raw.H.toFixed(2);
+ $('phase').textContent=raw.near?'MODO META':'ANÁLISIS';
  if(t){
   if($('techScore'))$('techScore').textContent=t.score.toFixed(0)+'/100';
   if($('techRsi'))$('techRsi').textContent=t.R.toFixed(1);
   if($('techMacd'))$('techMacd').textContent=t.M.hist.toFixed(4);
   if($('techTrend'))$('techTrend').textContent=t.trend;
  }
+ if($('finalScore'))$('finalScore').textContent=raw.finalScore.toFixed(0)+'/100';
+ if($('regimeState'))$('regimeState').textContent=raw.regime.gate?'ESTABLE':'CAMBIO';
+ updateShadowUI();
 
- if(!s.safe){
-  lastSignal=null;
+ if(pending){
   $('sepPick').textContent='—';
-  $('decision').textContent='ANALIZANDO';
-  $('reason').textContent='Sin señal completa todavía · validando también el contexto técnico a +2 ticks.';
-  buy.textContent='ESPERANDO SEÑAL';
-  buy.disabled=true;
-  $('meter').style.width=Math.min(95,t?t.score:0)+'%';
+  $('decision').textContent='OPERACIÓN EN CURSO';
+  $('reason').textContent='Esperando liquidación.';
+  buy.textContent='OPERACIÓN EN CURSO';buy.disabled=true;
   return;
  }
 
- lastSignal=s;
- $('sepPick').textContent='D'+s.q.d;
- $('decision').textContent='SEÑAL LISTA · D'+s.q.d;
- $('reason').textContent='Markov/Rényi + técnico actual + técnico proyectado 2T confirmados.';
- buy.textContent='COMPRAR AHORA · D'+s.q.d+' · RIESGO '+riskPct.toFixed(1)+'%';
+ if(!ready){
+  $('sepPick').textContent='—';
+  $('decision').textContent='ANALIZANDO';
+  $('reason').textContent=waitReason||'Todavía no hay una señal completa.';
+  buy.textContent='ESPERANDO SEÑAL';buy.disabled=true;
+  $('meter').style.width=Math.min(95,raw.finalScore)+'%';
+  return;
+ }
+
+ $('sepPick').textContent='D'+ready.q.d;
+ $('decision').textContent='SEÑAL LISTA · D'+ready.q.d;
+ $('reason').textContent='Confirmada tras 2 ticks reales · score '+ready.finalScore.toFixed(0)+'/100.';
+ buy.textContent='COMPRAR AHORA · D'+ready.q.d+' · RIESGO '+(ready.q.risk*100).toFixed(1)+'%';
  buy.disabled=false;
  $('meter').style.width='100%';
+}
+function updateShadowUI(){
+ if(!$('shadowState'))return;
+ let w=shadowStats.confirmedWins,l=shadowStats.confirmedLosses,n=w+l;
+ $('shadowState').textContent=n?((100*w/n).toFixed(1)+'% · '+n+' señales'):'SIN DATOS';
 }
 function ui(d){
  if(d!==undefined)$('tick').textContent='D'+d;
  $('pnl').textContent=(pnl>=0?'+':'')+'$'+pnl.toFixed(2);$('stake').textContent='$'+stake.toFixed(2);$('wins').textContent=wins;$('losses').textContent=losses;$('ops').textContent=ops;$('pick').textContent=lastPick===null?'—':'D'+lastPick;
 }
 function enter(s){
- if(!running||pending||!s||!s.safe){$('status').textContent='ESPERANDO SEÑAL COMPLETA';return}
+ if(!running||pending||!s||!s.safe||s!==lastSignal){$('status').textContent='ESPERANDO SEÑAL COMPLETA';return}
  let d=s.q.d,mode=$('mode').value;
  if(mode==='DEMO'&&!window.demoReady){$('status').textContent='CONECTA DEMO DERIV';return}
  lastPick=d;observe=0;pending={d,stake,mode};ops++;
@@ -422,8 +499,137 @@ function tradeError(e){
 function finish(profit,label){
  profit=Number(profit);if(!Number.isFinite(profit)){tradeError(new Error('Resultado inválido'));return}
  pnl+=profit;
- if(profit>0){wins++;stake=Math.max(baseStake(),stake+profit);log('WIN '+label+' +$'+profit.toFixed(2))}
- else{losses++;stake=baseStake();log('MATCH '+label+' $'+profit.toFixed(2))}
+ if(profit>0){
+  wins++;stake=Math.max(baseStake(),stake+profit);log('WIN '+label+' +
+ if(pnl>=target()){running=false;$('status').textContent='META +$'+target().toFixed(2)+' · STOP';$('phase').textContent='META'}
+ else if(running)$('status').textContent='OBSERVANDO';
+ ui();
+}
+function tick(d,price){
+ tickCounter++;
+ settleShadow(d);
+
+ if(pending&&pending.mode==='SIM'){
+  let p=pending;
+  finish(d===p.d?-p.stake:p.stake*.10,'SIM');
+ }
+
+ hist.push(d);if(hist.length>1000)hist.shift();
+ if(Number.isFinite(price)){quotes.push(price);if(quotes.length>1000)quotes.shift()}
+ if(running&&!pending)observe++;
+ if(cooldownTicks>0)cooldownTicks--;
+ if(deteriorationTicks>0)deteriorationTicks--;
+ ui(d);
+
+ let raw=analyse(),ready=null,reason='';
+
+ if(raw){
+  candidateHistory.push(raw.q.d);
+  if(candidateHistory.length>40)candidateHistory.shift();
+ }
+
+ if(!running){
+  arming=null;
+  reason='STOP MANUAL';
+ }else if(pending){
+  arming=null;
+  reason='Operación en curso.';
+ }else if(cooldownTicks>0){
+  arming=null;
+  reason='Recalibrando después de MATCH · '+cooldownTicks+' tick'+(cooldownTicks===1?'':'s')+'.';
+ }else if(deteriorationTicks>0){
+  arming=null;
+  reason='Protección activa por deterioro reciente · '+deteriorationTicks+'T.';
+ }else if(!raw||!raw.safe){
+  arming=null;
+  if(!raw)reason='Recolectando datos.';
+  else if(!raw.baseSafe)reason='Markov/Rényi aún no confirma.';
+  else if(!raw.techSafe)reason='Análisis técnico aún no confirma.';
+  else if(!raw.regimeSafe)reason='Cambio de régimen detectado.';
+  else reason='Score final insuficiente: '+raw.finalScore.toFixed(0)+'/100.';
+ }else{
+  if(!arming||arming.d!==raw.q.d){
+   arming={d:raw.q.d,age:0,minScore:raw.finalScore,confirmedShadow:false};
+   queueShadow(raw.q.d,'raw',tickCounter+3);
+   reason='Preseñal detectada · validando 2 ticks reales.';
+  }else{
+   arming.age++;
+   arming.minScore=Math.min(arming.minScore,raw.finalScore);
+   if(arming.age<2){
+    reason='Validación real '+arming.age+'/2 ticks.';
+   }else if(arming.minScore>=70){
+    ready={...raw,finalScore:Math.min(raw.finalScore,arming.minScore)};
+    reason='Confirmación completa.';
+    if(!arming.confirmedShadow){
+     queueShadow(raw.q.d,'confirmed',tickCounter+1);
+     arming.confirmedShadow=true;
+    }
+   }else{
+    arming=null;
+    reason='La calidad cayó durante el delay.';
+   }
+  }
+ }
+
+ if($('delayState')){
+  $('delayState').textContent=ready?'2/2 LISTO':arming?(Math.min(2,arming.age)+'/2'):'—';
+ }
+ showSignal(raw,ready,reason);
+}
+function connect(){
+ clearTimeout(retry);ws=new WebSocket('wss://api.derivws.com/trading/v1/options/ws/public');
+ ws.onopen=()=>ws.send(JSON.stringify({ticks_history:'R_75',count:300,end:'latest',style:'ticks'}));
+ ws.onmessage=e=>{let m=JSON.parse(e.data);
+  if(m.history&&m.history.prices){let p=Number(m.pip_size||4);quotes=m.history.prices.map(Number);hist=quotes.map(x=>Number(Number(x).toFixed(p).slice(-1)));ws.send(JSON.stringify({ticks:'R_75',subscribe:1}));$('status').textContent='LISTO · '+hist.length+' TICKS · HÍBRIDO'}
+  if(m.tick){let ep=+m.tick.epoch;if(ep===lastEpoch)return;lastEpoch=ep;let p=Number(m.tick.pip_size||4),price=Number(m.tick.quote),d=Number(price.toFixed(p).slice(-1));tick(d,price)}
+ };
+ ws.onclose=()=>retry=setTimeout(connect,2500);
+}
+$('start').onclick=()=>{
+ if($('mode').value==='DEMO'&&!window.demoReady){$('status').textContent='CONECTA DEMO DERIV PRIMERO';return}
+ pnl=0;stake=baseStake();wins=0;losses=0;ops=0;pending=null;observe=0;lastPick=null;lastSignal=null;candidateHistory=[];arming=null;cooldownTicks=0;deteriorationTicks=0;running=true;$('status').textContent='ANALIZANDO';log('NUEVA SESIÓN '+$('mode').value+' · STAKE $'+stake.toFixed(2)+' · META $'+target().toFixed(2));ui();
+};
+$('stop').onclick=()=>{running=false;$('status').textContent='STOP MANUAL'};
+$('buy').onclick=()=>{if(!running){$('status').textContent='PULSA REINICIAR SESIÓN';return}if(pending){$('status').textContent='OPERACIÓN EN CURSO';return}let s=lastSignal;if(!s){$('status').textContent='AÚN CALIBRANDO';return}enter(s)};
+window.demoSettlement=p=>finish(p,'DERIV DEMO');
+window.demoTradeError=tradeError;
+stake=baseStake();$('status').textContent='ANÁLISIS ACTIVO · V4';$('buy').disabled=true;ui();updateShadowUI();connect();+profit.toFixed(2));
+ }else{
+  losses++;stake=baseStake();cooldownTicks=Math.max(cooldownTicks,3);arming=null;lastSignal=null;
+  log('MATCH '+label+' 
+ if(pnl>=target()){running=false;$('status').textContent='META +$'+target().toFixed(2)+' · STOP';$('phase').textContent='META'}
+ else if(running)$('status').textContent='OBSERVANDO';
+ ui();
+}
+function tick(d,price){
+ if(pending&&pending.mode==='SIM'){let p=pending;finish(d===p.d?-p.stake:p.stake*.10,'SIM')}
+ hist.push(d);if(hist.length>1000)hist.shift();if(Number.isFinite(price)){quotes.push(price);if(quotes.length>1000)quotes.shift()}if(running&&!pending)observe++;ui(d);
+ let s=analyse();
+ if(s){
+  candidateHistory.push(s.q.d);
+  if(candidateHistory.length>40)candidateHistory.shift();
+ }
+ showSignal(s);
+}
+function connect(){
+ clearTimeout(retry);ws=new WebSocket('wss://api.derivws.com/trading/v1/options/ws/public');
+ ws.onopen=()=>ws.send(JSON.stringify({ticks_history:'R_75',count:300,end:'latest',style:'ticks'}));
+ ws.onmessage=e=>{let m=JSON.parse(e.data);
+  if(m.history&&m.history.prices){let p=Number(m.pip_size||4);quotes=m.history.prices.map(Number);hist=quotes.map(x=>Number(Number(x).toFixed(p).slice(-1)));ws.send(JSON.stringify({ticks:'R_75',subscribe:1}));$('status').textContent='LISTO · '+hist.length+' TICKS · HÍBRIDO'}
+  if(m.tick){let ep=+m.tick.epoch;if(ep===lastEpoch)return;lastEpoch=ep;let p=Number(m.tick.pip_size||4),price=Number(m.tick.quote),d=Number(price.toFixed(p).slice(-1));tick(d,price)}
+ };
+ ws.onclose=()=>retry=setTimeout(connect,2500);
+}
+$('start').onclick=()=>{
+ if($('mode').value==='DEMO'&&!window.demoReady){$('status').textContent='CONECTA DEMO DERIV PRIMERO';return}
+ pnl=0;stake=baseStake();wins=0;losses=0;ops=0;pending=null;observe=0;lastPick=null;lastSignal=null;candidateHistory=[];running=true;$('status').textContent='ANALIZANDO';log('NUEVA SESIÓN '+$('mode').value+' · STAKE $'+stake.toFixed(2)+' · META $'+target().toFixed(2));ui();
+};
+$('stop').onclick=()=>{running=false;$('status').textContent='STOP MANUAL'};
+$('buy').onclick=()=>{if(!running){$('status').textContent='PULSA REINICIAR SESIÓN';return}if(pending){$('status').textContent='OPERACIÓN EN CURSO';return}let s=lastSignal;if(!s){$('status').textContent='AÚN CALIBRANDO';return}enter(s)};
+window.demoSettlement=p=>finish(p,'DERIV DEMO');
+window.demoTradeError=tradeError;
+stake=baseStake();$('status').textContent='ANÁLISIS ACTIVO';$('buy').disabled=true;ui();connect();+profit.toFixed(2)+' · recalibración 3T');
+ }
  pending=null;observe=0;
  if(pnl>=target()){running=false;$('status').textContent='META +$'+target().toFixed(2)+' · STOP';$('phase').textContent='META'}
  else if(running)$('status').textContent='OBSERVANDO';
