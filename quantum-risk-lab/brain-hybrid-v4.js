@@ -409,7 +409,7 @@ function analyse(){
      regime=regimeAnalysis(),
      finalScore=qualityScore(q,tech,regime),
      regimeSafe=regime.gate,
-     safe=baseSafe&&techSafe&&regimeSafe&&finalScore>=70;
+     safe=baseSafe&&techSafe&&regimeSafe&&finalScore>=65;
 
  // V4: la señal cruda todavía NO se muestra. Debe sobrevivir 2 ticks reales.
  return{q,spread,H:H2,near,safe,baseSafe,techSafe,regimeSafe,tech,regime,finalScore};
@@ -591,7 +591,7 @@ function tick(d,price){
 
    if(arming.age<2){
     reason='Validación real '+arming.age+'/2 ticks.';
-   }else if(arming.minScore>=70){
+   }else if(arming.minScore>=65){
     ready={...raw,finalScore:Math.min(raw.finalScore,arming.minScore)};
     reason='Confirmación completa.';
     if(!arming.confirmedShadow){
