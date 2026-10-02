@@ -1,6 +1,6 @@
 {
   "version": "2.0-differ-director",
-  "timestamp": 1790979350,
+  "timestamp": 1790980393,
   "decision": "COLLECT_V2_FORWARD_DATA",
   "baseline_random": 0.9,
   "payout_status": "OK",
@@ -43,42 +43,61 @@
     "status": "NOT_CONFIRMED"
   },
   "v2_leader": {
-    "id": "vote2_margin010",
-    "signals": 216,
-    "wins": 197,
-    "losses": 19,
-    "hit_rate": 0.9120370370370371,
-    "wilson_lower": 0.8667090792398531,
-    "raw_economic_p": 0.6700444870679304,
+    "id": "vote2_margin005",
+    "signals": 608,
+    "wins": 539,
+    "losses": 69,
+    "hit_rate": 0.8865131578947368,
+    "wilson_lower": 0.8588360077308712,
+    "raw_economic_p": 0.9967320428408446,
     "bonferroni_p": 1.0,
-    "shadow_pnl": -1.2700000000000087,
-    "shadow_roi": -0.0058796296296296695,
-    "max_drawdown_flat_stake": 6.250000000000006,
-    "temporal_blocks": [],
+    "shadow_pnl": -20.490000000000062,
+    "shadow_roi": -0.033700657894736946,
+    "max_drawdown_flat_stake": 22.290000000000063,
+    "temporal_blocks": [
+      {
+        "n": 203,
+        "wins": 181,
+        "hit_rate": 0.8916256157635468,
+        "wilson_lower": 0.8413687216160847
+      },
+      {
+        "n": 203,
+        "wins": 178,
+        "hit_rate": 0.8768472906403941,
+        "wilson_lower": 0.8245207898675716
+      },
+      {
+        "n": 202,
+        "wins": 180,
+        "hit_rate": 0.8910891089108911,
+        "wilson_lower": 0.8406104642817511
+      }
+    ],
     "block_stable": false,
     "prospective_sessions": {
       "target": 20.0,
       "stop_loss": 5.0,
       "base_stake": 1.0,
       "max_stake": 5.0,
-      "completed": 2,
+      "completed": 10,
       "targets": 0,
-      "stops": 2,
+      "stops": 10,
       "target_rate": 0.0,
-      "open_pnl": 3.7283515096849658,
+      "open_pnl": -2.704971,
       "open_stake": 1.2950290000000002,
-      "open_trades": 150
+      "open_trades": 24
     },
     "status": "COLLECTING"
   },
   "v4_leader": null,
   "v1_confirmed": [],
   "v2_confirmed": [],
-  "candidate_model_id": "311b9f70bd375a59",
-  "ensemble_id": "f6a0efe3c57893c3",
+  "candidate_model_id": "0dd35333d1339fb6",
+  "ensemble_id": "eb9a59a9c0640a96",
   "live_policy": {
     "version": "2.0-live-policy",
-    "timestamp": 1790979350,
+    "timestamp": 1790980393,
     "source": "v1",
     "rule": "neural_argmin",
     "candidate_id": "a77d2907eb2552a2",
