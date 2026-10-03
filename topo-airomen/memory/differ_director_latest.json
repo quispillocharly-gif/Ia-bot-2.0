@@ -1,7 +1,7 @@
 {
   "version": "2.0-differ-director",
-  "timestamp": 1791006143,
-  "decision": "NO_CONFIRMED_EDGE_CONTINUE_RESEARCH",
+  "timestamp": 1791006156,
+  "decision": "COLLECT_V2_FORWARD_DATA",
   "baseline_random": 0.9,
   "payout_status": "OK",
   "break_even_rate": 0.9174311926605504,
@@ -44,51 +44,32 @@
   },
   "v2_leader": {
     "id": "vote2_margin005",
-    "signals": 2228,
-    "wins": 1985,
-    "losses": 243,
-    "hit_rate": 0.8909335727109515,
-    "wilson_lower": 0.877310375962356,
-    "raw_economic_p": 0.9999944492363779,
+    "signals": 0,
+    "wins": 0,
+    "losses": 0,
+    "hit_rate": null,
+    "wilson_lower": 0.0,
+    "raw_economic_p": 1.0,
     "bonferroni_p": 1.0,
-    "shadow_pnl": -64.34999999999631,
-    "shadow_roi": -0.028882405745061183,
-    "max_drawdown_flat_stake": 69.38999999999679,
-    "temporal_blocks": [
-      {
-        "n": 743,
-        "wins": 656,
-        "hit_rate": 0.882907133243607,
-        "wilson_lower": 0.857793299227307
-      },
-      {
-        "n": 743,
-        "wins": 666,
-        "hit_rate": 0.8963660834454913,
-        "wilson_lower": 0.872373120835782
-      },
-      {
-        "n": 742,
-        "wins": 663,
-        "hit_rate": 0.8935309973045822,
-        "wilson_lower": 0.8692754302844495
-      }
-    ],
+    "shadow_pnl": 0.0,
+    "shadow_roi": null,
+    "max_drawdown_flat_stake": 0.0,
+    "temporal_blocks": [],
     "block_stable": false,
     "prospective_sessions": {
       "target": 20.0,
       "stop_loss": 5.0,
       "base_stake": 1.0,
       "max_stake": 5.0,
-      "completed": 27,
+      "completed": 0,
       "targets": 0,
-      "stops": 27,
-      "target_rate": 0.0,
-      "open_pnl": 8.378351509684988,
-      "open_stake": 1.2950290000000002,
-      "open_trades": 178
+      "stops": 0,
+      "target_rate": null,
+      "open_pnl": 0.0,
+      "open_stake": 1.0,
+      "open_trades": 0
     },
-    "status": "NOT_CONFIRMED"
+    "status": "COLLECTING"
   },
   "v4_leader": null,
   "v1_confirmed": [],
@@ -97,7 +78,7 @@
   "ensemble_id": "2be266406abdcba5",
   "live_policy": {
     "version": "2.0-live-policy",
-    "timestamp": 1791006143,
+    "timestamp": 1791006156,
     "source": "v1",
     "rule": "neural_p09",
     "candidate_id": "26724f1343dc69a2",
