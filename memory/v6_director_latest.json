@@ -1,22 +1,22 @@
 {
   "version": "6.0-autonomous-research-director",
-  "timestamp": 1791080784,
+  "timestamp": 1791088482,
   "decision": "FORWARD_EDGE_SIGNAL_DETECTED",
   "forward_confirmed_systems": [
     "V6.1"
   ],
-  "economic_status": "PAYOUT_STALE",
+  "economic_status": "STAT_EDGE_BELOW_BREAK_EVEN",
   "payout_status": "OK",
   "break_even_rate": 0.11198208286674133,
-  "payout_age_seconds": 24076,
-  "payout_fresh": false,
+  "payout_age_seconds": 6726,
+  "payout_fresh": true,
   "payout_max_age_seconds": 7200,
   "drift_status": "STABLE",
-  "historical_to_future_gap": -0.010290272502101794,
+  "historical_to_future_gap": -0.01019258545714151,
   "multiple_testing": {
     "v4": {
       "tests": 64,
-      "adjusted_p": 1.0
+      "adjusted_p": 0.037942314733567024
     },
     "v5": {
       "tests": 54,
@@ -24,42 +24,43 @@
     }
   },
   "forward_evidence": {
-    "v4_1_p": 0.44298113161649966,
-    "v5_2_p": 0.29063117599457594,
-    "v6_1_p": 0.012214190778604903,
-    "v7_economic_placebo_p": 0.9862
+    "v4_1_p": 0.39996874523453885,
+    "v5_2_p": 0.22206307811542508,
+    "v6_1_p": 0.01530809911460437,
+    "v7_economic_placebo_p": 0.9974
   },
   "adaptive_v7": {
-    "status": "PAYOUT_STALE",
+    "status": "NOT_CONFIRMED",
     "current_regime": "UNIFORM",
-    "shadow_pnl": -4728.770000000208,
-    "ev_per_signal": -0.08913966333013267,
-    "calibration_ece": 0.0763713833166891
+    "shadow_pnl": -4813.290000000197,
+    "ev_per_signal": -0.09004377513797021,
+    "calibration_ece": 0.0764095312095651
   },
   "challenger_v8": {
     "status": "RESEARCHING",
-    "leader_id": "agree4_all",
-    "leader_signals": 6029,
-    "leader_hit_rate": 0.10515840106153591,
-    "leader_wilson": 0.0976648693555021,
+    "leader_id": "conf14_agree3",
+    "leader_signals": 27573,
+    "leader_hit_rate": 0.10111340804410111,
+    "leader_wilson": 0.09761025699082362,
     "leader_bonferroni_p": 1.0,
     "confirmed_variants": []
   },
   "evidence_sprint": {
     "status": "RESEARCHING_EDGE",
-    "days_left": 5.109486832013888,
+    "days_left": 5.020314303981481,
     "core_gates_passed": 1,
     "core_gates_total": 4,
-    "projected_signals_at_deadline": 79808.99615957944
+    "projected_signals_at_deadline": 81938.4542667282
   },
-  "registry_total": 220,
+  "registry_total": 221,
   "graveyard_size": 1,
   "priorities": [
     "Do not reuse the rejected V4.1 transition_3 candidate without new independent evidence.",
     "Rotate from the failed neural candidate after cooldown and test a materially different challenger.",
     "Treat V5 historical gains as exploratory after multiple-testing correction.",
+    "V7 adaptive shadow strategy did not confirm economic edge; use its regime and calibration diagnostics only.",
     "Continue V8 prospective challenger tournament; do not select a winner before independent forward evidence and Bonferroni correction.",
-    "Payout snapshot is stale; block economic confirmation until a fresh proposal snapshot is available."
+    "Forward evidence has not cleared the current conservative break-even rate 0.1120."
   ],
   "note": "V6 records evidence, corrects exploratory multiple testing, monitors drift and failed candidates, and does not equate hit rate with profitability."
 }
